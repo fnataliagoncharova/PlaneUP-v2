@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  v2-postgres:
+    image: postgres:16
+    container_name: planeup-v2-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: planeup_v2
+    ports:
+      - "5434:5432"
+    volumes:
+      - v2_pg_data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d
+
+volumes:
+  v2_pg_data:
