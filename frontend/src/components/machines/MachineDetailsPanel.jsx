@@ -1,6 +1,10 @@
-import { CheckCircle2, Cog, Gauge } from "lucide-react";
+import { CheckCircle2, Cog, Gauge, PencilLine } from "lucide-react";
 
-function MachineDetailsPanel({ item }) {
+function getUsageEntries(item) {
+  return item?.usage_entries ?? item?.usageEntries ?? [];
+}
+
+function MachineDetailsPanel({ item, onEdit }) {
   if (!item) {
     return (
       <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
@@ -10,11 +14,11 @@ function MachineDetailsPanel({ item }) {
               <Cog className="h-8 w-8" />
             </div>
             <h2 className="mt-6 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
-              Оборудование не найдено
+              Единица не выбрана
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              По текущему поиску нет подходящих единиц оборудования. Измените строку поиска,
-              чтобы снова увидеть детали выбранной единицы.
+              Выберите единицу оборудования в списке слева, чтобы посмотреть карточку и
+              статус.
             </p>
           </div>
         </div>
@@ -22,19 +26,33 @@ function MachineDetailsPanel({ item }) {
     );
   }
 
+  const usageEntries = getUsageEntries(item);
+
   return (
     <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="panel-title">Выбранная единица</div>
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
-            {item.name}
+            {item.machine_name}
           </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">{item.description}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            Карточка оборудования из V2-справочника. Данные синхронизированы с backend API.
+          </p>
         </div>
-        <span className="rounded-none border border-cyan-200/24 bg-cyan-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-100">
-          {item.code}
-        </span>
+        <div className="flex flex-col items-end gap-3">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
+          >
+            <PencilLine className="h-3.5 w-3.5" />
+            Редактировать
+          </button>
+          <span className="rounded-none border border-cyan-200/24 bg-cyan-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-100">
+            {item.machine_code}
+          </span>
+        </div>
       </div>
 
       <div className="panel-divider mt-5" />
@@ -51,18 +69,18 @@ function MachineDetailsPanel({ item }) {
           <div className="flex min-h-[110px] items-start justify-between gap-5">
             <div className="max-w-[72%]">
               <div className="text-sm uppercase tracking-[0.22em] text-cyan-100/72">
-                {item.code}
+                {item.machine_code}
               </div>
               <div className="mt-3 text-[1.36rem] font-semibold leading-tight text-cyan-50">
-                {item.name}
+                {item.machine_name}
               </div>
             </div>
             <div className="text-right">
               <div className="text-4xl font-semibold leading-none text-cyan-50">
-                {item.stepUsages.length}
+                {usageEntries.length}
               </div>
               <div className="mt-2 text-xs uppercase tracking-[0.2em] text-cyan-100/60">
-                Шагов
+                Использований
               </div>
             </div>
           </div>
@@ -80,12 +98,12 @@ function MachineDetailsPanel({ item }) {
           <span
             className={[
               "inline-flex rounded-none border px-3 py-1 text-[11px] uppercase tracking-[0.18em]",
-              item.isActive
+              item.is_active
                 ? "border-cyan-200/18 bg-cyan-300/10 text-cyan-100/80"
                 : "border-amber-200/18 bg-amber-300/10 text-amber-100/80",
             ].join(" ")}
           >
-            {item.isActive ? "Активно" : "Неактивно"}
+            {item.is_active ? "Активно" : "Неактивно"}
           </span>
         </div>
       </section>
@@ -121,43 +139,58 @@ function MachineDetailsPanel({ item }) {
                 </tr>
               </thead>
               <tbody>
-                {item.usageEntries.map((entry) => {
-                  const isPrimary = entry.role === "Primary";
+                {usageEntries.length > 0 ? (
+                  usageEntries.map((entry, index) => {
+                    const routeCode = entry.route_code ?? entry.routeCode ?? "—";
+                    const routeName = entry.route_name ?? entry.routeName ?? "";
+                    const stepNo = entry.step_no ?? entry.stepNo ?? "—";
+                    const stepName = entry.step_name ?? entry.stepName ?? "—";
+                    const operation = entry.operation ?? "—";
+                    const role = entry.role ?? "—";
+                    const rate = entry.rate ?? "—";
+                    const isPrimary =
+                      String(role).toLowerCase() === "primary" ||
+                      String(role).toLowerCase() === "основная";
 
-                  return (
-                    <tr
-                      key={`${item.id}-${entry.routeCode}-${entry.stepNo}-${entry.role}`}
-                      className="border-t border-white/[0.06] transition-colors hover:bg-cyan-300/[0.05]"
-                    >
-                      <td className="px-4 py-3 align-top text-sm text-slate-200">
-                        <div className="font-medium text-slate-100">{entry.routeCode}</div>
-                        <div className="mt-1 text-xs text-slate-500">{entry.routeName}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-sm text-slate-200">
-                        <div className="font-medium text-slate-100">Шаг {entry.stepNo}</div>
-                        <div className="mt-1 text-xs text-slate-500">{entry.stepName}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-sm text-slate-200">
-                        {entry.operation}
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <span
-                          className={[
-                            "inline-flex rounded-none border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em]",
-                            isPrimary
-                              ? "border-cyan-200/20 bg-cyan-300/10 text-cyan-100/80"
-                              : "border-amber-200/20 bg-amber-300/10 text-amber-100/80",
-                          ].join(" ")}
-                        >
-                          {entry.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 align-top text-sm font-medium text-slate-100">
-                        {entry.rate}
-                      </td>
-                    </tr>
-                  );
-                })}
+                    return (
+                      <tr
+                        key={`${routeCode}-${stepNo}-${role}-${index}`}
+                        className="border-t border-white/[0.06] transition-colors hover:bg-cyan-300/[0.05]"
+                      >
+                        <td className="px-4 py-3 align-top text-sm text-slate-200">
+                          <div className="font-medium text-slate-100">{routeCode}</div>
+                          <div className="mt-1 text-xs text-slate-500">{routeName}</div>
+                        </td>
+                        <td className="px-4 py-3 align-top text-sm text-slate-200">
+                          <div className="font-medium text-slate-100">Шаг {stepNo}</div>
+                          <div className="mt-1 text-xs text-slate-500">{stepName}</div>
+                        </td>
+                        <td className="px-4 py-3 align-top text-sm text-slate-200">{operation}</td>
+                        <td className="px-4 py-3 align-top">
+                          <span
+                            className={[
+                              "inline-flex rounded-none border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em]",
+                              isPrimary
+                                ? "border-cyan-200/20 bg-cyan-300/10 text-cyan-100/80"
+                                : "border-amber-200/20 bg-amber-300/10 text-amber-100/80",
+                            ].join(" ")}
+                          >
+                            {role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 align-top text-sm font-medium text-slate-100">
+                          {rate}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr className="border-t border-white/[0.06]">
+                    <td colSpan={5} className="px-4 py-5 text-sm text-slate-400">
+                      Связанные использования пока не загружены в этом контуре V2.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -168,3 +201,4 @@ function MachineDetailsPanel({ item }) {
 }
 
 export default MachineDetailsPanel;
+
