@@ -6,7 +6,7 @@ from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
-from schemas.machines import MachineCreate, MachineRead, MachineUpdate
+from schemas.machines import MachineCreate, MachineRead, MachineUpdate, MachineUsageRead
 
 
 router = APIRouter(prefix="/machines", tags=["machines"])
@@ -17,6 +17,39 @@ SELECT_COLUMNS = """
     machine_name,
     is_active
 """
+
+USAGE_SELECT_COLUMNS = """
+    rse.step_equipment_id,
+    r.route_id,
+    r.route_code,
+    r.route_name,
+    rs.route_step_id,
+    rs.step_no,
+    p.process_id,
+    p.process_code,
+    p.process_name,
+    rse.equipment_role,
+    rse.nominal_rate,
+    rse.rate_uom
+"""
+
+
+def ensure_machine_exists(cursor: RealDictCursor, machine_id: int) -> None:
+    cursor.execute(
+        """
+        SELECT machine_id
+        FROM machines
+        WHERE machine_id = %s;
+        """,
+        (machine_id,),
+    )
+    row = cursor.fetchone()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Единица оборудования не найдена.",
+        )
 
 
 @router.get("", response_model=List[MachineRead])
@@ -74,6 +107,39 @@ def get_machine(machine_id: int = Path(..., gt=0)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось получить единицу оборудования.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.get("/{machine_id}/usage", response_model=List[MachineUsageRead])
+def list_machine_usage(machine_id: int = Path(..., gt=0)):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            ensure_machine_exists(cursor, machine_id)
+            cursor.execute(
+                f"""
+                SELECT {USAGE_SELECT_COLUMNS}
+                FROM route_step_equipment AS rse
+                INNER JOIN route_steps AS rs ON rs.route_step_id = rse.route_step_id
+                INNER JOIN routes AS r ON r.route_id = rs.route_id
+                INNER JOIN processes AS p ON p.process_id = rs.process_id
+                WHERE rse.machine_id = %s
+                ORDER BY r.route_code, rs.step_no, rse.priority, rse.step_equipment_id;
+                """,
+                (machine_id,),
+            )
+            rows = cursor.fetchall()
+
+        return rows
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось получить использования оборудования.",
         ) from exc
     finally:
         if connection is not None:
@@ -223,4 +289,3 @@ def deactivate_machine(machine_id: int = Path(..., gt=0)):
     finally:
         if connection is not None:
             connection.close()
-

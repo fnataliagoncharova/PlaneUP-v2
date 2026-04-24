@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -44,3 +46,48 @@ class NomenclatureUpdate(NomenclatureBase):
 class NomenclatureRead(NomenclatureBase):
     nomenclature_id: int
 
+
+ImportMode = Literal["add_only", "upsert"]
+ImportPreviewRowStatus = Literal["new", "update", "conflict", "error"]
+ImportCommitRowStatus = Literal["created", "updated", "skipped", "error"]
+
+
+class NomenclatureImportPreviewRow(BaseModel):
+    row_no: int
+    nomenclature_code: str | None = None
+    nomenclature_name: str | None = None
+    unit_of_measure: str | None = None
+    is_active: bool | None = None
+    status: ImportPreviewRowStatus
+    can_import: bool
+    messages: list[str] = Field(default_factory=list)
+    unit_normalized_from: str | None = None
+
+
+class NomenclatureImportPreviewResponse(BaseModel):
+    import_mode: ImportMode
+    total_rows: int
+    valid_rows: int
+    new_rows: int
+    update_rows: int
+    conflict_rows: int
+    error_rows: int
+    rows: list[NomenclatureImportPreviewRow]
+
+
+class NomenclatureImportCommitRow(BaseModel):
+    row_no: int
+    nomenclature_code: str | None = None
+    status: ImportCommitRowStatus
+    message: str | None = None
+
+
+class NomenclatureImportCommitResponse(BaseModel):
+    import_mode: ImportMode
+    total_rows: int
+    created_count: int
+    updated_count: int
+    skipped_count: int
+    error_count: int
+    conflict_count: int
+    rows: list[NomenclatureImportCommitRow]

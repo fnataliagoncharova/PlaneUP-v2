@@ -6,6 +6,7 @@ import MachineFormPanel from "../components/machines/MachineFormPanel";
 import MachinesList from "../components/machines/MachinesList";
 import {
   createMachineItem,
+  getMachineUsage,
   getMachinesList,
   updateMachineItem,
 } from "../services/machinesApi";
@@ -35,6 +36,9 @@ function MachinesSection() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formMode, setFormMode] = useState("create");
+  const [usageEntries, setUsageEntries] = useState([]);
+  const [isUsageLoading, setIsUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState("");
 
   useEffect(() => {
     let isCancelled = false;
@@ -103,6 +107,51 @@ function MachinesSection() {
   }, [filteredItems, selectedItemId]);
 
   const selectedItem = items.find((item) => item.machine_id === selectedItemId) ?? null;
+
+  useEffect(() => {
+    let isCancelled = false;
+    const machineId = selectedItem?.machine_id;
+
+    if (!machineId) {
+      setUsageEntries([]);
+      setUsageError("");
+      setIsUsageLoading(false);
+      return;
+    }
+
+    async function loadUsage() {
+      setIsUsageLoading(true);
+      setUsageError("");
+      setUsageEntries([]);
+
+      try {
+        const response = await getMachineUsage(machineId);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setUsageEntries(Array.isArray(response) ? response : []);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setUsageEntries([]);
+        setUsageError(error.message || "Не удалось загрузить использования оборудования.");
+      } finally {
+        if (!isCancelled) {
+          setIsUsageLoading(false);
+        }
+      }
+    }
+
+    loadUsage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedItem?.machine_id]);
 
   const handleOpenCreateForm = () => {
     setFormMode("create");
@@ -220,6 +269,9 @@ function MachinesSection() {
       ) : (
         <MachineDetailsPanel
           item={filteredItems.length > 0 ? selectedItem : null}
+          usageEntries={usageEntries}
+          isUsageLoading={isUsageLoading}
+          usageError={usageError}
           onEdit={handleOpenEditForm}
         />
       )}
@@ -228,4 +280,3 @@ function MachinesSection() {
 }
 
 export default MachinesSection;
-

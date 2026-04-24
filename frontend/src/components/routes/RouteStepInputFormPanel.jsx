@@ -1,13 +1,13 @@
 import { Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import NomenclatureSearchSelect from "../shared/NomenclatureSearchSelect";
 
-function createInitialState(item, nomenclatureItems) {
-  const fallbackNomenclatureId = nomenclatureItems[0]?.nomenclature_id ?? "";
+function createInitialState(item) {
   const inputType = item?.input_nomenclature_id ? "nomenclature" : "external";
 
   return {
     inputType,
-    input_nomenclature_id: item?.input_nomenclature_id ?? fallbackNomenclatureId,
+    input_nomenclature_id: item?.input_nomenclature_id ?? "",
     external_input_name: item?.external_input_name ?? "",
     input_qty: item?.input_qty ?? "1.000",
   };
@@ -23,7 +23,7 @@ function RouteStepInputFormPanel({
   onSave,
 }) {
   const isEditMode = mode === "edit";
-  const [formValues, setFormValues] = useState(() => createInitialState(item, nomenclatureItems));
+  const [formValues, setFormValues] = useState(() => createInitialState(item));
   const [localError, setLocalError] = useState("");
 
   const sortedNomenclatureItems = useMemo(
@@ -35,9 +35,9 @@ function RouteStepInputFormPanel({
   );
 
   useEffect(() => {
-    setFormValues(createInitialState(item, sortedNomenclatureItems));
+    setFormValues(createInitialState(item));
     setLocalError("");
-  }, [item, mode, sortedNomenclatureItems]);
+  }, [item, mode]);
 
   const handleFieldChange = (fieldName, fieldValue) => {
     setFormValues((previousValues) => ({
@@ -144,26 +144,16 @@ function RouteStepInputFormPanel({
         </div>
 
         {formValues.inputType === "nomenclature" ? (
-          <label className="block">
-            <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Номенклатура</div>
-            <select
-              value={formValues.input_nomenclature_id}
-              onChange={(event) =>
-                handleFieldChange("input_nomenclature_id", event.target.value)
-              }
-              className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
-            >
-              {sortedNomenclatureItems.map((nomenclatureItem) => (
-                <option
-                  key={nomenclatureItem.nomenclature_id}
-                  value={nomenclatureItem.nomenclature_id}
-                  className="bg-slate-950 text-slate-100"
-                >
-                  {nomenclatureItem.nomenclature_code} — {nomenclatureItem.nomenclature_name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <NomenclatureSearchSelect
+            label="Номенклатура"
+            items={sortedNomenclatureItems}
+            value={formValues.input_nomenclature_id}
+            onChange={(nomenclatureId) =>
+              handleFieldChange("input_nomenclature_id", nomenclatureId)
+            }
+            placeholder="Начните вводить код или название"
+            disabled={sortedNomenclatureItems.length === 0}
+          />
         ) : (
           <label className="block">
             <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">

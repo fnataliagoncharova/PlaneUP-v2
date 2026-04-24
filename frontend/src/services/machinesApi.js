@@ -8,6 +8,10 @@ export function getMachineItem(machineId) {
   return apiRequest(`/machines/${machineId}`);
 }
 
+export function getMachineUsage(machineId) {
+  return apiRequest(`/machines/${machineId}/usage`);
+}
+
 export function createMachineItem(payload) {
   return apiRequest("/machines", {
     method: "POST",
@@ -27,4 +31,3 @@ export function deleteMachineItem(machineId) {
     method: "DELETE",
   });
 }
-

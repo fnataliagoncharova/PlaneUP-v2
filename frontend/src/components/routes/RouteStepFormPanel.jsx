@@ -1,14 +1,14 @@
 import { Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import NomenclatureSearchSelect from "../shared/NomenclatureSearchSelect";
 
-function createInitialState(item, processItems, nomenclatureItems) {
+function createInitialState(item, processItems) {
   const fallbackProcessId = processItems[0]?.process_id ?? "";
-  const fallbackNomenclatureId = nomenclatureItems[0]?.nomenclature_id ?? "";
 
   return {
     step_no: item?.step_no ?? "",
     process_id: item?.process_id ?? fallbackProcessId,
-    output_nomenclature_id: item?.output_nomenclature_id ?? fallbackNomenclatureId,
+    output_nomenclature_id: item?.output_nomenclature_id ?? "",
     output_qty: item?.output_qty ?? "1.000",
     notes: item?.notes ?? "",
   };
@@ -27,7 +27,7 @@ function RouteStepFormPanel({
 }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() =>
-    createInitialState(item, processItems, nomenclatureItems),
+    createInitialState(item, processItems),
   );
   const [localError, setLocalError] = useState("");
   const [pendingPayload, setPendingPayload] = useState(null);
@@ -50,11 +50,11 @@ function RouteStepFormPanel({
   );
 
   useEffect(() => {
-    setFormValues(createInitialState(item, sortedProcessItems, sortedNomenclatureItems));
+    setFormValues(createInitialState(item, sortedProcessItems));
     setLocalError("");
     setPendingPayload(null);
     setIsDuplicateProcessWarningOpen(false);
-  }, [item, mode, sortedProcessItems, sortedNomenclatureItems]);
+  }, [item, mode, sortedProcessItems]);
 
   const hasDuplicateProcessInRoute = (processId) =>
     routeSteps.some(
@@ -191,28 +191,16 @@ function RouteStepFormPanel({
           </select>
         </label>
 
-        <label className="block">
-          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-            Выходная номенклатура
-          </div>
-          <select
-            value={formValues.output_nomenclature_id}
-            onChange={(event) =>
-              handleFieldChange("output_nomenclature_id", event.target.value)
-            }
-            className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
-          >
-            {sortedNomenclatureItems.map((nomenclatureItem) => (
-              <option
-                key={nomenclatureItem.nomenclature_id}
-                value={nomenclatureItem.nomenclature_id}
-                className="bg-slate-950 text-slate-100"
-              >
-                {nomenclatureItem.nomenclature_code} — {nomenclatureItem.nomenclature_name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <NomenclatureSearchSelect
+          label="Выходная номенклатура"
+          items={sortedNomenclatureItems}
+          value={formValues.output_nomenclature_id}
+          onChange={(nomenclatureId) =>
+            handleFieldChange("output_nomenclature_id", nomenclatureId)
+          }
+          placeholder="Начните вводить код или название"
+          disabled={sortedNomenclatureItems.length === 0}
+        />
 
         <label className="block">
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">

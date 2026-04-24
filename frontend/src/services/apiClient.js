@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001").replace(
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001").replace(
   /\/$/,
   "",
 );
@@ -40,8 +40,9 @@ async function parsePayload(response) {
 export async function apiRequest(path, options = {}) {
   const headers = { ...(options.headers ?? {}) };
   const hasBody = options.body !== undefined;
+  const isFormDataBody = hasBody && options.body instanceof FormData;
 
-  if (hasBody && !headers["Content-Type"]) {
+  if (hasBody && !isFormDataBody && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -57,4 +58,26 @@ export async function apiRequest(path, options = {}) {
   }
 
   return payload;
+}
+
+export async function apiRequestBlob(path, options = {}) {
+  const headers = { ...(options.headers ?? {}) };
+  const hasBody = options.body !== undefined;
+  const isFormDataBody = hasBody && options.body instanceof FormData;
+
+  if (hasBody && !isFormDataBody && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const payload = await parsePayload(response);
+    throw new Error(getErrorMessage(payload, response.status));
+  }
+
+  return response.blob();
 }

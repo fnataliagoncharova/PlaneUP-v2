@@ -1,12 +1,16 @@
-import { AlertCircle, Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Plus, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import NomenclatureDetailsPanel from "../components/nomenclature/NomenclatureDetailsPanel";
 import NomenclatureFormPanel from "../components/nomenclature/NomenclatureFormPanel";
+import NomenclatureImportPanel from "../components/nomenclature/NomenclatureImportPanel";
 import NomenclatureList from "../components/nomenclature/NomenclatureList";
 import {
+  commitNomenclatureImport,
   createNomenclatureItem,
+  downloadNomenclatureImportTemplate,
   getNomenclatureList,
+  previewNomenclatureImport,
   updateNomenclatureItem,
 } from "../services/nomenclatureApi";
 
@@ -35,24 +39,42 @@ function NomenclatureSection() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formMode, setFormMode] = useState("create");
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importMode, setImportMode] = useState("upsert");
+  const [importFile, setImportFile] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [commitResult, setCommitResult] = useState(null);
+  const [importError, setImportError] = useState("");
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isCommitLoading, setIsCommitLoading] = useState(false);
+  const [isTemplateDownloading, setIsTemplateDownloading] = useState(false);
+
+  const reloadNomenclature = useCallback(async () => {
+    const response = await getNomenclatureList();
+    const sortedItems = sortByCode(response);
+
+    setItems(sortedItems);
+    setSelectedItemId((currentSelectedId) => {
+      if (sortedItems.some((item) => item.nomenclature_id === currentSelectedId)) {
+        return currentSelectedId;
+      }
+      return getDefaultSelection(sortedItems);
+    });
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
 
-    async function loadNomenclature() {
+    async function loadNomenclatureData() {
       setIsLoading(true);
       setLoadError("");
 
       try {
-        const response = await getNomenclatureList();
-
         if (isCancelled) {
           return;
         }
 
-        const sortedItems = sortByCode(response);
-        setItems(sortedItems);
-        setSelectedItemId(getDefaultSelection(sortedItems));
+        await reloadNomenclature();
       } catch (error) {
         if (isCancelled) {
           return;
@@ -68,12 +90,12 @@ function NomenclatureSection() {
       }
     }
 
-    loadNomenclature();
+    loadNomenclatureData();
 
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [reloadNomenclature]);
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
@@ -107,6 +129,7 @@ function NomenclatureSection() {
   const handleOpenCreateForm = () => {
     setFormMode("create");
     setSaveError("");
+    setIsImportOpen(false);
     setIsFormOpen(true);
   };
 
@@ -117,6 +140,7 @@ function NomenclatureSection() {
 
     setFormMode("edit");
     setSaveError("");
+    setIsImportOpen(false);
     setIsFormOpen(true);
   };
 
@@ -161,6 +185,112 @@ function NomenclatureSection() {
     }
   };
 
+  const resetImportState = () => {
+    setImportFile(null);
+    setImportMode("upsert");
+    setPreviewData(null);
+    setCommitResult(null);
+    setImportError("");
+    setIsPreviewLoading(false);
+    setIsCommitLoading(false);
+  };
+
+  const handleOpenImportPanel = () => {
+    setIsFormOpen(false);
+    resetImportState();
+    setIsImportOpen(true);
+  };
+
+  const handleCloseImportPanel = () => {
+    if (isPreviewLoading || isCommitLoading) {
+      return;
+    }
+
+    setIsImportOpen(false);
+    setImportError("");
+  };
+
+  const handleImportFileChange = (nextFile) => {
+    setImportFile(nextFile);
+    setPreviewData(null);
+    setCommitResult(null);
+    setImportError("");
+  };
+
+  const handleImportModeChange = (nextMode) => {
+    setImportMode(nextMode);
+    setPreviewData(null);
+    setCommitResult(null);
+    setImportError("");
+  };
+
+  const handlePreviewImport = async () => {
+    if (!importFile) {
+      setImportError("Выберите Excel-файл для предпросмотра.");
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    setImportError("");
+    setCommitResult(null);
+
+    try {
+      const response = await previewNomenclatureImport(importFile, importMode);
+      setPreviewData(response);
+    } catch (error) {
+      setPreviewData(null);
+      setImportError(error.message || "Не удалось подготовить предпросмотр импорта.");
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleCommitImport = async () => {
+    if (!importFile) {
+      setImportError("Выберите Excel-файл для импорта.");
+      return;
+    }
+
+    if (!previewData) {
+      setImportError("Сначала выполните предпросмотр файла.");
+      return;
+    }
+
+    setIsCommitLoading(true);
+    setImportError("");
+
+    try {
+      const response = await commitNomenclatureImport(importFile, importMode);
+      setCommitResult(response);
+      await reloadNomenclature();
+    } catch (error) {
+      setImportError(error.message || "Не удалось выполнить импорт номенклатуры.");
+    } finally {
+      setIsCommitLoading(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    setIsTemplateDownloading(true);
+    setImportError("");
+
+    try {
+      const templateBlob = await downloadNomenclatureImportTemplate();
+      const url = URL.createObjectURL(templateBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "nomenclature_import_template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setImportError(error.message || "Не удалось скачать шаблон Excel.");
+    } finally {
+      setIsTemplateDownloading(false);
+    }
+  };
+
   const formItem = formMode === "edit" ? selectedItem : null;
 
   return (
@@ -172,13 +302,9 @@ function NomenclatureSection() {
               <h1 className="font-['Space_Grotesk'] text-3xl font-semibold text-slate-50 sm:text-4xl">
                 Номенклатура
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
-                Единый справочник производственных позиций V2. Раздел работает на реальном backend API
-                и поддерживает создание и редактирование карточек напрямую из интерфейса.
-              </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-nowrap items-center gap-3">
               <button
                 type="button"
                 onClick={handleOpenCreateForm}
@@ -186,6 +312,14 @@ function NomenclatureSection() {
               >
                 <Plus className="h-4 w-4" />
                 Новая позиция
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenImportPanel}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
+              >
+                <Upload className="h-4 w-4" />
+                Импорт Excel
               </button>
             </div>
           </div>
@@ -208,7 +342,24 @@ function NomenclatureSection() {
         />
       </div>
 
-      {isFormOpen ? (
+      {isImportOpen ? (
+        <NomenclatureImportPanel
+          importMode={importMode}
+          selectedFile={importFile}
+          previewData={previewData}
+          commitResult={commitResult}
+          errorMessage={importError}
+          isPreviewLoading={isPreviewLoading}
+          isCommitLoading={isCommitLoading}
+          onImportModeChange={handleImportModeChange}
+          onFileChange={handleImportFileChange}
+          onPreview={handlePreviewImport}
+          onCommit={handleCommitImport}
+          onCancel={handleCloseImportPanel}
+          onDownloadTemplate={handleDownloadTemplate}
+          isTemplateDownloading={isTemplateDownloading}
+        />
+      ) : isFormOpen ? (
         <NomenclatureFormPanel
           mode={formMode}
           item={formItem}

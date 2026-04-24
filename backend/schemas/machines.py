@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -30,3 +32,17 @@ class MachineUpdate(MachineBase):
 class MachineRead(MachineBase):
     machine_id: int
 
+
+class MachineUsageRead(BaseModel):
+    step_equipment_id: int
+    route_id: int
+    route_code: str
+    route_name: str
+    route_step_id: int
+    step_no: int
+    process_id: int
+    process_code: str
+    process_name: str
+    equipment_role: str
+    nominal_rate: Decimal
+    rate_uom: str

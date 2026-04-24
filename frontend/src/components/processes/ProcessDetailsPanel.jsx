@@ -1,4 +1,4 @@
-import { CheckCircle2, Hash, PencilLine, Workflow } from "lucide-react";
+import { CheckCircle2, PencilLine, Workflow } from "lucide-react";
 
 function StatusTile({ label, value, tone = "cyan" }) {
   const toneClass =
@@ -97,15 +97,6 @@ function ProcessDetailsPanel({ item, onEdit }) {
         </div>
       </section>
 
-      <section className="mt-6">
-        <div className="border border-cyan-300/10 bg-[linear-gradient(180deg,rgba(17,31,43,0.72),rgba(10,19,29,0.76))] px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Hash className="h-4 w-4 text-cyan-200" />
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Код</div>
-          </div>
-          <div className="mt-3 text-sm font-medium text-slate-100">{item.process_code}</div>
-        </div>
-      </section>
     </aside>
   );
 }

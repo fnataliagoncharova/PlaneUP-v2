@@ -1,13 +1,12 @@
 import { Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import NomenclatureSearchSelect from "../shared/NomenclatureSearchSelect";
 
-function createInitialState(item, nomenclatureItems) {
-  const fallbackNomenclatureId = nomenclatureItems[0]?.nomenclature_id ?? "";
-
+function createInitialState(item) {
   return {
     route_code: item?.route_code ?? "",
     route_name: item?.route_name ?? "",
-    result_nomenclature_id: item?.result_nomenclature_id ?? fallbackNomenclatureId,
+    result_nomenclature_id: item?.result_nomenclature_id ?? "",
   };
 }
 
@@ -22,7 +21,7 @@ function RouteFormPanel({
 }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() =>
-    createInitialState(item, nomenclatureItems),
+    createInitialState(item),
   );
   const [localError, setLocalError] = useState("");
 
@@ -35,9 +34,9 @@ function RouteFormPanel({
   );
 
   useEffect(() => {
-    setFormValues(createInitialState(item, sortedNomenclatureItems));
+    setFormValues(createInitialState(item));
     setLocalError("");
-  }, [item, mode, sortedNomenclatureItems]);
+  }, [item, mode]);
 
   const handleFieldChange = (fieldName, fieldValue) => {
     setFormValues((previousValues) => ({
@@ -117,28 +116,16 @@ function RouteFormPanel({
           />
         </label>
 
-        <label className="block">
-          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-            Выходная номенклатура
-          </div>
-          <select
-            value={formValues.result_nomenclature_id}
-            onChange={(event) =>
-              handleFieldChange("result_nomenclature_id", event.target.value)
-            }
-            className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
-          >
-            {sortedNomenclatureItems.map((nomenclatureItem) => (
-              <option
-                key={nomenclatureItem.nomenclature_id}
-                value={nomenclatureItem.nomenclature_id}
-                className="bg-slate-950 text-slate-100"
-              >
-                {nomenclatureItem.nomenclature_code} — {nomenclatureItem.nomenclature_name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <NomenclatureSearchSelect
+          label="Выходная номенклатура"
+          items={sortedNomenclatureItems}
+          value={formValues.result_nomenclature_id}
+          onChange={(nomenclatureId) =>
+            handleFieldChange("result_nomenclature_id", nomenclatureId)
+          }
+          placeholder="Начните вводить код или название"
+          disabled={sortedNomenclatureItems.length === 0}
+        />
 
         {localError ? (
           <div className="border border-amber-300/30 bg-amber-500/[0.09] px-4 py-3 text-sm text-amber-100">

@@ -4,7 +4,41 @@ function getUsageEntries(item) {
   return item?.usage_entries ?? item?.usageEntries ?? [];
 }
 
-function MachineDetailsPanel({ item, onEdit }) {
+function getRoleLabel(role) {
+  const normalizedRole = String(role ?? "").toLowerCase();
+
+  if (normalizedRole === "primary" || normalizedRole === "основная" || normalizedRole === "основное") {
+    return "Основное";
+  }
+
+  if (
+    normalizedRole === "alternative" ||
+    normalizedRole === "альтернативная" ||
+    normalizedRole === "альтернативное"
+  ) {
+    return "Альтернативное";
+  }
+
+  return role || "—";
+}
+
+function formatRate(value) {
+  const normalizedValue = Number(value);
+
+  if (!Number.isFinite(normalizedValue)) {
+    return null;
+  }
+
+  return normalizedValue.toFixed(3);
+}
+
+function MachineDetailsPanel({
+  item,
+  usageEntries = [],
+  isUsageLoading = false,
+  usageError = "",
+  onEdit,
+}) {
   if (!item) {
     return (
       <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
@@ -26,7 +60,9 @@ function MachineDetailsPanel({ item, onEdit }) {
     );
   }
 
-  const usageEntries = getUsageEntries(item);
+  const resolvedUsageEntries = Array.isArray(usageEntries)
+    ? usageEntries
+    : getUsageEntries(item);
 
   return (
     <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
@@ -74,7 +110,7 @@ function MachineDetailsPanel({ item, onEdit }) {
             </div>
             <div className="text-right">
               <div className="text-4xl font-semibold leading-none text-cyan-50">
-                {usageEntries.length}
+                {resolvedUsageEntries.length}
               </div>
               <div className="mt-2 text-xs uppercase tracking-[0.2em] text-cyan-100/60">
                 Использований
@@ -136,22 +172,47 @@ function MachineDetailsPanel({ item, onEdit }) {
                 </tr>
               </thead>
               <tbody>
-                {usageEntries.length > 0 ? (
-                  usageEntries.map((entry, index) => {
+                {isUsageLoading ? (
+                  <tr className="border-t border-white/[0.06]">
+                    <td colSpan={5} className="px-4 py-5 text-sm text-slate-300">
+                      Загрузка использований оборудования...
+                    </td>
+                  </tr>
+                ) : usageError ? (
+                  <tr className="border-t border-white/[0.06]">
+                    <td colSpan={5} className="px-4 py-5 text-sm text-rose-100">
+                      {usageError}
+                    </td>
+                  </tr>
+                ) : resolvedUsageEntries.length > 0 ? (
+                  resolvedUsageEntries.map((entry, index) => {
                     const routeCode = entry.route_code ?? entry.routeCode ?? "—";
                     const routeName = entry.route_name ?? entry.routeName ?? "";
                     const stepNo = entry.step_no ?? entry.stepNo ?? "—";
                     const stepName = entry.step_name ?? entry.stepName ?? "—";
-                    const operation = entry.operation ?? "—";
-                    const role = entry.role ?? "—";
-                    const rate = entry.rate ?? "—";
+                    const processCode = entry.process_code ?? entry.processCode ?? "";
+                    const processName = entry.process_name ?? entry.processName ?? "";
+                    const operation =
+                      processCode && processName
+                        ? `${processCode} ${processName}`
+                        : processName || processCode || entry.operation || "—";
+                    const roleRaw = entry.equipment_role ?? entry.role ?? "—";
+                    const roleLabel = getRoleLabel(roleRaw);
+                    const fallbackRate = [
+                      formatRate(entry.nominal_rate ?? entry.nominalRate),
+                      entry.rate_uom ?? entry.rateUom,
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+                    const normalizedRate =
+                      entry.rate ?? (fallbackRate || "—");
                     const isPrimary =
-                      String(role).toLowerCase() === "primary" ||
-                      String(role).toLowerCase() === "основная";
+                      String(roleRaw).toLowerCase() === "primary" ||
+                      String(roleLabel).toLowerCase() === "основное";
 
                     return (
                       <tr
-                        key={`${routeCode}-${stepNo}-${role}-${index}`}
+                        key={`${routeCode}-${stepNo}-${roleRaw}-${index}`}
                         className="border-t border-white/[0.06] transition-colors hover:bg-cyan-300/[0.05]"
                       >
                         <td className="px-4 py-3 align-top text-sm text-slate-200">
@@ -172,11 +233,11 @@ function MachineDetailsPanel({ item, onEdit }) {
                                 : "border-amber-200/20 bg-amber-300/10 text-amber-100/80",
                             ].join(" ")}
                           >
-                            {role}
+                            {roleLabel}
                           </span>
                         </td>
                         <td className="px-4 py-3 align-top text-sm font-medium text-slate-100">
-                          {rate}
+                          {normalizedRate}
                         </td>
                       </tr>
                     );
@@ -184,7 +245,7 @@ function MachineDetailsPanel({ item, onEdit }) {
                 ) : (
                   <tr className="border-t border-white/[0.06]">
                     <td colSpan={5} className="px-4 py-5 text-sm text-slate-400">
-                      Связанные использования пока не загружены в этом контуре V2.
+                      Оборудование пока не привязано к шагам маршрутов.
                     </td>
                   </tr>
                 )}
