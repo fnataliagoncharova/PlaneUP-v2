@@ -1,33 +1,68 @@
-import { ChevronRight, Goal } from "lucide-react";
+import { ChevronRight, Goal, Plus } from "lucide-react";
 
-function RouteStepsFlow({ steps, selectedStepId, onSelectStep }) {
-  return (
-    <section className="glass-panel p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
-            Технологический маршрут
-          </h2>
+function RouteStepsFlow({
+  steps,
+  selectedStepId,
+  onSelectStep,
+  onAddStep,
+  isLoading,
+  errorMessage,
+  isRouteSelected,
+}) {
+  const content = (() => {
+    if (!isRouteSelected) {
+      return (
+        <div className="mt-6 border border-white/[0.05] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-5 py-8 text-center">
+          <div className="text-base font-medium text-slate-200">Выберите маршрут слева.</div>
+          <div className="mt-2 text-sm text-slate-500">
+            После выбора маршрута отобразится технологическая цепочка шагов.
+          </div>
         </div>
-        <div className="tech-chip">
-          <Goal className="h-4 w-4" />
-          Выберите шаг
+      );
+    }
+
+    if (isLoading) {
+      return (
+        <div className="mt-6 border border-white/[0.05] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-5 py-8 text-center">
+          <div className="text-base font-medium text-slate-200">Загрузка шагов маршрута...</div>
         </div>
-      </div>
+      );
+    }
 
-      <div className="panel-divider mt-5" />
+    if (errorMessage) {
+      return (
+        <div className="mt-6 border border-rose-300/30 bg-rose-500/[0.1] px-5 py-5 text-sm text-rose-100">
+          {errorMessage}
+        </div>
+      );
+    }
 
+    if (steps.length === 0) {
+      return (
+        <div className="mt-6 border border-white/[0.05] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-5 py-8 text-center">
+          <div className="text-base font-medium text-slate-200">В этом маршруте пока нет шагов.</div>
+          <div className="mt-2 text-sm text-slate-500">
+            Добавьте первый шаг, чтобы собрать технологическую цепочку.
+          </div>
+        </div>
+      );
+    }
+
+    return (
       <div className="mt-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-4">
           {steps.map((step, index) => {
-            const isSelected = step.id === selectedStepId;
+            const isSelected = step.route_step_id === selectedStepId;
             const isLast = index === steps.length - 1;
 
             return (
-              <div key={step.id} className="flex min-w-0 flex-1 items-center gap-3 lg:gap-4">
+              <div
+                key={step.route_step_id}
+                className="flex min-w-0 flex-1 items-center gap-3 lg:gap-4"
+              >
                 <button
                   type="button"
-                  onClick={() => onSelectStep(step.id)}
+                  onClick={() => onSelectStep(step.route_step_id)}
                   className={[
                     "group relative flex min-h-[112px] min-w-0 flex-1 flex-col justify-between rounded-none border px-4 py-3 text-left transition-all duration-200 lg:px-5",
                     isSelected
@@ -44,15 +79,20 @@ function RouteStepsFlow({ steps, selectedStepId, onSelectStep }) {
                           : "bg-white/[0.05] text-slate-400",
                       ].join(" ")}
                     >
-                      Шаг {step.number}
+                      Шаг {step.step_no}
                     </span>
                     <span className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                      {step.process.split(" ")[0]}
+                      {step.process_code ?? "PR"}
                     </span>
                   </div>
 
                   <div className="mt-3 whitespace-normal break-words font-['Space_Grotesk'] text-lg font-semibold leading-tight text-slate-50 xl:text-xl">
-                    {step.title}
+                    {step.process_name || "Технологическая операция"}
+                  </div>
+
+                  <div className="mt-2 text-xs text-slate-300/80">
+                    Выход: {step.output_nomenclature_code ?? "NM"} —{" "}
+                    {step.output_nomenclature_name || "не выбрана"}
                   </div>
 
                   {isSelected ? (
@@ -70,6 +110,37 @@ function RouteStepsFlow({ steps, selectedStepId, onSelectStep }) {
           })}
         </div>
       </div>
+    );
+  })();
+
+  return (
+    <section className="glass-panel p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
+            Технологический маршрут
+          </h2>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="tech-chip">
+            <Goal className="h-4 w-4" />
+            Этап 2 маршрутов
+          </div>
+          <button
+            type="button"
+            onClick={onAddStep}
+            disabled={!isRouteSelected}
+            className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            <Plus className="h-4 w-4" />
+            Добавить шаг
+          </button>
+        </div>
+      </div>
+
+      <div className="panel-divider mt-5" />
+
+      {content}
     </section>
   );
 }

@@ -1,18 +1,41 @@
 import { ChevronRight, Layers3, Network, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-function RouteList({ routes, selectedRouteId, onSelectRoute }) {
+function RouteList({
+  routes,
+  isLoading,
+  selectedRouteId,
+  onSelectRoute,
+  getResultNomenclatureLabel,
+}) {
   const [searchValue, setSearchValue] = useState("");
 
-  const normalizedSearch = searchValue.trim().toLowerCase();
-  const filteredRoutes = normalizedSearch
-    ? routes.filter((route) => {
-        const codeMatches = route.code.toLowerCase().includes(normalizedSearch);
-        const nameMatches = route.name.toLowerCase().includes(normalizedSearch);
+  const filteredRoutes = useMemo(() => {
+    const normalizedSearch = searchValue.trim().toLowerCase();
 
-        return codeMatches || nameMatches;
-      })
-    : routes;
+    if (!normalizedSearch) {
+      return routes;
+    }
+
+    return routes.filter((route) => {
+      const codeMatches = route.route_code.toLowerCase().includes(normalizedSearch);
+      const nameMatches = route.route_name.toLowerCase().includes(normalizedSearch);
+
+      return codeMatches || nameMatches;
+    });
+  }, [routes, searchValue]);
+
+  useEffect(() => {
+    if (filteredRoutes.length === 0) {
+      return;
+    }
+
+    const hasSelectedRoute = filteredRoutes.some((route) => route.route_id === selectedRouteId);
+
+    if (!hasSelectedRoute) {
+      onSelectRoute(filteredRoutes[0].route_id);
+    }
+  }, [filteredRoutes, onSelectRoute, selectedRouteId]);
 
   return (
     <section className="glass-panel p-5 sm:p-6">
@@ -25,7 +48,7 @@ function RouteList({ routes, selectedRouteId, onSelectRoute }) {
         </div>
         <div className="tech-chip">
           <Network className="h-4 w-4" />
-          Demo data
+          Backend API
         </div>
       </div>
 
@@ -45,15 +68,19 @@ function RouteList({ routes, selectedRouteId, onSelectRoute }) {
       </div>
 
       <div className="mt-5 space-y-3">
-        {filteredRoutes.length > 0 ? (
+        {isLoading ? (
+          <div className="border border-white/[0.05] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-5 py-8 text-center">
+            <div className="text-base font-medium text-slate-200">Загрузка маршрутов...</div>
+          </div>
+        ) : filteredRoutes.length > 0 ? (
           filteredRoutes.map((route) => {
-            const isSelected = route.id === selectedRouteId;
+            const isSelected = route.route_id === selectedRouteId;
 
             return (
               <button
-                key={route.id}
+                key={route.route_id}
                 type="button"
-                onClick={() => onSelectRoute(route.id)}
+                onClick={() => onSelectRoute(route.route_id)}
                 className={[
                   "group relative flex w-full items-start gap-4 overflow-hidden rounded-none border px-4 py-4 text-left transition-all duration-200",
                   isSelected
@@ -81,14 +108,23 @@ function RouteList({ routes, selectedRouteId, onSelectRoute }) {
                 <div className="relative z-10 min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="font-['Space_Grotesk'] text-xl font-semibold text-slate-50">
-                      {route.code}
+                      {route.route_code}
                     </span>
-                    <span className="rounded-none border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                      {route.kind}
+                    <span
+                      className={[
+                        "rounded-none border px-2.5 py-1 text-[11px] uppercase tracking-[0.16em]",
+                        route.is_active
+                          ? "border-cyan-200/24 bg-cyan-300/10 text-cyan-100/80"
+                          : "border-amber-200/62 bg-[linear-gradient(180deg,rgba(251,191,36,0.30),rgba(180,83,9,0.24))] text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_0_0_1px_rgba(251,191,36,0.12)]",
+                      ].join(" ")}
+                    >
+                      {route.is_active ? "Активен" : "Неактивен"}
                     </span>
                   </div>
-                  <div className="mt-2 text-base text-slate-200">{route.name}</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-400">{route.subtitle}</div>
+                  <div className="mt-2 text-base text-slate-200">{route.route_name}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-400">
+                    Выход: {getResultNomenclatureLabel(route.result_nomenclature_id)}
+                  </div>
                 </div>
 
                 <ChevronRight
@@ -116,3 +152,4 @@ function RouteList({ routes, selectedRouteId, onSelectRoute }) {
 }
 
 export default RouteList;
+

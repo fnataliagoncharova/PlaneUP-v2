@@ -49,8 +49,11 @@ CREATE TABLE route_step_inputs (
     input_qty NUMERIC(12,3) NOT NULL DEFAULT 1.000,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (input_qty > 0),
-    CHECK (input_nomenclature_id IS NOT NULL OR external_input_name IS NOT NULL)
+    CONSTRAINT route_step_inputs_input_qty_check CHECK (input_qty > 0),
+    CONSTRAINT route_step_inputs_input_source_check CHECK (
+        input_nomenclature_id IS NOT NULL
+        OR NULLIF(BTRIM(external_input_name), '') IS NOT NULL
+    )
 );
 
 CREATE TABLE machines (
