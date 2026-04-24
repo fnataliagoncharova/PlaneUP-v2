@@ -6,6 +6,7 @@ from db import get_connection
 from routers.machines import router as machines_router
 from routers.nomenclature import router as nomenclature_router
 from routers.processes import router as processes_router
+from routers.route_step_equipment import router as route_step_equipment_router
 from routers.route_step_inputs import router as route_step_inputs_router
 from routers.route_steps import router as route_steps_router
 from routers.routes import router as routes_router
@@ -28,6 +29,7 @@ app.include_router(machines_router)
 app.include_router(routes_router)
 app.include_router(route_steps_router)
 app.include_router(route_step_inputs_router)
+app.include_router(route_step_equipment_router)
 
 
 @app.get("/")

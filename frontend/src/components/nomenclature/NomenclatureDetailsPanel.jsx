@@ -56,9 +56,6 @@ function NomenclatureDetailsPanel({ item, onEdit }) {
             <PencilLine className="h-3.5 w-3.5" />
             Редактировать
           </button>
-          <span className="rounded-none border border-cyan-200/24 bg-cyan-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-100">
-            {item.nomenclature_code}
-          </span>
         </div>
       </div>
 

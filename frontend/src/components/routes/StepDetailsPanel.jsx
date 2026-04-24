@@ -13,7 +13,7 @@ function formatQty(value) {
   const normalizedValue = Number(value);
 
   if (!Number.isFinite(normalizedValue)) {
-    return "—";
+    return "-";
   }
 
   return normalizedValue.toFixed(3);
@@ -27,7 +27,18 @@ function buildInputTitle(input) {
   const code = input.input_nomenclature_code || "NM";
   const name = input.input_nomenclature_name || "Номенклатура";
 
-  return `${code} — ${name}`;
+  return `${code} - ${name}`;
+}
+
+function buildEquipmentTitle(equipmentItem) {
+  const code = equipmentItem.machine_code || "MC";
+  const name = equipmentItem.machine_name || "Оборудование";
+
+  return `${code} - ${name}`;
+}
+
+function getEquipmentRoleLabel(role) {
+  return role === "primary" ? "Основное" : "Альтернативное";
 }
 
 function IconActionButton({ label, onClick, disabled = false, tone = "edit", children }) {
@@ -82,6 +93,13 @@ function StepDetailsPanel({
   onEditInput,
   onDeleteInput,
   isDeletingInput,
+  equipment,
+  isEquipmentLoading,
+  equipmentError,
+  onOpenCreateEquipment,
+  onEditEquipment,
+  onDeleteEquipment,
+  isDeletingEquipment,
 }) {
   if (!selectedRoute) {
     return (
@@ -108,7 +126,10 @@ function StepDetailsPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="panel-title">Выбранный маршрут</div>
-          <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
+          <div className="mt-2 text-sm font-normal tracking-[0.12em] text-slate-200">
+            {selectedRoute.route_code}
+          </div>
+          <h2 className="mt-2 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
             {selectedRoute.route_name}
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -138,9 +159,6 @@ function StepDetailsPanel({
             <Power className="h-3.5 w-3.5" />
             {selectedRoute.is_active ? "Деактивировать" : "Активировать"}
           </button>
-          <span className="rounded-none border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-100">
-            {selectedRoute.route_code}
-          </span>
         </div>
       </div>
 
@@ -308,15 +326,105 @@ function StepDetailsPanel({
           </section>
 
           <section className="mt-6">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center text-cyan-100">
-                <Cog className="h-4 w-4" />
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center text-cyan-100">
+                  <Cog className="h-4 w-4" />
+                </div>
+                <div className="text-lg font-medium text-slate-50">Оборудование шага</div>
               </div>
-              <div className="text-lg font-medium text-slate-50">Оборудование шага</div>
+              <button
+                type="button"
+                onClick={onOpenCreateEquipment}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-cyan-50 transition hover:bg-cyan-400/18"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Добавить оборудование
+              </button>
             </div>
-            <div className="rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-4 py-4 text-sm text-slate-400">
-              Оборудование шага будет подключено на следующем этапе. Сейчас данные не редактируются.
-            </div>
+
+            {isEquipmentLoading ? (
+              <div className="rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-4 py-4 text-sm text-slate-400">
+                Загрузка оборудования шага...
+              </div>
+            ) : equipmentError ? (
+              <div className="rounded-none border border-rose-300/30 bg-rose-500/[0.1] px-4 py-4 text-sm text-rose-100">
+                {equipmentError}
+              </div>
+            ) : equipment.length === 0 ? (
+              <div className="rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,rgba(16,26,37,0.58),rgba(10,18,27,0.7))] px-4 py-4 text-sm text-slate-400">
+                Для этого шага пока нет оборудования. Добавьте первую единицу.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {equipment.map((equipmentItem) => {
+                  const isPrimary = equipmentItem.equipment_role === "primary";
+
+                  return (
+                    <div
+                      key={equipmentItem.step_equipment_id}
+                      className={[
+                        "rounded-none border px-4 py-4",
+                        isPrimary
+                          ? "border-cyan-200/20 bg-[linear-gradient(180deg,rgba(25,88,114,0.28),rgba(11,30,44,0.62))] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+                          : "border-slate-200/18 bg-[linear-gradient(180deg,rgba(52,63,82,0.28),rgba(19,25,34,0.62))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
+                      ].join(" ")}
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div
+                          className={[
+                            "text-xs uppercase tracking-[0.18em]",
+                            isPrimary ? "text-cyan-100/62" : "text-slate-300/78",
+                          ].join(" ")}
+                        >
+                          {getEquipmentRoleLabel(equipmentItem.equipment_role)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <IconActionButton
+                            label="Редактировать"
+                            onClick={() => onEditEquipment(equipmentItem)}
+                          >
+                            <PencilLine className="h-3.5 w-3.5" />
+                          </IconActionButton>
+                          <IconActionButton
+                            label="Удалить"
+                            onClick={() => onDeleteEquipment(equipmentItem)}
+                            disabled={isDeletingEquipment}
+                            tone="danger"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </IconActionButton>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-base font-medium text-slate-50">
+                            {buildEquipmentTitle(equipmentItem)}
+                          </div>
+                          <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+                            Приоритет {equipmentItem.priority}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xl font-semibold text-slate-50">
+                            {formatQty(equipmentItem.nominal_rate)}
+                          </div>
+                          <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
+                            {equipmentItem.rate_uom || "ед./мин"}
+                          </div>
+                          {!equipmentItem.is_active ? (
+                            <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-amber-200/80">
+                              Неактивно
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </>
       ) : (

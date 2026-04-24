@@ -4,12 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
 import RouteFormPanel from "../components/routes/RouteFormPanel";
 import RouteList from "../components/routes/RouteList";
+import RouteStepEquipmentFormPanel from "../components/routes/RouteStepEquipmentFormPanel";
 import RouteStepFormPanel from "../components/routes/RouteStepFormPanel";
 import RouteStepInputFormPanel from "../components/routes/RouteStepInputFormPanel";
 import RouteStepsFlow from "../components/routes/RouteStepsFlow";
 import StepDetailsPanel from "../components/routes/StepDetailsPanel";
+import { getMachinesList } from "../services/machinesApi";
 import { getNomenclatureList } from "../services/nomenclatureApi";
 import { getProcessesList } from "../services/processesApi";
+import {
+  createRouteStepEquipmentItem,
+  deleteRouteStepEquipmentItem,
+  getRouteStepEquipmentList,
+  updateRouteStepEquipmentItem,
+} from "../services/routeStepEquipmentApi";
 import {
   createRouteStepInputItem,
   deleteRouteStepInputItem,
@@ -54,6 +62,20 @@ function sortInputsById(items) {
   return [...items].sort((left, right) => left.step_input_id - right.step_input_id);
 }
 
+function sortMachinesByCode(items) {
+  return [...items].sort((left, right) => left.machine_code.localeCompare(right.machine_code, "ru"));
+}
+
+function sortEquipmentByPriority(items) {
+  return [...items].sort((left, right) => {
+    if (left.priority !== right.priority) {
+      return left.priority - right.priority;
+    }
+
+    return left.step_equipment_id - right.step_equipment_id;
+  });
+}
+
 function getDefaultRouteSelection(items) {
   if (items.length === 0) {
     return null;
@@ -69,7 +91,7 @@ function buildProcessLabel(step) {
   }
 
   if (step.process_code && step.process_name) {
-    return `${step.process_code} — ${step.process_name}`;
+    return `${step.process_code} - ${step.process_name}`;
   }
 
   return step.process_name || "Не выбрана";
@@ -81,7 +103,7 @@ function buildNomenclatureLabel(step) {
   }
 
   if (step.output_nomenclature_code && step.output_nomenclature_name) {
-    return `${step.output_nomenclature_code} — ${step.output_nomenclature_name}`;
+    return `${step.output_nomenclature_code} - ${step.output_nomenclature_name}`;
   }
 
   return step.output_nomenclature_name || "Не выбрана";
@@ -94,31 +116,41 @@ function RoutesSection() {
   const [routes, setRoutes] = useState([]);
   const [routeSteps, setRouteSteps] = useState([]);
   const [routeStepInputs, setRouteStepInputs] = useState([]);
+  const [routeStepEquipment, setRouteStepEquipment] = useState([]);
+  const [machineItems, setMachineItems] = useState([]);
   const [nomenclatureItems, setNomenclatureItems] = useState([]);
   const [processItems, setProcessItems] = useState([]);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [selectedStepId, setSelectedStepId] = useState(null);
   const [selectedInputId, setSelectedInputId] = useState(null);
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isStepsLoading, setIsStepsLoading] = useState(false);
   const [isInputsLoading, setIsInputsLoading] = useState(false);
+  const [isEquipmentLoading, setIsEquipmentLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [stepsError, setStepsError] = useState("");
   const [inputsError, setInputsError] = useState("");
+  const [equipmentError, setEquipmentError] = useState("");
 
   const [routeSaveError, setRouteSaveError] = useState("");
   const [stepSaveError, setStepSaveError] = useState("");
   const [inputSaveError, setInputSaveError] = useState("");
+  const [equipmentSaveError, setEquipmentSaveError] = useState("");
   const [isSavingRoute, setIsSavingRoute] = useState(false);
   const [isChangingRouteStatus, setIsChangingRouteStatus] = useState(false);
   const [isSavingStep, setIsSavingStep] = useState(false);
   const [isSavingInput, setIsSavingInput] = useState(false);
+  const [isSavingEquipment, setIsSavingEquipment] = useState(false);
   const [isDeletingStep, setIsDeletingStep] = useState(false);
   const [isDeletingInput, setIsDeletingInput] = useState(false);
+  const [isDeletingEquipment, setIsDeletingEquipment] = useState(false);
   const [isDeleteStepConfirmOpen, setIsDeleteStepConfirmOpen] = useState(false);
   const [isDeleteInputConfirmOpen, setIsDeleteInputConfirmOpen] = useState(false);
+  const [isDeleteEquipmentConfirmOpen, setIsDeleteEquipmentConfirmOpen] = useState(false);
   const [inputPendingDeleteId, setInputPendingDeleteId] = useState(null);
+  const [equipmentPendingDeleteId, setEquipmentPendingDeleteId] = useState(null);
   const [routeStatusError, setRouteStatusError] = useState("");
   const [routeStatusNotice, setRouteStatusNotice] = useState("");
 
@@ -126,6 +158,7 @@ function RoutesSection() {
   const [routeFormMode, setRouteFormMode] = useState("create");
   const [stepFormMode, setStepFormMode] = useState("create");
   const [inputFormMode, setInputFormMode] = useState("create");
+  const [equipmentFormMode, setEquipmentFormMode] = useState("create");
 
   useEffect(() => {
     let isCancelled = false;
@@ -135,10 +168,11 @@ function RoutesSection() {
       setLoadError("");
 
       try {
-        const [routesResponse, nomenclatureResponse, processesResponse] = await Promise.all([
+        const [routesResponse, nomenclatureResponse, processesResponse, machinesResponse] = await Promise.all([
           getRoutesList(),
           getNomenclatureList(),
           getProcessesList(),
+          getMachinesList(),
         ]);
 
         if (isCancelled) {
@@ -149,6 +183,7 @@ function RoutesSection() {
         setRoutes(sortedRoutes);
         setNomenclatureItems(sortNomenclatureByCode(nomenclatureResponse));
         setProcessItems(sortProcessesByCode(processesResponse));
+        setMachineItems(sortMachinesByCode(machinesResponse));
         setSelectedRouteId(getDefaultRouteSelection(sortedRoutes));
       } catch (error) {
         if (isCancelled) {
@@ -159,11 +194,14 @@ function RoutesSection() {
         setRoutes([]);
         setRouteSteps([]);
         setRouteStepInputs([]);
+        setRouteStepEquipment([]);
+        setMachineItems([]);
         setNomenclatureItems([]);
         setProcessItems([]);
         setSelectedRouteId(null);
         setSelectedStepId(null);
         setSelectedInputId(null);
+        setSelectedEquipmentId(null);
       } finally {
         if (!isCancelled) {
           setIsLoading(false);
@@ -266,6 +304,11 @@ function RoutesSection() {
     [processItems],
   );
 
+  const machineById = useMemo(
+    () => new Map(machineItems.map((item) => [item.machine_id, item])),
+    [machineItems],
+  );
+
   const getResultNomenclatureLabel = useCallback(
     (nomenclatureId) => {
       const nomenclatureItem = nomenclatureById.get(nomenclatureId);
@@ -274,7 +317,7 @@ function RoutesSection() {
         return "Не выбрана";
       }
 
-      return `${nomenclatureItem.nomenclature_code} — ${nomenclatureItem.nomenclature_name}`;
+      return `${nomenclatureItem.nomenclature_code} - ${nomenclatureItem.nomenclature_name}`;
     },
     [nomenclatureById],
   );
@@ -353,6 +396,52 @@ function RoutesSection() {
   }, [selectedStep?.route_step_id]);
 
   useEffect(() => {
+    const routeStepId = selectedStep?.route_step_id;
+
+    if (!routeStepId) {
+      setRouteStepEquipment([]);
+      setSelectedEquipmentId(null);
+      setEquipmentError("");
+      setIsEquipmentLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadRouteStepEquipment() {
+      setIsEquipmentLoading(true);
+      setEquipmentError("");
+
+      try {
+        const response = await getRouteStepEquipmentList(routeStepId);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setRouteStepEquipment(sortEquipmentByPriority(response));
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setRouteStepEquipment([]);
+        setEquipmentError(error.message || "Не удалось загрузить оборудование шага.");
+      } finally {
+        if (!isCancelled) {
+          setIsEquipmentLoading(false);
+        }
+      }
+    }
+
+    loadRouteStepEquipment();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedStep?.route_step_id]);
+
+  useEffect(() => {
     if (selectedInputId === null) {
       return;
     }
@@ -364,13 +453,26 @@ function RoutesSection() {
   }, [routeStepInputs, selectedInputId]);
 
   useEffect(() => {
+    if (selectedEquipmentId === null) {
+      return;
+    }
+
+    const hasSelectedEquipment = routeStepEquipment.some(
+      (equipment) => equipment.step_equipment_id === selectedEquipmentId,
+    );
+    if (!hasSelectedEquipment) {
+      setSelectedEquipmentId(null);
+    }
+  }, [routeStepEquipment, selectedEquipmentId]);
+
+  useEffect(() => {
     if (!selectedStep && isDeleteStepConfirmOpen) {
       setIsDeleteStepConfirmOpen(false);
     }
   }, [isDeleteStepConfirmOpen, selectedStep]);
 
   useEffect(() => {
-    if (!selectedStep && activePanel === "input-form") {
+    if (!selectedStep && (activePanel === "input-form" || activePanel === "equipment-form")) {
       setActivePanel("view");
     }
   }, [activePanel, selectedStep]);
@@ -389,6 +491,21 @@ function RoutesSection() {
       setInputPendingDeleteId(null);
     }
   }, [inputPendingDeleteId, routeStepInputs]);
+
+  useEffect(() => {
+    if (equipmentPendingDeleteId === null) {
+      return;
+    }
+
+    const hasPendingEquipment = routeStepEquipment.some(
+      (equipment) => equipment.step_equipment_id === equipmentPendingDeleteId,
+    );
+
+    if (!hasPendingEquipment) {
+      setIsDeleteEquipmentConfirmOpen(false);
+      setEquipmentPendingDeleteId(null);
+    }
+  }, [equipmentPendingDeleteId, routeStepEquipment]);
 
   const hydratedInputs = useMemo(
     () =>
@@ -409,6 +526,24 @@ function RoutesSection() {
 
   const selectedInput =
     hydratedInputs.find((input) => input.step_input_id === selectedInputId) ?? null;
+
+  const hydratedEquipment = useMemo(
+    () =>
+      routeStepEquipment.map((equipmentItem) => {
+        const machineItem = machineById.get(equipmentItem.machine_id);
+
+        return {
+          ...equipmentItem,
+          machine_code: machineItem?.machine_code,
+          machine_name: machineItem?.machine_name,
+        };
+      }),
+    [machineById, routeStepEquipment],
+  );
+
+  const selectedEquipment =
+    hydratedEquipment.find((equipmentItem) => equipmentItem.step_equipment_id === selectedEquipmentId) ??
+    null;
 
   const selectedResultNomenclatureLabel = selectedRoute
     ? getResultNomenclatureLabel(selectedRoute.result_nomenclature_id)
@@ -657,17 +792,25 @@ function RoutesSection() {
 
       setRouteSteps(nextSteps);
       setRouteStepInputs([]);
+      setRouteStepEquipment([]);
       setSelectedInputId(null);
+      setSelectedEquipmentId(null);
       setSelectedStepId(nextSteps[0]?.route_step_id ?? null);
       setStepSaveError("");
       setInputSaveError("");
+      setEquipmentSaveError("");
       setInputsError("");
+      setEquipmentError("");
 
       if (routeId) {
         await syncRouteAfterStructuralChange(routeId, wasRouteActive);
       }
 
-      if (activePanel === "step-form" || activePanel === "input-form") {
+      if (
+        activePanel === "step-form" ||
+        activePanel === "input-form" ||
+        activePanel === "equipment-form"
+      ) {
         setActivePanel("view");
       }
     } catch (error) {
@@ -811,9 +954,154 @@ function RoutesSection() {
     }
   };
 
+  const handleOpenCreateEquipmentForm = () => {
+    if (!selectedStep) {
+      return;
+    }
+
+    setEquipmentFormMode("create");
+    setSelectedEquipmentId(null);
+    setEquipmentSaveError("");
+    setActivePanel("equipment-form");
+  };
+
+  const handleOpenEditEquipmentForm = (equipmentItem) => {
+    if (!selectedStep || !equipmentItem) {
+      return;
+    }
+
+    setEquipmentFormMode("edit");
+    setSelectedEquipmentId(equipmentItem.step_equipment_id);
+    setEquipmentSaveError("");
+    setActivePanel("equipment-form");
+  };
+
+  const handleCancelEquipmentForm = () => {
+    if (isSavingEquipment) {
+      return;
+    }
+
+    setEquipmentSaveError("");
+    setActivePanel("view");
+  };
+
+  const handleSubmitEquipmentForm = async (payload) => {
+    if (!selectedStep) {
+      return;
+    }
+
+    const routeId = selectedRoute?.route_id ?? null;
+    const wasRouteActive = Boolean(selectedRoute?.is_active);
+
+    setIsSavingEquipment(true);
+    setEquipmentSaveError("");
+    setRouteStatusError("");
+
+    try {
+      if (equipmentFormMode === "create") {
+        const createdEquipment = await createRouteStepEquipmentItem(selectedStep.route_step_id, payload);
+        const nextEquipment = sortEquipmentByPriority([...routeStepEquipment, createdEquipment]);
+
+        setRouteStepEquipment(nextEquipment);
+        setSelectedEquipmentId(createdEquipment.step_equipment_id);
+      } else if (selectedEquipment) {
+        const updatedEquipment = await updateRouteStepEquipmentItem(
+          selectedEquipment.step_equipment_id,
+          payload,
+        );
+        const nextEquipment = sortEquipmentByPriority(
+          routeStepEquipment.map((equipmentItem) =>
+            equipmentItem.step_equipment_id === selectedEquipment.step_equipment_id
+              ? updatedEquipment
+              : equipmentItem,
+          ),
+        );
+
+        setRouteStepEquipment(nextEquipment);
+        setSelectedEquipmentId(updatedEquipment.step_equipment_id);
+      }
+
+      if (routeId) {
+        await syncRouteAfterStructuralChange(routeId, wasRouteActive);
+      }
+
+      setActivePanel("view");
+    } catch (error) {
+      setEquipmentSaveError(error.message || "Не удалось сохранить оборудование шага.");
+    } finally {
+      setIsSavingEquipment(false);
+    }
+  };
+
+  const handleOpenDeleteEquipmentConfirm = (equipmentItem) => {
+    if (!equipmentItem || isDeletingEquipment) {
+      return;
+    }
+
+    setEquipmentPendingDeleteId(equipmentItem.step_equipment_id);
+    setIsDeleteEquipmentConfirmOpen(true);
+  };
+
+  const handleCancelDeleteEquipmentConfirm = () => {
+    if (isDeletingEquipment) {
+      return;
+    }
+
+    setIsDeleteEquipmentConfirmOpen(false);
+    setEquipmentPendingDeleteId(null);
+  };
+
+  const handleConfirmDeleteEquipment = async () => {
+    if (equipmentPendingDeleteId === null) {
+      return;
+    }
+
+    const routeId = selectedRoute?.route_id ?? null;
+    const wasRouteActive = Boolean(selectedRoute?.is_active);
+
+    const deletingEquipmentId = equipmentPendingDeleteId;
+    setIsDeleteEquipmentConfirmOpen(false);
+    setIsDeletingEquipment(true);
+    setEquipmentError("");
+    setRouteStatusError("");
+
+    try {
+      const deletedEquipment = await deleteRouteStepEquipmentItem(deletingEquipmentId);
+      const nextEquipment = sortEquipmentByPriority(
+        routeStepEquipment.filter(
+          (equipmentItem) => equipmentItem.step_equipment_id !== deletedEquipment.step_equipment_id,
+        ),
+      );
+
+      setRouteStepEquipment(nextEquipment);
+      setEquipmentSaveError("");
+
+      if (routeId) {
+        await syncRouteAfterStructuralChange(routeId, wasRouteActive);
+      }
+
+      if (selectedEquipmentId === deletedEquipment.step_equipment_id) {
+        setSelectedEquipmentId(null);
+      }
+
+      if (
+        activePanel === "equipment-form" &&
+        selectedEquipmentId === deletedEquipment.step_equipment_id
+      ) {
+        setActivePanel("view");
+      }
+    } catch (error) {
+      setEquipmentError(error.message || "Не удалось удалить оборудование шага.");
+    } finally {
+      setIsDeletingEquipment(false);
+      setEquipmentPendingDeleteId(null);
+    }
+  };
+
   const routeFormItem = routeFormMode === "edit" ? selectedRoute : null;
   const stepFormItem = stepFormMode === "edit" ? selectedStep : null;
   const inputFormItem = inputFormMode === "edit" ? selectedInput : null;
+  const equipmentFormItem = equipmentFormMode === "edit" ? selectedEquipment : null;
 
   return (
     <>
@@ -826,8 +1114,8 @@ function RoutesSection() {
                   Маршруты
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
-                  Этап 3 маршрутов: шапка маршрута, шаги и входы шага подключены к backend API.
-                  Оборудование шага остаётся следующим этапом.
+                  Этап 4 маршрутов: шапка маршрута, шаги, входы и оборудование шага подключены к
+                  backend API.
                 </p>
               </div>
 
@@ -902,6 +1190,16 @@ function RoutesSection() {
             onCancel={handleCancelInputForm}
             onSave={handleSubmitInputForm}
           />
+        ) : activePanel === "equipment-form" ? (
+          <RouteStepEquipmentFormPanel
+            mode={equipmentFormMode}
+            item={equipmentFormItem}
+            machineItems={machineItems}
+            isSaving={isSavingEquipment}
+            errorMessage={equipmentSaveError}
+            onCancel={handleCancelEquipmentForm}
+            onSave={handleSubmitEquipmentForm}
+          />
         ) : (
           <StepDetailsPanel
             selectedRoute={selectedRoute}
@@ -927,6 +1225,13 @@ function RoutesSection() {
             onEditInput={handleOpenEditInputForm}
             onDeleteInput={handleOpenDeleteInputConfirm}
             isDeletingInput={isDeletingInput}
+            equipment={hydratedEquipment}
+            isEquipmentLoading={isEquipmentLoading}
+            equipmentError={equipmentError}
+            onOpenCreateEquipment={handleOpenCreateEquipmentForm}
+            onEditEquipment={handleOpenEditEquipmentForm}
+            onDeleteEquipment={handleOpenDeleteEquipmentConfirm}
+            isDeletingEquipment={isDeletingEquipment}
           />
         )}
       </section>
@@ -952,8 +1257,20 @@ function RoutesSection() {
         isConfirmDisabled={isDeletingInput}
         isCancelDisabled={isDeletingInput}
       />
+
+      <V2ConfirmDialog
+        isOpen={isDeleteEquipmentConfirmOpen}
+        title="Удалить оборудование шага?"
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={handleConfirmDeleteEquipment}
+        onCancel={handleCancelDeleteEquipmentConfirm}
+        isConfirmDisabled={isDeletingEquipment}
+        isCancelDisabled={isDeletingEquipment}
+      />
     </>
   );
 }
 
 export default RoutesSection;
+
