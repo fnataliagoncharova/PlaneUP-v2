@@ -3,6 +3,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import get_connection
+from routers.demand import router as demand_router
+from routers.inventory_balance import router as inventory_balance_router
 from routers.machines import router as machines_router
 from routers.nomenclature import router as nomenclature_router
 from routers.processes import router as processes_router
@@ -10,6 +12,8 @@ from routers.route_step_equipment import router as route_step_equipment_router
 from routers.route_step_inputs import router as route_step_inputs_router
 from routers.route_steps import router as route_steps_router
 from routers.routes import router as routes_router
+from routers.safety_stock import router as safety_stock_router
+from routers.sales_plan import router as sales_plan_router
 
 
 app = FastAPI()
@@ -30,6 +34,10 @@ app.include_router(routes_router)
 app.include_router(route_steps_router)
 app.include_router(route_step_inputs_router)
 app.include_router(route_step_equipment_router)
+app.include_router(demand_router)
+app.include_router(sales_plan_router)
+app.include_router(inventory_balance_router)
+app.include_router(safety_stock_router)
 
 
 @app.get("/")

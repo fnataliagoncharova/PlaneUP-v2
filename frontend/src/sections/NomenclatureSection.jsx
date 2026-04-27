@@ -13,6 +13,9 @@ import {
   previewNomenclatureImport,
   updateNomenclatureItem,
 } from "../services/nomenclatureApi";
+import { getProcessesList } from "../services/processesApi";
+import { getRouteStepsList } from "../services/routeStepsApi";
+import { getRoutesList } from "../services/routesApi";
 
 function sortByCode(items) {
   return [...items].sort((left, right) =>
@@ -29,12 +32,52 @@ function getDefaultSelection(items) {
   return preferredItem?.nomenclature_id ?? items[0].nomenclature_id;
 }
 
-function NomenclatureSection() {
+function pickRouteByResultNomenclature(routes, nomenclatureId) {
+  const matchedRoutes = routes.filter(
+    (route) => route.result_nomenclature_id === nomenclatureId,
+  );
+
+  if (matchedRoutes.length === 0) {
+    return null;
+  }
+
+  return [...matchedRoutes].sort((left, right) => {
+    if (left.is_active !== right.is_active) {
+      return Number(right.is_active) - Number(left.is_active);
+    }
+
+    return left.route_code.localeCompare(right.route_code, "ru");
+  })[0];
+}
+
+function buildStepProcessLabel(step, processById) {
+  const processItem = processById.get(step.process_id);
+
+  if (!processItem) {
+    return `Операция #${step.process_id}`;
+  }
+
+  if (processItem.process_name) {
+    return processItem.process_name;
+  }
+
+  return processItem.process_code || `Операция #${step.process_id}`;
+}
+
+function NomenclatureSection({ onOpenRoute }) {
   const [items, setItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState(null);
+  const [routes, setRoutes] = useState([]);
+  const [processes, setProcesses] = useState([]);
+  const [selectedProductionRoute, setSelectedProductionRoute] = useState(null);
+  const [selectedProductionRouteSteps, setSelectedProductionRouteSteps] = useState([]);
   const [searchValue, setSearchValue] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isRouteContextLoading, setIsRouteContextLoading] = useState(true);
+  const [isRouteStepsLoading, setIsRouteStepsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [routeContextError, setRouteContextError] = useState("");
+  const [routeStepsError, setRouteStepsError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -125,6 +168,141 @@ function NomenclatureSection() {
   }, [filteredItems, selectedItemId]);
 
   const selectedItem = items.find((item) => item.nomenclature_id === selectedItemId) ?? null;
+  const selectedNomenclatureId = selectedItem?.nomenclature_id ?? null;
+  const processById = useMemo(
+    () => new Map(processes.map((process) => [process.process_id, process])),
+    [processes],
+  );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadRouteContext() {
+      setIsRouteContextLoading(true);
+      setRouteContextError("");
+
+      try {
+        const [routesResponse, processesResponse] = await Promise.all([
+          getRoutesList(),
+          getProcessesList(),
+        ]);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setRoutes(routesResponse);
+        setProcesses(processesResponse);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setRoutes([]);
+        setProcesses([]);
+        setRouteContextError(error.message || "Не удалось загрузить маршруты номенклатуры.");
+      } finally {
+        if (!isCancelled) {
+          setIsRouteContextLoading(false);
+        }
+      }
+    }
+
+    loadRouteContext();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedNomenclatureId) {
+      setSelectedProductionRoute(null);
+      setSelectedProductionRouteSteps([]);
+      setRouteStepsError("");
+      setIsRouteStepsLoading(false);
+      return;
+    }
+
+    if (isRouteContextLoading) {
+      return;
+    }
+
+    if (routeContextError) {
+      setSelectedProductionRoute(null);
+      setSelectedProductionRouteSteps([]);
+      setIsRouteStepsLoading(false);
+      return;
+    }
+
+    const nextRoute = pickRouteByResultNomenclature(routes, selectedNomenclatureId);
+
+    if (!nextRoute) {
+      setSelectedProductionRoute(null);
+      setSelectedProductionRouteSteps([]);
+      setRouteStepsError("");
+      setIsRouteStepsLoading(false);
+      return;
+    }
+
+    setSelectedProductionRoute(nextRoute);
+
+    let isCancelled = false;
+
+    async function loadProductionRouteSteps() {
+      setIsRouteStepsLoading(true);
+      setRouteStepsError("");
+
+      try {
+        const response = await getRouteStepsList(nextRoute.route_id);
+
+        if (isCancelled) {
+          return;
+        }
+
+        const normalizedSteps = [...response]
+          .sort((left, right) => left.step_no - right.step_no)
+          .map((step) => ({
+            route_step_id: step.route_step_id,
+            step_no: step.step_no,
+            process_label: buildStepProcessLabel(step, processById),
+          }));
+
+        setSelectedProductionRouteSteps(normalizedSteps);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setSelectedProductionRouteSteps([]);
+        setRouteStepsError(error.message || "Не удалось загрузить шаги маршрута.");
+      } finally {
+        if (!isCancelled) {
+          setIsRouteStepsLoading(false);
+        }
+      }
+    }
+
+    loadProductionRouteSteps();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    isRouteContextLoading,
+    processById,
+    routeContextError,
+    routes,
+    selectedNomenclatureId,
+  ]);
+
+  const handleOpenRoute = useCallback(() => {
+    if (!selectedProductionRoute || !onOpenRoute) {
+      return;
+    }
+
+    onOpenRoute(selectedProductionRoute.route_id);
+  }, [onOpenRoute, selectedProductionRoute]);
 
   const handleOpenCreateForm = () => {
     setFormMode("create");
@@ -372,6 +550,11 @@ function NomenclatureSection() {
         <NomenclatureDetailsPanel
           item={filteredItems.length > 0 ? selectedItem : null}
           onEdit={handleOpenEditForm}
+          productionRoute={selectedProductionRoute}
+          productionRouteSteps={selectedProductionRouteSteps}
+          isProductionRouteLoading={isRouteContextLoading || isRouteStepsLoading}
+          productionRouteError={routeContextError || routeStepsError}
+          onOpenRoute={handleOpenRoute}
         />
       )}
     </section>

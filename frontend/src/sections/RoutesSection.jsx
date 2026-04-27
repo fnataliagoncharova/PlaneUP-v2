@@ -112,7 +112,7 @@ function buildNomenclatureLabel(step) {
 const ROUTE_AUTODEACTIVATION_MESSAGE =
   "После изменения маршрут стал неактивным. Активируйте его повторно после проверки.";
 
-function RoutesSection() {
+function RoutesSection({ routeOpenRequest }) {
   const [routes, setRoutes] = useState([]);
   const [routeSteps, setRouteSteps] = useState([]);
   const [routeStepInputs, setRouteStepInputs] = useState([]);
@@ -288,6 +288,21 @@ function RoutesSection() {
   }, [selectedRouteId]);
 
   const selectedRoute = routes.find((route) => route.route_id === selectedRouteId) ?? null;
+
+  useEffect(() => {
+    const requestedRouteId = routeOpenRequest?.routeId;
+    if (!requestedRouteId) {
+      return;
+    }
+
+    const hasRequestedRoute = routes.some((route) => route.route_id === requestedRouteId);
+    if (!hasRequestedRoute) {
+      return;
+    }
+
+    setSelectedRouteId(requestedRouteId);
+    setActivePanel("view");
+  }, [routeOpenRequest?.routeId, routeOpenRequest?.version, routes]);
 
   useEffect(() => {
     setRouteStatusError("");
@@ -1113,10 +1128,6 @@ function RoutesSection() {
                 <h1 className="font-['Space_Grotesk'] text-3xl font-semibold text-slate-50 sm:text-4xl">
                   Маршруты
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
-                  Этап 4 маршрутов: шапка маршрута, шаги, входы и оборудование шага подключены к
-                  backend API.
-                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">

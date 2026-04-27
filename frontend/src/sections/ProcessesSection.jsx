@@ -172,10 +172,6 @@ function ProcessesSection() {
               <h1 className="font-['Space_Grotesk'] text-3xl font-semibold text-slate-50 sm:text-4xl">
                 Технологические операции
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
-                Справочник технологических операций V2 работает на backend API и поддерживает
-                создание и редактирование карточек напрямую из интерфейса.
-              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">

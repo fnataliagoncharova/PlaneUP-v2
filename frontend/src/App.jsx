@@ -1,11 +1,12 @@
 import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
 import MachinesSection from "./sections/MachinesSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
+import ReportsSection from "./sections/ReportsSection";
 import RoutesSection from "./sections/RoutesSection";
 
 const navigationItems = [
@@ -31,6 +32,22 @@ const sectionDescriptions = {
 
 function App() {
   const [activeSection, setActiveSection] = useState("machines");
+  const [routeOpenRequest, setRouteOpenRequest] = useState({
+    routeId: null,
+    version: 0,
+  });
+
+  const handleOpenRouteFromNomenclature = useCallback((routeId) => {
+    if (!routeId) {
+      return;
+    }
+
+    setRouteOpenRequest((previousRequest) => ({
+      routeId,
+      version: previousRequest.version + 1,
+    }));
+    setActiveSection("routes");
+  }, []);
 
   const activeItem =
     navigationItems.find((item) => item.id === activeSection) ?? navigationItems[0];
@@ -48,13 +65,15 @@ function App() {
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(48,170,212,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%)]" />
           <div className="relative h-full overflow-y-auto p-4 sm:p-6 xl:p-8">
             {activeSection === "nomenclature" ? (
-              <NomenclatureSection />
+              <NomenclatureSection onOpenRoute={handleOpenRouteFromNomenclature} />
             ) : activeSection === "processes" ? (
               <ProcessesSection />
             ) : activeSection === "routes" ? (
-              <RoutesSection />
+              <RoutesSection routeOpenRequest={routeOpenRequest} />
             ) : activeSection === "machines" ? (
               <MachinesSection />
+            ) : activeSection === "reports" ? (
+              <ReportsSection />
             ) : (
               <SectionPlaceholder
                 title={activeItem.label}
