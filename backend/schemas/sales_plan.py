@@ -20,6 +20,21 @@ class SalesPlanRead(BaseModel):
     unit_of_measure: str
 
 
+class SalesPlanCreate(BaseModel):
+    plan_date: date
+    nomenclature_id: int = Field(gt=0)
+    plan_qty: Decimal = Field(gt=0)
+
+
+class SalesPlanUpdate(BaseModel):
+    plan_qty: Decimal = Field(gt=0)
+
+
+class SalesPlanDeleteResponse(BaseModel):
+    sales_plan_id: int
+    message: str
+
+
 class SalesPlanImportPreviewRow(BaseModel):
     row_no: int
     plan_date: date | None = None

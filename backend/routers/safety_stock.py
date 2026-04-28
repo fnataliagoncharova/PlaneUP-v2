@@ -4,19 +4,23 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
+from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
 from schemas.safety_stock import (
+    SafetyStockCreate,
+    SafetyStockDeleteResponse,
     SafetyStockImportCommitResponse,
     SafetyStockImportCommitRow,
     SafetyStockImportMode,
     SafetyStockImportPreviewResponse,
     SafetyStockImportPreviewRow,
     SafetyStockRead,
+    SafetyStockUpdate,
 )
 
 
@@ -510,6 +514,197 @@ def list_safety_stock(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось получить страховой запас.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.post("", response_model=SafetyStockRead, status_code=status.HTTP_201_CREATED)
+def create_safety_stock_item(payload: SafetyStockCreate):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT nomenclature_id
+                FROM nomenclature
+                WHERE nomenclature_id = %s;
+                """,
+                (payload.nomenclature_id,),
+            )
+            nomenclature_row = cursor.fetchone()
+            if nomenclature_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Номенклатура не найдена.",
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO safety_stock (
+                    nomenclature_id,
+                    stock_qty
+                )
+                VALUES (%s, %s)
+                RETURNING safety_stock_id;
+                """,
+                (
+                    payload.nomenclature_id,
+                    payload.stock_qty,
+                ),
+            )
+            created_row = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    ss.safety_stock_id,
+                    ss.nomenclature_id,
+                    n.nomenclature_code,
+                    n.nomenclature_name,
+                    ss.stock_qty,
+                    n.unit_of_measure
+                FROM safety_stock AS ss
+                INNER JOIN nomenclature AS n ON n.nomenclature_id = ss.nomenclature_id
+                WHERE ss.safety_stock_id = %s;
+                """,
+                (created_row["safety_stock_id"],),
+            )
+            response_row = cursor.fetchone()
+
+        connection.commit()
+        return response_row
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except UniqueViolation as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Позиция уже есть в страховом запасе.",
+        ) from exc
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось создать строку страхового запаса.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.put("/{safety_stock_id}", response_model=SafetyStockRead)
+def update_safety_stock_item(
+    payload: SafetyStockUpdate,
+    safety_stock_id: int = Path(..., gt=0),
+):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                UPDATE safety_stock
+                SET
+                    stock_qty = %s,
+                    updated_at = NOW()
+                WHERE safety_stock_id = %s
+                RETURNING safety_stock_id;
+                """,
+                (
+                    payload.stock_qty,
+                    safety_stock_id,
+                ),
+            )
+            updated_row = cursor.fetchone()
+
+            if updated_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Строка страхового запаса не найдена.",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    ss.safety_stock_id,
+                    ss.nomenclature_id,
+                    n.nomenclature_code,
+                    n.nomenclature_name,
+                    ss.stock_qty,
+                    n.unit_of_measure
+                FROM safety_stock AS ss
+                INNER JOIN nomenclature AS n ON n.nomenclature_id = ss.nomenclature_id
+                WHERE ss.safety_stock_id = %s;
+                """,
+                (safety_stock_id,),
+            )
+            response_row = cursor.fetchone()
+
+        connection.commit()
+        return response_row
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось обновить строку страхового запаса.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.delete("/{safety_stock_id}", response_model=SafetyStockDeleteResponse)
+def delete_safety_stock_item(safety_stock_id: int = Path(..., gt=0)):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                DELETE FROM safety_stock
+                WHERE safety_stock_id = %s
+                RETURNING safety_stock_id;
+                """,
+                (safety_stock_id,),
+            )
+            deleted_row = cursor.fetchone()
+
+            if deleted_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Строка страхового запаса не найдена.",
+                )
+
+        connection.commit()
+        return SafetyStockDeleteResponse(
+            safety_stock_id=safety_stock_id,
+            message="Строка страхового запаса удалена.",
+        )
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось удалить строку страхового запаса.",
         ) from exc
     finally:
         if connection is not None:

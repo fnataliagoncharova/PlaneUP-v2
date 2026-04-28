@@ -4,9 +4,9 @@ import { useCallback, useState } from "react";
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
 import MachinesSection from "./sections/MachinesSection";
+import DemandSection from "./sections/DemandSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
-import ReportsSection from "./sections/ReportsSection";
 import RoutesSection from "./sections/RoutesSection";
 
 const navigationItems = [
@@ -14,7 +14,7 @@ const navigationItems = [
   { id: "processes", label: "Технологические операции", icon: Workflow },
   { id: "routes", label: "Маршруты", icon: ScrollText },
   { id: "machines", label: "Оборудование", icon: Cog },
-  { id: "reports", label: "Отчёты", icon: BarChart3 },
+  { id: "demand", label: "Потребность", icon: BarChart3 },
 ];
 
 const sectionDescriptions = {
@@ -26,12 +26,12 @@ const sectionDescriptions = {
     "Маршруты связывают номенклатуру, шаги, входы и оборудование в производственную цепочку V2.",
   machines:
     "Справочник оборудования с ролями, производительностью и привязкой к шагам маршрутов.",
-  reports:
-    "Будущие аналитические срезы по выпуску, потребности во входах и загрузке оборудования.",
+  demand:
+    "Подготовка входных данных, запуск расчёта потребности и проверка результатов без длинной прокрутки.",
 };
 
 function App() {
-  const [activeSection, setActiveSection] = useState("machines");
+  const [activeSection, setActiveSection] = useState("demand");
   const [routeOpenRequest, setRouteOpenRequest] = useState({
     routeId: null,
     version: 0,
@@ -72,8 +72,8 @@ function App() {
               <RoutesSection routeOpenRequest={routeOpenRequest} />
             ) : activeSection === "machines" ? (
               <MachinesSection />
-            ) : activeSection === "reports" ? (
-              <ReportsSection />
+            ) : activeSection === "demand" ? (
+              <DemandSection />
             ) : (
               <SectionPlaceholder
                 title={activeItem.label}

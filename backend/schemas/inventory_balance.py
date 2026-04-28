@@ -20,6 +20,21 @@ class InventoryBalanceRead(BaseModel):
     unit_of_measure: str
 
 
+class InventoryBalanceCreate(BaseModel):
+    as_of_date: date
+    nomenclature_id: int = Field(gt=0)
+    available_qty: Decimal = Field(ge=0)
+
+
+class InventoryBalanceUpdate(BaseModel):
+    available_qty: Decimal = Field(ge=0)
+
+
+class InventoryBalanceDeleteResponse(BaseModel):
+    balance_id: int
+    message: str
+
+
 class InventoryBalanceImportPreviewRow(BaseModel):
     row_no: int
     as_of_date: date | None = None

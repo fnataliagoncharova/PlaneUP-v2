@@ -18,6 +18,20 @@ class SafetyStockRead(BaseModel):
     unit_of_measure: str
 
 
+class SafetyStockCreate(BaseModel):
+    nomenclature_id: int = Field(gt=0)
+    stock_qty: Decimal = Field(ge=0)
+
+
+class SafetyStockUpdate(BaseModel):
+    stock_qty: Decimal = Field(ge=0)
+
+
+class SafetyStockDeleteResponse(BaseModel):
+    safety_stock_id: int
+    message: str
+
+
 class SafetyStockImportPreviewRow(BaseModel):
     row_no: int
     nomenclature_code: str | None = None

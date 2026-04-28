@@ -5,6 +5,26 @@ export function getSafetyStockList(nomenclatureId) {
   return apiRequest(`/safety-stock${query}`);
 }
 
+export function createSafetyStockItem(payload) {
+  return apiRequest("/safety-stock", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateSafetyStockItem(safetyStockId, payload) {
+  return apiRequest(`/safety-stock/${safetyStockId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteSafetyStockItem(safetyStockId) {
+  return apiRequest(`/safety-stock/${safetyStockId}`, {
+    method: "DELETE",
+  });
+}
+
 export function previewSafetyStockImport(file) {
   const formData = new FormData();
   formData.append("file", file);

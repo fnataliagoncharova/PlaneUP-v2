@@ -5,20 +5,24 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
+from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
 from schemas.sales_plan import (
+    SalesPlanCreate,
+    SalesPlanDeleteResponse,
     SalesPlanImportCommitResponse,
     SalesPlanImportCommitRow,
     SalesPlanImportPreviewResponse,
     SalesPlanImportPreviewRow,
     SalesPlanImportMode,
     SalesPlanRead,
+    SalesPlanUpdate,
 )
 
 
@@ -41,7 +45,14 @@ REQUIRED_IMPORT_HEADERS = {
 }
 
 HEADER_ALIASES: dict[str, set[str]] = {
-    HEADER_FIELD_PLAN_DATE: {"датаплана", "plandate"},
+    HEADER_FIELD_PLAN_DATE: {
+        "периодпланирования",
+        "месяцплана",
+        "planningperiod",
+        "planmonth",
+        "датаплана",
+        "plandate",
+    },
     HEADER_FIELD_NOMENCLATURE_CODE: {"кодноменклатуры", "nomenclaturecode"},
     HEADER_FIELD_NOMENCLATURE_NAME: {"наименованиеноменклатуры", "nomenclaturename"},
     HEADER_FIELD_PLAN_QTY: {"количество", "planqty"},
@@ -150,30 +161,44 @@ def normalize_plan_qty(value: object) -> tuple[Decimal | None, str | None]:
 
 
 def normalize_plan_date(value: object) -> tuple[date | None, str | None]:
+    def to_month_start(parsed_date: date) -> date:
+        return date(parsed_date.year, parsed_date.month, 1)
+
     if value is None:
-        return None, "Пустая дата плана"
+        return None, "Пустой период планирования"
 
     if isinstance(value, datetime):
-        return value.date(), None
+        return to_month_start(value.date()), None
 
     if isinstance(value, date):
-        return value, None
+        return to_month_start(value), None
 
     if isinstance(value, (int, float)):
         try:
             excel_datetime = from_excel(value)
             if isinstance(excel_datetime, datetime):
-                return excel_datetime.date(), None
+                return to_month_start(excel_datetime.date()), None
             if isinstance(excel_datetime, date):
-                return excel_datetime, None
+                return to_month_start(excel_datetime), None
         except Exception:
-            return None, "Некорректная дата плана"
+            return None, "Некорректный период планирования"
 
-        return None, "Некорректная дата плана"
+        return None, "Некорректный период планирования"
 
     raw_value = str(value).strip()
     if not raw_value:
-        return None, "Пустая дата плана"
+        return None, "Пустой период планирования"
+
+    month_formats = [
+        "%Y-%m",
+        "%m.%Y",
+    ]
+    for month_format in month_formats:
+        try:
+            month_date = datetime.strptime(raw_value, month_format).date()
+            return to_month_start(month_date), None
+        except ValueError:
+            continue
 
     date_formats = [
         "%Y-%m-%d",
@@ -184,11 +209,16 @@ def normalize_plan_date(value: object) -> tuple[date | None, str | None]:
     ]
     for date_format in date_formats:
         try:
-            return datetime.strptime(raw_value, date_format).date(), None
+            parsed_date = datetime.strptime(raw_value, date_format).date()
+            return to_month_start(parsed_date), None
         except ValueError:
             continue
 
-    return None, "Некорректная дата плана"
+    return None, "Некорректный период планирования"
+
+
+def normalize_month_start(plan_date: date) -> date:
+    return date(plan_date.year, plan_date.month, 1)
 
 
 def validate_import_file(file: UploadFile, file_bytes: bytes) -> None:
@@ -242,7 +272,7 @@ def read_import_rows(file_bytes: bytes) -> list[dict[str, Any]]:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     "Не найдены обязательные колонки шаблона: "
-                    "Дата плана, Код номенклатуры, Наименование номенклатуры, Количество, Единица измерения."
+                    "Период планирования, Код номенклатуры, Наименование номенклатуры, Количество, Единица измерения."
                 ),
             )
 
@@ -496,7 +526,7 @@ def create_template_workbook() -> bytes:
 
     sheet.append(
         [
-            "Дата плана",
+            "Период планирования",
             "Код номенклатуры",
             "Наименование номенклатуры",
             "Количество",
@@ -505,7 +535,7 @@ def create_template_workbook() -> bytes:
     )
     sheet.append(
         [
-            "2026-05-01",
+            "2026-04",
             "NM-001",
             "Полотно ламинированное белое",
             "1200",
@@ -602,6 +632,202 @@ def list_sales_plan(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось получить план продаж.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.post("", response_model=SalesPlanRead, status_code=status.HTTP_201_CREATED)
+def create_sales_plan_item(payload: SalesPlanCreate):
+    connection = None
+
+    try:
+        normalized_plan_date = normalize_month_start(payload.plan_date)
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT nomenclature_id
+                FROM nomenclature
+                WHERE nomenclature_id = %s;
+                """,
+                (payload.nomenclature_id,),
+            )
+            nomenclature_row = cursor.fetchone()
+            if nomenclature_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Номенклатура не найдена.",
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO sales_plan (
+                    plan_date,
+                    nomenclature_id,
+                    plan_qty
+                )
+                VALUES (%s, %s, %s)
+                RETURNING sales_plan_id;
+                """,
+                (
+                    normalized_plan_date,
+                    payload.nomenclature_id,
+                    payload.plan_qty,
+                ),
+            )
+            created_row = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    sp.sales_plan_id,
+                    sp.plan_date,
+                    sp.nomenclature_id,
+                    n.nomenclature_code,
+                    n.nomenclature_name,
+                    sp.plan_qty,
+                    n.unit_of_measure
+                FROM sales_plan AS sp
+                INNER JOIN nomenclature AS n ON n.nomenclature_id = sp.nomenclature_id
+                WHERE sp.sales_plan_id = %s;
+                """,
+                (created_row["sales_plan_id"],),
+            )
+            response_row = cursor.fetchone()
+
+        connection.commit()
+        return response_row
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except UniqueViolation as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Позиция уже есть в плане продаж за выбранный период.",
+        ) from exc
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось создать строку плана продаж.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.put("/{sales_plan_id}", response_model=SalesPlanRead)
+def update_sales_plan_item(
+    payload: SalesPlanUpdate,
+    sales_plan_id: int = Path(..., gt=0),
+):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                UPDATE sales_plan
+                SET
+                    plan_qty = %s,
+                    updated_at = NOW()
+                WHERE sales_plan_id = %s
+                RETURNING sales_plan_id;
+                """,
+                (
+                    payload.plan_qty,
+                    sales_plan_id,
+                ),
+            )
+            updated_row = cursor.fetchone()
+
+            if updated_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Строка плана продаж не найдена.",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    sp.sales_plan_id,
+                    sp.plan_date,
+                    sp.nomenclature_id,
+                    n.nomenclature_code,
+                    n.nomenclature_name,
+                    sp.plan_qty,
+                    n.unit_of_measure
+                FROM sales_plan AS sp
+                INNER JOIN nomenclature AS n ON n.nomenclature_id = sp.nomenclature_id
+                WHERE sp.sales_plan_id = %s;
+                """,
+                (sales_plan_id,),
+            )
+            response_row = cursor.fetchone()
+
+        connection.commit()
+        return response_row
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось обновить строку плана продаж.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.delete("/{sales_plan_id}", response_model=SalesPlanDeleteResponse)
+def delete_sales_plan_item(sales_plan_id: int = Path(..., gt=0)):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                DELETE FROM sales_plan
+                WHERE sales_plan_id = %s
+                RETURNING sales_plan_id;
+                """,
+                (sales_plan_id,),
+            )
+            deleted_row = cursor.fetchone()
+
+            if deleted_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Строка плана продаж не найдена.",
+                )
+
+        connection.commit()
+        return SalesPlanDeleteResponse(
+            sales_plan_id=sales_plan_id,
+            message="Строка плана продаж удалена.",
+        )
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось удалить строку плана продаж.",
         ) from exc
     finally:
         if connection is not None:

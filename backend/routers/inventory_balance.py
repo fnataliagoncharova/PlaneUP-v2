@@ -5,20 +5,24 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
+from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
 from schemas.inventory_balance import (
+    InventoryBalanceCreate,
+    InventoryBalanceDeleteResponse,
     InventoryBalanceImportCommitResponse,
     InventoryBalanceImportCommitRow,
     InventoryBalanceImportMode,
     InventoryBalanceImportPreviewResponse,
     InventoryBalanceImportPreviewRow,
     InventoryBalanceRead,
+    InventoryBalanceUpdate,
 )
 
 
@@ -594,6 +598,228 @@ def list_inventory_balance(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось получить остатки.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.get("/dates", response_model=list[date])
+def list_inventory_balance_dates():
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT as_of_date
+                FROM inventory_balance
+                ORDER BY as_of_date DESC;
+                """
+            )
+            rows = cursor.fetchall()
+
+        return [row["as_of_date"] for row in rows if row.get("as_of_date") is not None]
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось получить даты остатков.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.post("", response_model=InventoryBalanceRead, status_code=status.HTTP_201_CREATED)
+def create_inventory_balance_item(payload: InventoryBalanceCreate):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT nomenclature_id
+                FROM nomenclature
+                WHERE nomenclature_id = %s;
+                """,
+                (payload.nomenclature_id,),
+            )
+            nomenclature_row = cursor.fetchone()
+            if nomenclature_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Номенклатура не найдена.",
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO inventory_balance (
+                    as_of_date,
+                    nomenclature_id,
+                    available_qty
+                )
+                VALUES (%s, %s, %s)
+                RETURNING balance_id;
+                """,
+                (
+                    payload.as_of_date,
+                    payload.nomenclature_id,
+                    payload.available_qty,
+                ),
+            )
+            created_row = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    ib.balance_id,
+                    ib.as_of_date,
+                    ib.nomenclature_id,
+                    n.nomenclature_code,
+                    n.nomenclature_name,
+                    ib.available_qty,
+                    n.unit_of_measure
+                FROM inventory_balance AS ib
+                INNER JOIN nomenclature AS n ON n.nomenclature_id = ib.nomenclature_id
+                WHERE ib.balance_id = %s;
+                """,
+                (created_row["balance_id"],),
+            )
+            response_row = cursor.fetchone()
+
+        connection.commit()
+        return response_row
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except UniqueViolation as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Позиция уже есть в остатках на выбранную дату.",
+        ) from exc
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось создать строку остатков.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.put("/{balance_id}", response_model=InventoryBalanceRead)
+def update_inventory_balance_item(
+    payload: InventoryBalanceUpdate,
+    balance_id: int = Path(..., gt=0),
+):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                UPDATE inventory_balance
+                SET
+                    available_qty = %s,
+                    updated_at = NOW()
+                WHERE balance_id = %s
+                RETURNING balance_id;
+                """,
+                (
+                    payload.available_qty,
+                    balance_id,
+                ),
+            )
+            updated_row = cursor.fetchone()
+
+            if updated_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Строка остатков не найдена.",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    ib.balance_id,
+                    ib.as_of_date,
+                    ib.nomenclature_id,
+                    n.nomenclature_code,
+                    n.nomenclature_name,
+                    ib.available_qty,
+                    n.unit_of_measure
+                FROM inventory_balance AS ib
+                INNER JOIN nomenclature AS n ON n.nomenclature_id = ib.nomenclature_id
+                WHERE ib.balance_id = %s;
+                """,
+                (balance_id,),
+            )
+            response_row = cursor.fetchone()
+
+        connection.commit()
+        return response_row
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось обновить строку остатков.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.delete("/{balance_id}", response_model=InventoryBalanceDeleteResponse)
+def delete_inventory_balance_item(balance_id: int = Path(..., gt=0)):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                DELETE FROM inventory_balance
+                WHERE balance_id = %s
+                RETURNING balance_id;
+                """,
+                (balance_id,),
+            )
+            deleted_row = cursor.fetchone()
+
+            if deleted_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Строка остатков не найдена.",
+                )
+
+        connection.commit()
+        return InventoryBalanceDeleteResponse(
+            balance_id=balance_id,
+            message="Строка остатков удалена.",
+        )
+    except HTTPException:
+        if connection is not None:
+            connection.rollback()
+        raise
+    except psycopg2.Error as exc:
+        if connection is not None:
+            connection.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось удалить строку остатков.",
         ) from exc
     finally:
         if connection is not None:

@@ -5,6 +5,30 @@ export function getInventoryBalanceList(asOfDate) {
   return apiRequest(`/inventory-balance${query}`);
 }
 
+export function getInventoryBalanceDates() {
+  return apiRequest("/inventory-balance/dates");
+}
+
+export function createInventoryBalanceItem(payload) {
+  return apiRequest("/inventory-balance", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateInventoryBalanceItem(balanceId, payload) {
+  return apiRequest(`/inventory-balance/${balanceId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteInventoryBalanceItem(balanceId) {
+  return apiRequest(`/inventory-balance/${balanceId}`, {
+    method: "DELETE",
+  });
+}
+
 export function previewInventoryBalanceImport(file) {
   const formData = new FormData();
   formData.append("file", file);
