@@ -104,7 +104,7 @@ def normalize_unit_of_measure(value: object) -> tuple[str | None, str | None]:
     compact_value = re.sub(r"\s+", "", cyrillic_value)
     compact_without_dots = compact_value.replace(".", "")
 
-    if compact_value in {"м²", "м2", "м^2"}:
+    if compact_value in {"м²", "м2", "м^2", "m2"}:
         return "м²", None
 
     if compact_without_dots in {"мп", "мпог", "мпогон", "мпогонный"}:
@@ -112,6 +112,15 @@ def normalize_unit_of_measure(value: object) -> tuple[str | None, str | None]:
 
     if compact_without_dots.startswith("м") and "пог" in compact_without_dots:
         return "м.п.", None
+
+    if compact_without_dots in {"шт", "штука", "штуки", "pcs", "pc"}:
+        return "шт", None
+
+    if compact_without_dots in {"кг", "kg"}:
+        return "кг", None
+
+    if compact_without_dots in {"л", "литр", "литры", "l"}:
+        return "л", None
 
     return None, "Недопустимая единица измерения"
 

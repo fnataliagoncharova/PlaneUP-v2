@@ -1,9 +1,17 @@
-import { Check, Save, X } from "lucide-react";
+﻿import { Check, Save, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const UNIT_OPTIONS = [
   { value: "м²", label: "м²" },
   { value: "м.п.", label: "м.п." },
+  { value: "шт", label: "шт" },
+  { value: "кг", label: "кг" },
+  { value: "л", label: "л" },
+];
+
+const ITEM_TYPE_OPTIONS = [
+  { value: "manufactured", label: "Производимая" },
+  { value: "purchased", label: "Закупаемая" },
 ];
 
 function createInitialState(item) {
@@ -11,18 +19,12 @@ function createInitialState(item) {
     nomenclature_code: item?.nomenclature_code ?? "",
     nomenclature_name: item?.nomenclature_name ?? "",
     unit_of_measure: item?.unit_of_measure ?? "м²",
+    item_type: item?.item_type ?? "manufactured",
     is_active: item?.is_active ?? true,
   };
 }
 
-function NomenclatureFormPanel({
-  mode,
-  item,
-  isSaving,
-  errorMessage,
-  onCancel,
-  onSave,
-}) {
+function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, onSave }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() => createInitialState(item));
   const [localError, setLocalError] = useState("");
@@ -62,9 +64,7 @@ function NomenclatureFormPanel({
     <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="panel-title">
-            {isEditMode ? "Редактирование позиции" : "Новая позиция"}
-          </div>
+          <div className="panel-title">{isEditMode ? "Редактирование позиции" : "Новая позиция"}</div>
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
             {isEditMode ? "Изменение номенклатуры" : "Создание номенклатуры"}
           </h2>
@@ -78,9 +78,7 @@ function NomenclatureFormPanel({
 
       <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
         <label className="block">
-          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-            Код номенклатуры
-          </div>
+          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Код номенклатуры</div>
           <input
             type="text"
             value={formValues.nomenclature_code}
@@ -91,9 +89,7 @@ function NomenclatureFormPanel({
         </label>
 
         <label className="block">
-          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-            Наименование
-          </div>
+          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Наименование</div>
           <input
             type="text"
             value={formValues.nomenclature_name}
@@ -104,20 +100,29 @@ function NomenclatureFormPanel({
         </label>
 
         <label className="block">
-          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-            Единица измерения
-          </div>
+          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Тип номенклатуры</div>
+          <select
+            value={formValues.item_type}
+            onChange={(event) => handleFieldChange("item_type", event.target.value)}
+            className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
+          >
+            {ITEM_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value} className="bg-slate-950 text-slate-100">
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Единица измерения</div>
           <select
             value={formValues.unit_of_measure}
             onChange={(event) => handleFieldChange("unit_of_measure", event.target.value)}
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           >
             {UNIT_OPTIONS.map((option) => (
-              <option
-                key={option.value}
-                value={option.value}
-                className="bg-slate-950 text-slate-100"
-              >
+              <option key={option.value} value={option.value} className="bg-slate-950 text-slate-100">
                 {option.label}
               </option>
             ))}
@@ -128,7 +133,7 @@ function NomenclatureFormPanel({
           <div>
             <div className="text-sm font-medium text-slate-100">Активность</div>
             <div className="mt-1 text-xs text-slate-500">
-              Неактивные позиции сохраняются, но выключаются из оперативной работы.
+              Неактивные позиции сохраняются, но исключаются из оперативной работы.
             </div>
           </div>
           <button
@@ -152,17 +157,8 @@ function NomenclatureFormPanel({
           </button>
         </label>
 
-        {localError ? (
-          <div className="border border-amber-300/30 bg-amber-500/[0.09] px-4 py-3 text-sm text-amber-100">
-            {localError}
-          </div>
-        ) : null}
-
-        {errorMessage ? (
-          <div className="border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
-            {errorMessage}
-          </div>
-        ) : null}
+        {localError ? <div className="border border-amber-300/30 bg-amber-500/[0.09] px-4 py-3 text-sm text-amber-100">{localError}</div> : null}
+        {errorMessage ? <div className="border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{errorMessage}</div> : null}
 
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           <button

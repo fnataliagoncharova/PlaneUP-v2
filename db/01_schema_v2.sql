@@ -1,12 +1,14 @@
-CREATE TABLE nomenclature (
+﻿CREATE TABLE nomenclature (
     nomenclature_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nomenclature_code VARCHAR UNIQUE NOT NULL,
     nomenclature_name TEXT NOT NULL,
     unit_of_measure TEXT NOT NULL,
+    item_type TEXT NOT NULL DEFAULT 'manufactured',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (unit_of_measure IN ('м²', 'м.п.'))
+    CHECK (unit_of_measure IN ('м²', 'м.п.', 'шт', 'кг', 'л')),
+    CHECK (item_type IN ('manufactured', 'purchased'))
 );
 
 CREATE TABLE processes (
@@ -44,16 +46,11 @@ CREATE TABLE route_steps (
 CREATE TABLE route_step_inputs (
     step_input_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     route_step_id BIGINT NOT NULL REFERENCES route_steps(route_step_id),
-    input_nomenclature_id BIGINT NULL REFERENCES nomenclature(nomenclature_id),
-    external_input_name TEXT NULL,
+    input_nomenclature_id BIGINT NOT NULL REFERENCES nomenclature(nomenclature_id),
     input_qty NUMERIC(12,3) NOT NULL DEFAULT 1.000,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT route_step_inputs_input_qty_check CHECK (input_qty > 0),
-    CONSTRAINT route_step_inputs_input_source_check CHECK (
-        input_nomenclature_id IS NOT NULL
-        OR NULLIF(BTRIM(external_input_name), '') IS NOT NULL
-    )
+    CONSTRAINT route_step_inputs_input_qty_check CHECK (input_qty > 0)
 );
 
 CREATE TABLE machines (
@@ -79,6 +76,7 @@ CREATE TABLE route_step_equipment (
     CHECK (priority > 0),
     CHECK (nominal_rate > 0),
     CHECK (equipment_role IN ('primary', 'alternative')),
-    CHECK (rate_uom IN ('м²/мин', 'м.п./мин')),
+    CHECK (rate_uom IN ('РјВІ/РјРёРЅ', 'Рј.Рї./РјРёРЅ')),
     UNIQUE (route_step_id, machine_id)
 );
+

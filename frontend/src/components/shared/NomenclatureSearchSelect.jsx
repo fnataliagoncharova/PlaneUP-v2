@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+﻿import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -7,7 +7,8 @@ function normalizeText(value) {
 }
 
 function getOptionLabel(item) {
-  return `${item.nomenclature_code} — ${item.nomenclature_name}`;
+  const typeLabel = item.item_type === "purchased" ? "Закупаемая" : "Производимая";
+  return `${item.nomenclature_code} — ${item.nomenclature_name} (${typeLabel})`;
 }
 
 function NomenclatureSearchSelect({
@@ -42,15 +43,12 @@ function NomenclatureSearchSelect({
   );
 
   const normalizedValue = Number(value);
-  const selectedItem = sortedItems.find(
-    (item) => item.nomenclature_id === normalizedValue,
-  );
+  const selectedItem = sortedItems.find((item) => item.nomenclature_id === normalizedValue);
 
   useEffect(() => {
     if (isOpen) {
       return;
     }
-
     setQuery(selectedItem ? getOptionLabel(selectedItem) : "");
   }, [isOpen, selectedItem]);
 
@@ -62,21 +60,17 @@ function NomenclatureSearchSelect({
     const handleOutsideClick = (event) => {
       const clickedInsideTrigger = containerRef.current?.contains(event.target);
       const clickedInsideDropdown = dropdownRef.current?.contains(event.target);
-
       if (!clickedInsideTrigger && !clickedInsideDropdown) {
         setIsOpen(false);
       }
     };
 
     document.addEventListener("mousedown", handleOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [isOpen]);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = normalizeText(query);
-
     if (!normalizedQuery) {
       return sortedItems.slice(0, maxVisibleOptions);
     }
@@ -85,7 +79,6 @@ function NomenclatureSearchSelect({
       .filter((item) => {
         const codeMatches = normalizeText(item.nomenclature_code).includes(normalizedQuery);
         const nameMatches = normalizeText(item.nomenclature_name).includes(normalizedQuery);
-
         return codeMatches || nameMatches;
       })
       .slice(0, maxVisibleOptions);
@@ -107,13 +100,8 @@ function NomenclatureSearchSelect({
     const availableBelow = window.innerHeight - rect.bottom - spacing - viewportPadding;
     const availableAbove = rect.top - spacing - viewportPadding;
     const placeAbove = availableBelow < 200 && availableAbove > availableBelow;
-    const maxHeight = Math.max(
-      140,
-      Math.min(preferredMaxHeight, placeAbove ? availableAbove : availableBelow),
-    );
-    const top = placeAbove
-      ? Math.max(viewportPadding, rect.top - spacing - maxHeight)
-      : rect.bottom + spacing;
+    const maxHeight = Math.max(140, Math.min(preferredMaxHeight, placeAbove ? availableAbove : availableBelow));
+    const top = placeAbove ? Math.max(viewportPadding, rect.top - spacing - maxHeight) : rect.bottom + spacing;
 
     setDropdownPosition({
       left: rect.left,
@@ -168,7 +156,6 @@ function NomenclatureSearchSelect({
       if (filteredItems.length === 0) {
         return;
       }
-
       event.preventDefault();
       handleSelect(filteredItems[highlightedIndex] ?? filteredItems[0]);
       return;
@@ -214,9 +201,7 @@ function NomenclatureSearchSelect({
               ref={dropdownRef}
               className={[
                 "fixed z-[120] overflow-y-auto border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(8,18,28,0.98),rgba(6,13,22,0.98))] shadow-[0_16px_38px_rgba(2,8,20,0.58)]",
-                dropdownPosition.placement === "top"
-                  ? "origin-bottom"
-                  : "origin-top",
+                dropdownPosition.placement === "top" ? "origin-bottom" : "origin-top",
               ].join(" ")}
               style={{
                 left: dropdownPosition.left,
@@ -244,16 +229,12 @@ function NomenclatureSearchSelect({
                       ].join(" ")}
                     >
                       <span className="text-sm font-medium">{getOptionLabel(option)}</span>
-                      <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
-                        {option.unit_of_measure}
-                      </span>
+                      <span className="text-xs uppercase tracking-[0.14em] text-slate-400">{option.unit_of_measure}</span>
                     </button>
                   );
                 })
               ) : (
-                <div className="px-4 py-3 text-sm text-slate-400">
-                  Ничего не найдено.
-                </div>
+                <div className="px-4 py-3 text-sm text-slate-400">Ничего не найдено.</div>
               )}
             </div>,
             document.body,

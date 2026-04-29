@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
@@ -25,7 +25,6 @@ router = APIRouter(prefix="/demand", tags=["demand"])
 
 DECIMAL_ZERO = Decimal("0")
 QTY_SCALE = Decimal("0.001")
-DEFAULT_EXTERNAL_INPUT_NAME = "Внешний вход"
 
 
 @dataclass
@@ -79,7 +78,6 @@ class DemandCalculator:
 
         self.internal_demand_by_nomenclature: dict[int, Decimal] = defaultdict(lambda: DECIMAL_ZERO)
         self.external_nomenclature_demand: dict[int, Decimal] = defaultdict(lambda: DECIMAL_ZERO)
-        self.external_input_demand: dict[str, Decimal] = defaultdict(lambda: DECIMAL_ZERO)
         self.problems: list[DemandProblemItem] = []
         self.problem_keys: set[tuple[str, int | None, int | None, str | None]] = set()
 
@@ -106,7 +104,7 @@ class DemandCalculator:
             if nomenclature_row is None:
                 self.add_problem(
                     problem_code="missing_nomenclature",
-                    message="Номенклатура не найдена.",
+                    message="РќРѕРјРµРЅРєР»Р°С‚СѓСЂР° РЅРµ РЅР°Р№РґРµРЅР°.",
                     nomenclature_id=nomenclature_id,
                 )
                 continue
@@ -127,6 +125,7 @@ class DemandCalculator:
                     nomenclature_id=nomenclature_id,
                     nomenclature_code=nomenclature_row["nomenclature_code"],
                     nomenclature_name=nomenclature_row["nomenclature_name"],
+                    unit_of_measure=nomenclature_row["unit_of_measure"],
                     sales_plan_qty=normalize_qty(sales_plan_qty),
                     safety_stock_qty=normalize_qty(safety_stock_qty),
                     available_qty=normalize_qty(available_qty),
@@ -167,7 +166,7 @@ class DemandCalculator:
             cycle_path = [*path, nomenclature_id]
             self.add_problem(
                 problem_code="route_cycle",
-                message="Обнаружена циклическая зависимость маршрутов.",
+                message="РћР±РЅР°СЂСѓР¶РµРЅР° С†РёРєР»РёС‡РµСЃРєР°СЏ Р·Р°РІРёСЃРёРјРѕСЃС‚СЊ РјР°СЂС€СЂСѓС‚РѕРІ.",
                 nomenclature_id=nomenclature_id,
                 details=self.format_nomenclature_path(cycle_path),
             )
@@ -177,7 +176,7 @@ class DemandCalculator:
         if nomenclature_row is None:
             self.add_problem(
                 problem_code="missing_nomenclature",
-                message="Номенклатура не найдена.",
+                message="РќРѕРјРµРЅРєР»Р°С‚СѓСЂР° РЅРµ РЅР°Р№РґРµРЅР°.",
                 nomenclature_id=nomenclature_id,
             )
             return
@@ -186,11 +185,15 @@ class DemandCalculator:
         if net_qty_after_inventory <= DECIMAL_ZERO:
             return
 
+        if nomenclature_row.get("item_type") == "purchased":
+            self.external_nomenclature_demand[nomenclature_id] += net_qty_after_inventory
+            return
+
         active_route_info = self.get_active_route(nomenclature_id)
         if active_route_info.active_count > 1:
             self.add_problem(
                 problem_code="multiple_active_routes",
-                message="Для номенклатуры найдено несколько активных маршрутов. Использован первый.",
+                message="Р”Р»СЏ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹ РЅР°Р№РґРµРЅРѕ РЅРµСЃРєРѕР»СЊРєРѕ Р°РєС‚РёРІРЅС‹С… РјР°СЂС€СЂСѓС‚РѕРІ. РСЃРїРѕР»СЊР·РѕРІР°РЅ РїРµСЂРІС‹Р№.",
                 nomenclature_id=nomenclature_id,
                 nomenclature_code=nomenclature_row["nomenclature_code"],
                 route_id=active_route_info.route_id,
@@ -200,7 +203,7 @@ class DemandCalculator:
             self.external_nomenclature_demand[nomenclature_id] += net_qty_after_inventory
             self.add_problem(
                 problem_code="missing_active_route",
-                message="Для номенклатуры нет активного маршрута.",
+                message="Для производимой номенклатуры нет активного маршрута.",
                 nomenclature_id=nomenclature_id,
                 nomenclature_code=nomenclature_row["nomenclature_code"],
             )
@@ -235,7 +238,7 @@ class DemandCalculator:
             cycle_ids = [*route_output_stack, output_nomenclature_id]
             self.add_problem(
                 problem_code="invalid_route_cycle",
-                message="Обнаружена циклическая зависимость внутри маршрута.",
+                message="РћР±РЅР°СЂСѓР¶РµРЅР° С†РёРєР»РёС‡РµСЃРєР°СЏ Р·Р°РІРёСЃРёРјРѕСЃС‚СЊ РІРЅСѓС‚СЂРё РјР°СЂС€СЂСѓС‚Р°.",
                 nomenclature_id=output_nomenclature_id,
                 route_id=route_structure.route_id,
                 details=self.format_nomenclature_path(cycle_ids),
@@ -255,7 +258,7 @@ class DemandCalculator:
         if output_qty <= DECIMAL_ZERO:
             self.add_problem(
                 problem_code="invalid_route_step_output_qty",
-                message="Некорректный маршрут: выход шага должен быть больше 0.",
+                message="РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РјР°СЂС€СЂСѓС‚: РІС‹С…РѕРґ С€Р°РіР° РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ Р±РѕР»СЊС€Рµ 0.",
                 nomenclature_id=output_nomenclature_id,
                 route_id=route_structure.route_id,
             )
@@ -270,35 +273,29 @@ class DemandCalculator:
                 continue
 
             input_nomenclature_id = step_input["input_nomenclature_id"]
-            if input_nomenclature_id is not None:
-                if input_nomenclature_id in route_structure.producer_step_by_output:
-                    net_internal_qty = self.consume_inventory(
-                        nomenclature_id=input_nomenclature_id,
-                        required_qty=input_required_qty,
-                    )
-                    if net_internal_qty <= DECIMAL_ZERO:
-                        continue
-
-                    self.internal_demand_by_nomenclature[input_nomenclature_id] += net_internal_qty
-                    self.expand_route_output(
-                        route_structure=route_structure,
-                        output_nomenclature_id=input_nomenclature_id,
-                        required_qty=net_internal_qty,
-                        path=path,
-                        route_output_stack=[*route_output_stack, output_nomenclature_id],
-                    )
-                    continue
-
-                self.resolve_nomenclature_demand(
+            if input_nomenclature_id in route_structure.producer_step_by_output:
+                net_internal_qty = self.consume_inventory(
                     nomenclature_id=input_nomenclature_id,
                     required_qty=input_required_qty,
+                )
+                if net_internal_qty <= DECIMAL_ZERO:
+                    continue
+
+                self.internal_demand_by_nomenclature[input_nomenclature_id] += net_internal_qty
+                self.expand_route_output(
+                    route_structure=route_structure,
+                    output_nomenclature_id=input_nomenclature_id,
+                    required_qty=net_internal_qty,
                     path=path,
+                    route_output_stack=[*route_output_stack, output_nomenclature_id],
                 )
                 continue
 
-            external_input_name = (step_input.get("external_input_name") or "").strip()
-            normalized_external_name = external_input_name or DEFAULT_EXTERNAL_INPUT_NAME
-            self.external_input_demand[normalized_external_name] += input_required_qty
+            self.resolve_nomenclature_demand(
+                nomenclature_id=input_nomenclature_id,
+                required_qty=input_required_qty,
+                path=path,
+            )
 
     def consume_inventory(self, nomenclature_id: int, required_qty: Decimal) -> Decimal:
         available_qty = self.get_remaining_inventory_qty(nomenclature_id)
@@ -397,7 +394,9 @@ class DemandCalculator:
             SELECT
                 nomenclature_id,
                 nomenclature_code,
-                nomenclature_name
+                nomenclature_name,
+                unit_of_measure,
+                item_type
             FROM nomenclature
             WHERE nomenclature_id = %s;
             """,
@@ -469,7 +468,7 @@ class DemandCalculator:
         if route_row is None:
             self.add_problem(
                 problem_code="missing_route",
-                message="Маршрут не найден.",
+                message="РњР°СЂС€СЂСѓС‚ РЅРµ РЅР°Р№РґРµРЅ.",
                 route_id=route_id,
             )
             self.route_structure_cache[route_id] = None
@@ -493,7 +492,7 @@ class DemandCalculator:
         if not step_rows:
             self.add_problem(
                 problem_code="invalid_route_no_steps",
-                message="Некорректный маршрут: не добавлены шаги.",
+                message="РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РјР°СЂС€СЂСѓС‚: РЅРµ РґРѕР±Р°РІР»РµРЅС‹ С€Р°РіРё.",
                 route_id=route_id,
             )
             self.route_structure_cache[route_id] = None
@@ -506,7 +505,6 @@ class DemandCalculator:
                 step_input_id,
                 route_step_id,
                 input_nomenclature_id,
-                external_input_name,
                 input_qty
             FROM route_step_inputs
             WHERE route_step_id = ANY(%s)
@@ -533,8 +531,8 @@ class DemandCalculator:
             self.add_problem(
                 problem_code="invalid_route_duplicate_step_output",
                 message=(
-                    "Некорректный маршрут: несколько шагов с одинаковой выходной номенклатурой. "
-                    "Использован шаг с максимальным номером."
+                    "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РјР°СЂС€СЂСѓС‚: РЅРµСЃРєРѕР»СЊРєРѕ С€Р°РіРѕРІ СЃ РѕРґРёРЅР°РєРѕРІРѕР№ РІС‹С…РѕРґРЅРѕР№ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂРѕР№. "
+                    "РСЃРїРѕР»СЊР·РѕРІР°РЅ С€Р°Рі СЃ РјР°РєСЃРёРјР°Р»СЊРЅС‹Рј РЅРѕРјРµСЂРѕРј."
                 ),
                 nomenclature_id=duplicate_output_nomenclature_id,
                 nomenclature_code=(
@@ -547,7 +545,7 @@ class DemandCalculator:
         if route_result_nomenclature_id not in producer_step_by_output:
             self.add_problem(
                 problem_code="invalid_route_result_output_missing",
-                message="Некорректный маршрут: нет шага, который выпускает выход маршрута.",
+                message="РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РјР°СЂС€СЂСѓС‚: РЅРµС‚ С€Р°РіР°, РєРѕС‚РѕСЂС‹Р№ РІС‹РїСѓСЃРєР°РµС‚ РІС‹С…РѕРґ РјР°СЂС€СЂСѓС‚Р°.",
                 nomenclature_id=route_result_nomenclature_id,
                 route_id=route_id,
             )
@@ -580,6 +578,7 @@ class DemandCalculator:
                     nomenclature_id=nomenclature_id,
                     nomenclature_code=nomenclature_row["nomenclature_code"],
                     nomenclature_name=nomenclature_row["nomenclature_name"],
+                    unit_of_measure=nomenclature_row["unit_of_measure"],
                     required_qty=normalize_qty(required_qty),
                 )
             )
@@ -603,21 +602,8 @@ class DemandCalculator:
                     nomenclature_id=nomenclature_id,
                     nomenclature_code=nomenclature_row["nomenclature_code"],
                     nomenclature_name=nomenclature_row["nomenclature_name"],
+                    unit_of_measure=nomenclature_row["unit_of_measure"],
                     external_input_name=None,
-                    required_qty=normalize_qty(required_qty),
-                )
-            )
-
-        for external_input_name, required_qty in self.external_input_demand.items():
-            if required_qty <= DECIMAL_ZERO:
-                continue
-
-            rows.append(
-                ExternalDemandItem(
-                    nomenclature_id=None,
-                    nomenclature_code=None,
-                    nomenclature_name=None,
-                    external_input_name=external_input_name,
                     required_qty=normalize_qty(required_qty),
                 )
             )
@@ -625,7 +611,7 @@ class DemandCalculator:
         rows.sort(
             key=lambda row: (
                 row.nomenclature_code or "",
-                row.external_input_name or "",
+                row.nomenclature_name or "",
             )
         )
         return rows
@@ -690,8 +676,9 @@ def calculate_demand(payload: DemandCalculateRequest):
     except psycopg2.Error as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось выполнить расчёт потребности.",
+            detail="РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ СЂР°СЃС‡С‘С‚ РїРѕС‚СЂРµР±РЅРѕСЃС‚Рё.",
         ) from exc
     finally:
         if connection is not None:
             connection.close()
+

@@ -534,6 +534,7 @@ function RoutesSection({ routeOpenRequest }) {
           input_nomenclature_code: nomenclatureItem?.nomenclature_code,
           input_nomenclature_name: nomenclatureItem?.nomenclature_name,
           input_nomenclature_uom: nomenclatureItem?.unit_of_measure,
+          input_nomenclature_item_type: nomenclatureItem?.item_type,
         };
       }),
     [nomenclatureById, routeStepInputs],

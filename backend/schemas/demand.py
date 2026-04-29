@@ -37,6 +37,7 @@ class TopLevelDemandItem(BaseModel):
     nomenclature_id: int
     nomenclature_code: str
     nomenclature_name: str
+    unit_of_measure: str
     sales_plan_qty: Decimal
     safety_stock_qty: Decimal
     available_qty: Decimal
@@ -48,6 +49,7 @@ class NomenclatureDemandItem(BaseModel):
     nomenclature_id: int
     nomenclature_code: str
     nomenclature_name: str
+    unit_of_measure: str
     required_qty: Decimal
 
 
@@ -55,6 +57,7 @@ class ExternalDemandItem(BaseModel):
     nomenclature_id: int | None = None
     nomenclature_code: str | None = None
     nomenclature_name: str | None = None
+    unit_of_measure: str | None = None
     external_input_name: str | None = None
     required_qty: Decimal
 

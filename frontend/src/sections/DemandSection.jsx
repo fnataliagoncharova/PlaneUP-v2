@@ -88,14 +88,14 @@ function monthToApiDate(monthValue) {
 
 function formatMonthLabel(monthValue) {
   if (!monthValue) {
-    return "—";
+    return "";
   }
   return monthValue;
 }
 
 function formatQty(value) {
   if (value === null || value === undefined || value === "") {
-    return "—";
+    return "";
   }
 
   const asNumber = Number(value);
@@ -462,7 +462,7 @@ function DemandSection() {
           ? "Нет снимков"
           : balanceDate
             ? `Дата остатков: ${balanceDate}`
-            : "Дата остатков: —",
+            : "Дата остатков: не выбрана",
       dateBadgeText:
         inventoryBalanceDates.length === 0
           ? "нет снимков"
@@ -1038,8 +1038,8 @@ function DemandSection() {
             : "За выбранную дату остатки не загружены.",
         rowKey: (item) => item.balance_id,
         reload: reloadInventoryBalance,
-        selectionDateText: balanceDate ? `Дата остатков: ${balanceDate}` : "Дата остатков: —",
-        latestDateText: inventoryBalanceDates[0] || "—",
+        selectionDateText: balanceDate ? `Дата остатков: ${balanceDate}` : "Дата остатков: не выбрана",
+        latestDateText: inventoryBalanceDates[0] || "нет",
         isLatestDateSelected: Boolean(balanceDate && inventoryBalanceDates[0] === balanceDate),
         hints: ["По умолчанию используется последняя загруженная дата остатков."],
         checks: [
@@ -1412,12 +1412,12 @@ function DemandSection() {
                             key={currentSourceDataset.rowKey(item)}
                             className="border-t border-white/[0.05] transition hover:bg-cyan-300/[0.03]"
                           >
-                            <td className="px-3 py-2.5 text-sm font-medium text-slate-100">{item.nomenclature_code || "—"}</td>
-                            <td className="px-3 py-2.5 text-sm text-slate-300">{item.nomenclature_name || "—"}</td>
+                            <td className="px-3 py-2.5 text-sm font-medium text-slate-100">{item.nomenclature_code || ""}</td>
+                            <td className="px-3 py-2.5 text-sm text-slate-300">{item.nomenclature_name || ""}</td>
                             <td className="px-3 py-2.5 text-right text-sm tabular-nums text-slate-200">
                               {formatQty(item[currentSourceDataset.qtyKey])}
                             </td>
-                            <td className="px-3 py-2.5 text-sm text-slate-300">{item.unit_of_measure || "—"}</td>
+                            <td className="px-3 py-2.5 text-sm text-slate-300">{item.unit_of_measure || ""}</td>
                             {activeSourceTab === IMPORT_CONTEXT_SALES_PLAN ||
                             activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE ||
                             activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK ? (
@@ -1627,7 +1627,7 @@ function DemandSection() {
                   <input
                     type="text"
                     readOnly
-                    value={balanceDate || "—"}
+                    value={balanceDate || ""}
                     className="w-full rounded-none border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200"
                   />
                 </div>
@@ -1998,19 +1998,20 @@ function DemandSection() {
                   </div>
                   <div className="mt-4 max-h-[420px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
                       <tbody>
                         {demandTopLevelItems.length > 0 ? demandTopLevelItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || "—"}</td>
+                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || ""}</td>
+                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || ""}</td>
+                            <td className="px-3 py-2.5 text-slate-300">{item.unit_of_measure || ""}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.sales_plan_qty)}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.safety_stock_qty)}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.available_qty)}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.gross_demand_qty)}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.net_production_demand_qty)}</td>
                           </tr>
-                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={7}>Верхний спрос не сформирован.</td></tr>}
+                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={8}>Верхний спрос не сформирован.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -2020,33 +2021,35 @@ function DemandSection() {
                   <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Потребность к выпуску</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandInternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
                       <tbody>
                         {demandInternalItems.length > 0 ? demandInternalItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || "—"}</td>
+                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || ""}</td>
+                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || ""}</td>
+                            <td className="px-3 py-2.5 text-slate-300">{item.unit_of_measure || ""}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.required_qty)}</td>
                           </tr>
-                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={3}>Потребность к выпуску не сформирована.</td></tr>}
+                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={4}>Потребность к выпуску не сформирована.</td></tr>}
                       </tbody>
                     </table>
                   </div>
                 </section>
 
                 <section className="glass-panel p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешняя потребность</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandExternalItems.length}</span></div></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешнее обеспечение</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandExternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код / Внешний вход</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
                       <tbody>
                         {demandExternalItems.length > 0 ? demandExternalItems.map((item, index) => (
-                          <tr key={`${item.nomenclature_code || item.external_input_name || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || item.external_input_name || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || item.external_input_name || "—"}</td>
+                          <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
+                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || ""}</td>
+                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || ""}</td>
+                            <td className="px-3 py-2.5 text-slate-300">{item.unit_of_measure || ""}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.required_qty)}</td>
                           </tr>
-                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={3}>Внешняя потребность не сформирована.</td></tr>}
+                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={4}>Внешнее обеспечение не сформировано.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -2061,11 +2064,11 @@ function DemandSection() {
                         <tbody>
                           {demandProblemItems.map((problem, index) => (
                             <tr key={`${problem.problem_code || "problem"}-${index}`} className="border-t border-white/[0.05]">
-                              <td className="px-3 py-2.5 font-medium text-amber-50">{problem.problem_code || "—"}</td>
-                              <td className="px-3 py-2.5 text-slate-200">{problem.message || "—"}</td>
-                              <td className="px-3 py-2.5 text-slate-300">{problem.nomenclature_code || "—"}</td>
-                              <td className="px-3 py-2.5 tabular-nums text-slate-300">{problem.route_id ?? "—"}</td>
-                              <td className="px-3 py-2.5 text-slate-300">{problem.details ? JSON.stringify(problem.details) : "—"}</td>
+                              <td className="px-3 py-2.5 font-medium text-amber-50">{problem.problem_code || ""}</td>
+                              <td className="px-3 py-2.5 text-slate-200">{problem.message || ""}</td>
+                              <td className="px-3 py-2.5 text-slate-300">{problem.nomenclature_code || ""}</td>
+                              <td className="px-3 py-2.5 tabular-nums text-slate-300">{problem.route_id ?? ""}</td>
+                              <td className="px-3 py-2.5 text-slate-300">{problem.details ? JSON.stringify(problem.details) : ""}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2092,7 +2095,7 @@ function DemandSection() {
               <div className="text-sm font-medium text-slate-100">Параметры</div>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Период планирования</span><span className="font-medium text-slate-100">{formatMonthLabel(planMonth)}</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Дата остатков</span><span className="font-medium text-slate-100">{balanceDate || "—"}</span></div>
+                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Дата остатков</span><span className="font-medium text-slate-100">{balanceDate || "не выбрана"}</span></div>
                 <div className="flex items-center justify-between gap-3"><span className="text-slate-500">План продаж</span><span className="font-medium tabular-nums text-slate-100">{salesPlanItems.length} строк</span></div>
                 <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Остатки / страховой запас</span><span className="font-medium tabular-nums text-slate-100">{inventoryItems.length} / {safetyStockItems.length}</span></div>
               </div>
@@ -2104,7 +2107,7 @@ function DemandSection() {
                 <div className="mt-3 space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Верхний спрос</span><span className="font-medium tabular-nums text-slate-100">{demandTopLevelItems.length}</span></div>
                   <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Потребность к выпуску</span><span className="font-medium tabular-nums text-slate-100">{demandInternalItems.length}</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Внешняя потребность</span><span className="font-medium tabular-nums text-slate-100">{demandExternalItems.length}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Внешнее обеспечение</span><span className="font-medium tabular-nums text-slate-100">{demandExternalItems.length}</span></div>
                   <div className="flex items-center justify-between gap-3"><span className={demandProblemItems.length > 0 ? "text-amber-200" : "text-slate-500"}>Проблемы</span><span className={["font-medium tabular-nums", demandProblemItems.length > 0 ? "text-amber-100" : "text-emerald-100"].join(" ")}>{demandProblemItems.length}</span></div>
                 </div>
               ) : (
@@ -2115,7 +2118,7 @@ function DemandSection() {
             <div className="mt-4 rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
               <div className="text-sm font-medium text-slate-100">Статус</div>
               <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Последний расчёт</span><span className="font-medium text-slate-100">{lastCalculatedAt ? new Date(lastCalculatedAt).toLocaleString("ru-RU") : "—"}</span></div>
+                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Последний расчёт</span><span className="font-medium text-slate-100">{lastCalculatedAt ? new Date(lastCalculatedAt).toLocaleString("ru-RU") : "нет"}</span></div>
                 <div className="text-slate-400">
                   {!balanceDate
                     ? "Дата остатков не выбрана."

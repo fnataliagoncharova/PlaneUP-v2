@@ -1,4 +1,4 @@
-BEGIN;
+﻿BEGIN;
 
 -- V2 test seed data for production routes and equipment.
 
@@ -9,17 +9,20 @@ INSERT INTO nomenclature (
     is_active
 )
 VALUES
-    ('NM-001', 'Полотно-основа универсальное', 'м²', TRUE),
-    ('NM-002', 'Полотно грунтованное', 'м²', TRUE),
-    ('NM-003', 'Полотно ламинированное белое полуфабрикат', 'м²', TRUE),
-    ('NM-004', 'Полотно ламинированное белое', 'м²', TRUE),
-    ('NM-005', 'Полотно ламинированное серое', 'м²', TRUE),
-    ('NM-006', 'Пленка декоративная белая', 'м²', TRUE),
-    ('NM-007', 'Пленка декоративная серая', 'м²', TRUE),
-    ('NM-008', 'Профиль ПВХ базовый', 'м.п.', TRUE),
-    ('NM-009', 'Профиль ПВХ окрашенный белый', 'м.п.', TRUE),
-    ('NM-010', 'Кромка ПВХ белая 50 мм', 'м.п.', TRUE),
-    ('NM-011', 'Декоративная вставка ПВХ', 'м.п.', TRUE);
+    ('NM-001', 'РџРѕР»РѕС‚РЅРѕ-РѕСЃРЅРѕРІР° СѓРЅРёРІРµСЂСЃР°Р»СЊРЅРѕРµ', 'м²', TRUE),
+    ('NM-002', 'РџРѕР»РѕС‚РЅРѕ РіСЂСѓРЅС‚РѕРІР°РЅРЅРѕРµ', 'м²', TRUE),
+    ('NM-003', 'РџРѕР»РѕС‚РЅРѕ Р»Р°РјРёРЅРёСЂРѕРІР°РЅРЅРѕРµ Р±РµР»РѕРµ РїРѕР»СѓС„Р°Р±СЂРёРєР°С‚', 'м²', TRUE),
+    ('NM-004', 'РџРѕР»РѕС‚РЅРѕ Р»Р°РјРёРЅРёСЂРѕРІР°РЅРЅРѕРµ Р±РµР»РѕРµ', 'м²', TRUE),
+    ('NM-005', 'РџРѕР»РѕС‚РЅРѕ Р»Р°РјРёРЅРёСЂРѕРІР°РЅРЅРѕРµ СЃРµСЂРѕРµ', 'м²', TRUE),
+    ('NM-006', 'РџР»РµРЅРєР° РґРµРєРѕСЂР°С‚РёРІРЅР°СЏ Р±РµР»Р°СЏ', 'м²', TRUE),
+    ('NM-007', 'РџР»РµРЅРєР° РґРµРєРѕСЂР°С‚РёРІРЅР°СЏ СЃРµСЂР°СЏ', 'м²', TRUE),
+    ('NM-008', 'РџСЂРѕС„РёР»СЊ РџР’РҐ Р±Р°Р·РѕРІС‹Р№', 'м.п.', TRUE),
+    ('NM-009', 'РџСЂРѕС„РёР»СЊ РџР’РҐ РѕРєСЂР°С€РµРЅРЅС‹Р№ Р±РµР»С‹Р№', 'м.п.', TRUE),
+    ('NM-010', 'РљСЂРѕРјРєР° РџР’РҐ Р±РµР»Р°СЏ 50 РјРј', 'м.п.', TRUE),
+    ('NM-011', 'РћР±СЂРµР·Рё РїСЂРѕС„РёР»СЏ РџР’РҐ', 'м.п.', TRUE),
+    ('RM-001', 'Primer PU-01', 'кг', TRUE),
+    ('RM-002', 'Primer PU-02 gray', 'кг', TRUE),
+    ('RM-003', 'Paint RAL 9016', 'кг', TRUE);
 
 INSERT INTO processes (
     process_code,
@@ -27,10 +30,10 @@ INSERT INTO processes (
     is_active
 )
 VALUES
-    ('PR-001', 'Подготовка основы', TRUE),
-    ('PR-002', 'Ламинация', TRUE),
-    ('PR-003', 'Резка в размер', TRUE),
-    ('PR-004', 'Окраска профиля', TRUE);
+    ('PR-001', 'РџРѕРґРіРѕС‚РѕРІРєР° РѕСЃРЅРѕРІС‹', TRUE),
+    ('PR-002', 'Р›Р°РјРёРЅР°С†РёСЏ', TRUE),
+    ('PR-003', 'Р РµР·РєР° РІ СЂР°Р·РјРµСЂ', TRUE),
+    ('PR-004', 'РћРєСЂР°СЃРєР° РїСЂРѕС„РёР»СЏ', TRUE);
 
 INSERT INTO machines (
     machine_code,
@@ -38,12 +41,12 @@ INSERT INTO machines (
     is_active
 )
 VALUES
-    ('MC-001', 'Линия подготовки полотна', TRUE),
-    ('MC-002', 'Ламинатор LAM-1600', TRUE),
-    ('MC-003', 'Ламинатор LAM-2200', TRUE),
-    ('MC-004', 'Резательный комплекс полотна', TRUE),
-    ('MC-005', 'Линия окраски профиля', TRUE),
-    ('MC-006', 'Линия продольной резки профиля', TRUE);
+    ('MC-001', 'Р›РёРЅРёСЏ РїРѕРґРіРѕС‚РѕРІРєРё РїРѕР»РѕС‚РЅР°', TRUE),
+    ('MC-002', 'Р›Р°РјРёРЅР°С‚РѕСЂ LAM-1600', TRUE),
+    ('MC-003', 'Р›Р°РјРёРЅР°С‚РѕСЂ LAM-2200', TRUE),
+    ('MC-004', 'Р РµР·Р°С‚РµР»СЊРЅС‹Р№ РєРѕРјРїР»РµРєСЃ РїРѕР»РѕС‚РЅР°', TRUE),
+    ('MC-005', 'Р›РёРЅРёСЏ РѕРєСЂР°СЃРєРё РїСЂРѕС„РёР»СЏ', TRUE),
+    ('MC-006', 'Р›РёРЅРёСЏ РїСЂРѕРґРѕР»СЊРЅРѕР№ СЂРµР·РєРё РїСЂРѕС„РёР»СЏ', TRUE);
 
 INSERT INTO routes (
     route_code,
@@ -54,19 +57,19 @@ INSERT INTO routes (
 VALUES
     (
         'RT-001',
-        'Маршрут получения полотна ламинированного белого',
+        'РњР°СЂС€СЂСѓС‚ РїРѕР»СѓС‡РµРЅРёСЏ РїРѕР»РѕС‚РЅР° Р»Р°РјРёРЅРёСЂРѕРІР°РЅРЅРѕРіРѕ Р±РµР»РѕРіРѕ',
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-004'),
         TRUE
     ),
     (
         'RT-002',
-        'Маршрут получения полотна ламинированного серого',
+        'РњР°СЂС€СЂСѓС‚ РїРѕР»СѓС‡РµРЅРёСЏ РїРѕР»РѕС‚РЅР° Р»Р°РјРёРЅРёСЂРѕРІР°РЅРЅРѕРіРѕ СЃРµСЂРѕРіРѕ',
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-005'),
         TRUE
     ),
     (
         'RT-003',
-        'Маршрут получения кромки ПВХ белой 50 мм',
+        'РњР°СЂС€СЂСѓС‚ РїРѕР»СѓС‡РµРЅРёСЏ РєСЂРѕРјРєРё РџР’РҐ Р±РµР»РѕР№ 50 РјРј',
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-010'),
         TRUE
     );
@@ -86,7 +89,7 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-001'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-002'),
         1.000,
-        'Подготовка основы под белую ламинацию'
+        'РџРѕРґРіРѕС‚РѕРІРєР° РѕСЃРЅРѕРІС‹ РїРѕРґ Р±РµР»СѓСЋ Р»Р°РјРёРЅР°С†РёСЋ'
     ),
     (
         (SELECT route_id FROM routes WHERE route_code = 'RT-001'),
@@ -94,7 +97,7 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-002'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-003'),
         1.000,
-        'Ламинация белой декоративной пленкой'
+        'Р›Р°РјРёРЅР°С†РёСЏ Р±РµР»РѕР№ РґРµРєРѕСЂР°С‚РёРІРЅРѕР№ РїР»РµРЅРєРѕР№'
     ),
     (
         (SELECT route_id FROM routes WHERE route_code = 'RT-001'),
@@ -102,7 +105,7 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-003'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-004'),
         1.000,
-        'Финишная резка белого полотна'
+        'Р¤РёРЅРёС€РЅР°СЏ СЂРµР·РєР° Р±РµР»РѕРіРѕ РїРѕР»РѕС‚РЅР°'
     ),
     (
         (SELECT route_id FROM routes WHERE route_code = 'RT-002'),
@@ -110,7 +113,7 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-001'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-002'),
         1.000,
-        'Подготовка основы под серую ламинацию'
+        'РџРѕРґРіРѕС‚РѕРІРєР° РѕСЃРЅРѕРІС‹ РїРѕРґ СЃРµСЂСѓСЋ Р»Р°РјРёРЅР°С†РёСЋ'
     ),
     (
         (SELECT route_id FROM routes WHERE route_code = 'RT-002'),
@@ -118,7 +121,7 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-002'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-005'),
         1.000,
-        'Ламинация серой декоративной пленкой'
+        'Р›Р°РјРёРЅР°С†РёСЏ СЃРµСЂРѕР№ РґРµРєРѕСЂР°С‚РёРІРЅРѕР№ РїР»РµРЅРєРѕР№'
     ),
     (
         (SELECT route_id FROM routes WHERE route_code = 'RT-003'),
@@ -126,7 +129,7 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-004'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-009'),
         1.000,
-        'Окраска базового профиля в белый цвет'
+        'РћРєСЂР°СЃРєР° Р±Р°Р·РѕРІРѕРіРѕ РїСЂРѕС„РёР»СЏ РІ Р±РµР»С‹Р№ С†РІРµС‚'
     ),
     (
         (SELECT route_id FROM routes WHERE route_code = 'RT-003'),
@@ -134,13 +137,12 @@ VALUES
         (SELECT process_id FROM processes WHERE process_code = 'PR-003'),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-010'),
         1.000,
-        'Резка и сборка кромки ПВХ 50 мм'
+        'Р РµР·РєР° Рё СЃР±РѕСЂРєР° РєСЂРѕРјРєРё РџР’РҐ 50 РјРј'
     );
 
 INSERT INTO route_step_inputs (
     route_step_id,
     input_nomenclature_id,
-    external_input_name,
     input_qty
 )
 VALUES
@@ -152,7 +154,6 @@ VALUES
             WHERE r.route_code = 'RT-001' AND rs.step_no = 1
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-001'),
-        NULL,
         1.000
     ),
     (
@@ -162,8 +163,7 @@ VALUES
             JOIN routes r ON r.route_id = rs.route_id
             WHERE r.route_code = 'RT-001' AND rs.step_no = 1
         ),
-        NULL,
-        'Праймер PU-01',
+        (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'RM-001'),
         0.050
     ),
     (
@@ -174,7 +174,6 @@ VALUES
             WHERE r.route_code = 'RT-001' AND rs.step_no = 2
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-002'),
-        NULL,
         1.000
     ),
     (
@@ -185,7 +184,6 @@ VALUES
             WHERE r.route_code = 'RT-001' AND rs.step_no = 2
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-006'),
-        NULL,
         1.020
     ),
     (
@@ -196,7 +194,6 @@ VALUES
             WHERE r.route_code = 'RT-001' AND rs.step_no = 3
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-003'),
-        NULL,
         1.000
     ),
     (
@@ -207,7 +204,6 @@ VALUES
             WHERE r.route_code = 'RT-002' AND rs.step_no = 1
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-001'),
-        NULL,
         1.000
     ),
     (
@@ -217,8 +213,7 @@ VALUES
             JOIN routes r ON r.route_id = rs.route_id
             WHERE r.route_code = 'RT-002' AND rs.step_no = 1
         ),
-        NULL,
-        'Праймер PU-02 серый',
+        (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'RM-002'),
         0.050
     ),
     (
@@ -229,7 +224,6 @@ VALUES
             WHERE r.route_code = 'RT-002' AND rs.step_no = 2
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-002'),
-        NULL,
         1.000
     ),
     (
@@ -240,7 +234,6 @@ VALUES
             WHERE r.route_code = 'RT-002' AND rs.step_no = 2
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-007'),
-        NULL,
         1.020
     ),
     (
@@ -251,7 +244,6 @@ VALUES
             WHERE r.route_code = 'RT-003' AND rs.step_no = 1
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-008'),
-        NULL,
         1.000
     ),
     (
@@ -261,8 +253,7 @@ VALUES
             JOIN routes r ON r.route_id = rs.route_id
             WHERE r.route_code = 'RT-003' AND rs.step_no = 1
         ),
-        NULL,
-        'Краска RAL 9016',
+        (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'RM-003'),
         0.030
     ),
     (
@@ -273,7 +264,6 @@ VALUES
             WHERE r.route_code = 'RT-003' AND rs.step_no = 2
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-009'),
-        NULL,
         1.000
     ),
     (
@@ -284,7 +274,6 @@ VALUES
             WHERE r.route_code = 'RT-003' AND rs.step_no = 2
         ),
         (SELECT nomenclature_id FROM nomenclature WHERE nomenclature_code = 'NM-011'),
-        NULL,
         1.000
     );
 
@@ -309,7 +298,7 @@ VALUES
         'primary',
         1,
         18.000,
-        'м²/мин',
+        'РјВІ/РјРёРЅ',
         TRUE
     ),
     (
@@ -323,7 +312,7 @@ VALUES
         'primary',
         1,
         12.000,
-        'м²/мин',
+        'РјВІ/РјРёРЅ',
         TRUE
     ),
     (
@@ -337,7 +326,7 @@ VALUES
         'alternative',
         2,
         10.500,
-        'м²/мин',
+        'РјВІ/РјРёРЅ',
         TRUE
     ),
     (
@@ -351,7 +340,7 @@ VALUES
         'primary',
         1,
         25.000,
-        'м²/мин',
+        'РјВІ/РјРёРЅ',
         TRUE
     ),
     (
@@ -365,7 +354,7 @@ VALUES
         'primary',
         1,
         18.000,
-        'м²/мин',
+        'РјВІ/РјРёРЅ',
         TRUE
     ),
     (
@@ -379,7 +368,7 @@ VALUES
         'primary',
         1,
         11.000,
-        'м²/мин',
+        'РјВІ/РјРёРЅ',
         TRUE
     ),
     (
@@ -393,7 +382,7 @@ VALUES
         'primary',
         1,
         35.000,
-        'м.п./мин',
+        'Рј.Рї./РјРёРЅ',
         TRUE
     ),
     (
@@ -407,8 +396,9 @@ VALUES
         'primary',
         1,
         42.000,
-        'м.п./мин',
+        'Рј.Рї./РјРёРЅ',
         TRUE
     );
 
 COMMIT;
+

@@ -1,17 +1,19 @@
-from typing import Literal
+﻿from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-ALLOWED_UNITS = {"м²", "м.п."}
+ALLOWED_UNITS = {"м²", "м.п.", "шт", "кг", "л"}
+ALLOWED_ITEM_TYPES = {"manufactured", "purchased"}
 
 
-class NomenclatureBase(BaseModel):
+class NomenclatureWriteBase(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     nomenclature_code: str = Field(min_length=1, max_length=120)
     nomenclature_name: str = Field(min_length=1)
     unit_of_measure: str
+    item_type: Literal["manufactured", "purchased"] = "manufactured"
     is_active: bool = True
 
     @field_validator("nomenclature_code", "nomenclature_name")
@@ -30,21 +32,36 @@ class NomenclatureBase(BaseModel):
         normalized_value = value.strip()
 
         if normalized_value not in ALLOWED_UNITS:
-            raise ValueError("Единица измерения может быть только 'м²' или 'м.п.'.")
+            raise ValueError("Единица измерения должна быть одной из: м², м.п., шт, кг, л.")
 
         return normalized_value
 
+    @field_validator("item_type")
+    @classmethod
+    def validate_item_type(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if normalized_value not in ALLOWED_ITEM_TYPES:
+            raise ValueError("Тип номенклатуры должен быть manufactured или purchased.")
+        return normalized_value
 
-class NomenclatureCreate(NomenclatureBase):
+
+class NomenclatureCreate(NomenclatureWriteBase):
     pass
 
 
-class NomenclatureUpdate(NomenclatureBase):
+class NomenclatureUpdate(NomenclatureWriteBase):
     pass
 
 
-class NomenclatureRead(NomenclatureBase):
+class NomenclatureRead(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     nomenclature_id: int
+    nomenclature_code: str
+    nomenclature_name: str
+    unit_of_measure: str
+    item_type: Literal["manufactured", "purchased"] = "manufactured"
+    is_active: bool = True
 
 
 ImportMode = Literal["add_only", "upsert"]
@@ -57,6 +74,7 @@ class NomenclatureImportPreviewRow(BaseModel):
     nomenclature_code: str | None = None
     nomenclature_name: str | None = None
     unit_of_measure: str | None = None
+    item_type: Literal["manufactured", "purchased"] | None = None
     is_active: bool | None = None
     status: ImportPreviewRowStatus
     can_import: bool
