@@ -422,18 +422,6 @@ function DemandSection() {
     () => (Array.isArray(demandResult?.problems) ? demandResult.problems : []),
     [demandResult],
   );
-  const demandTopLevelNetSum = useMemo(
-    () => demandTopLevelItems.reduce((sum, item) => sum + (Number(item?.net_production_demand_qty) || 0), 0),
-    [demandTopLevelItems],
-  );
-  const demandInternalSum = useMemo(
-    () => demandInternalItems.reduce((sum, item) => sum + (Number(item?.required_qty) || 0), 0),
-    [demandInternalItems],
-  );
-  const demandExternalSum = useMemo(
-    () => demandExternalItems.reduce((sum, item) => sum + (Number(item?.required_qty) || 0), 0),
-    [demandExternalItems],
-  );
 
   const salesPlanStatus = resolveStatusMeta({
     isLoading: isSalesPlanLoading,
@@ -1053,10 +1041,6 @@ function DemandSection() {
         selectionDateText: balanceDate ? `Дата остатков: ${balanceDate}` : "Дата остатков: —",
         latestDateText: inventoryBalanceDates[0] || "—",
         isLatestDateSelected: Boolean(balanceDate && inventoryBalanceDates[0] === balanceDate),
-        totalQty: filteredInventoryItems.reduce(
-          (accumulator, item) => accumulator + Number(item.available_qty || 0),
-          0,
-        ),
         hints: ["По умолчанию используется последняя загруженная дата остатков."],
         checks: [
           "Проверьте, что дата остатка соответствует дате среза склада.",
@@ -1153,10 +1137,6 @@ function DemandSection() {
     salesPlanSearch,
   ]);
 
-  const currentTotalQty = currentSourceDataset.filteredItems.reduce(
-    (accumulator, item) => accumulator + Number(item[currentSourceDataset.qtyKey] || 0),
-    0,
-  );
   const showSearchEmpty =
     !currentSourceDataset.isLoading &&
     !currentSourceDataset.error &&
@@ -1521,17 +1501,13 @@ function DemandSection() {
                       <tfoot>
                         <tr className="border-t border-cyan-300/14 bg-cyan-400/[0.06]">
                           <td className="px-3 py-2 text-xs tracking-[0.08em] text-slate-300">Итого</td>
-                          <td className="px-3 py-2 text-sm text-slate-300">
-                            Позиций: {currentSourceDataset.filteredItems.length}
-                          </td>
-                          <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-cyan-50">
-                            {formatQty(currentTotalQty)}
-                          </td>
-                          <td className="px-3 py-2 text-sm text-slate-400">—</td>
+                          <td className="px-3 py-2 text-sm text-slate-300">Позиций: {currentSourceDataset.filteredItems.length}</td>
+                          <td className="px-3 py-2 text-sm text-slate-500"></td>
+                          <td className="px-3 py-2 text-sm text-slate-500"></td>
                           {activeSourceTab === IMPORT_CONTEXT_SALES_PLAN ||
                           activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE ||
                           activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK ? (
-                            <td className="px-3 py-2 text-sm text-slate-400">—</td>
+                            <td className="px-3 py-2 text-sm text-slate-500"></td>
                           ) : null}
                         </tr>
                       </tfoot>
@@ -1836,7 +1812,6 @@ function DemandSection() {
                         <div>{currentSourceDataset.selectionDateText}</div>
                         <div>Последняя загрузка: {currentSourceDataset.latestDateText}</div>
                         <div>Строк: {currentSourceDataset.filteredItems.length}</div>
-                        <div>Сумма количества: {formatQty(currentSourceDataset.totalQty)}</div>
                       </>
                     ) : (
                       <>
@@ -2019,7 +1994,7 @@ function DemandSection() {
                 <section className="glass-panel p-5">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <h3 className="text-xl font-semibold text-slate-50">Верхний спрос</h3>
-                    <div className="text-sm text-slate-400">Сумма к выпуску: <span className="font-medium tabular-nums text-cyan-100">{formatQty(demandTopLevelNetSum)}</span></div>
+                    <div className="text-sm text-slate-400">Позиций: <span className="font-medium tabular-nums text-slate-100">{demandTopLevelItems.length}</span></div>
                   </div>
                   <div className="mt-4 max-h-[420px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
@@ -2042,7 +2017,7 @@ function DemandSection() {
                 </section>
 
                 <section className="glass-panel p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Потребность к выпуску</h3><div className="text-sm text-slate-400">Сумма количеств по разным ед. изм.: <span className="tabular-nums text-slate-100">{formatQty(demandInternalSum)}</span></div></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Потребность к выпуску</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandInternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
                       <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
@@ -2060,7 +2035,7 @@ function DemandSection() {
                 </section>
 
                 <section className="glass-panel p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешняя потребность</h3><div className="text-sm text-slate-400">Сумма количеств по разным ед. изм.: <span className="tabular-nums text-slate-100">{formatQty(demandExternalSum)}</span></div></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешняя потребность</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandExternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
                       <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код / Внешний вход</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
