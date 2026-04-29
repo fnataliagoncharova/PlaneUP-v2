@@ -49,7 +49,14 @@ function Sidebar({ items, activeSection, onSelect }) {
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="relative z-10 flex-1 block text-base font-medium">{item.label}</span>
+                <span
+                  className={[
+                    "relative z-10 flex-1 block text-base font-medium",
+                    item.id === "demand" ? "font-['Space_Grotesk'] font-semibold" : "",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </span>
                 <ChevronRight
                   className={[
                     "relative z-10 h-4 w-4 transition-transform duration-200",

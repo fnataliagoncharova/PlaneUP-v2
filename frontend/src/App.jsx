@@ -1,4 +1,4 @@
-import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
+﻿import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
@@ -27,7 +27,7 @@ const sectionDescriptions = {
   machines:
     "Справочник оборудования с ролями, производительностью и привязкой к шагам маршрутов.",
   demand:
-    "Подготовка входных данных, запуск расчёта потребности и проверка результатов без длинной прокрутки.",
+    "Подготовка исходных данных, запуск расчёта потребности и проверка результатов.",
 };
 
 function App() {

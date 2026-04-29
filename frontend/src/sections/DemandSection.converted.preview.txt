@@ -60,9 +60,9 @@ const IMPORT_CONTEXT_INVENTORY_BALANCE = "inventory_balance";
 const IMPORT_CONTEXT_SAFETY_STOCK = "safety_stock";
 
 const MODULE_TABS = [
-  { id: MODULE_TAB_SOURCE_DATA, label: "Исходные данные" },
-  { id: MODULE_TAB_CALCULATE, label: "Расчёт потребности" },
-  { id: MODULE_TAB_RESULTS, label: "Результаты" },
+  { id: MODULE_TAB_SOURCE_DATA, label: "�������� ������" },
+  { id: MODULE_TAB_CALCULATE, label: "������ �����������" },
+  { id: MODULE_TAB_RESULTS, label: "����������" },
 ];
 
 const TAB_BUTTON_BASE_CLASS =
@@ -88,14 +88,14 @@ function monthToApiDate(monthValue) {
 
 function formatMonthLabel(monthValue) {
   if (!monthValue) {
-    return "—";
+    return "�";
   }
   return monthValue;
 }
 
 function formatQty(value) {
   if (value === null || value === undefined || value === "") {
-    return "—";
+    return "�";
   }
 
   const asNumber = Number(value);
@@ -125,36 +125,36 @@ function filterItemsBySearch(items, query) {
 function resolveStatusMeta({ isLoading, error, items }) {
   if (isLoading) {
     return {
-      label: "Загрузка",
-      className: "text-cyan-200/85",
+      label: "��������",
+      className: "border-cyan-300/28 bg-cyan-300/[0.12] text-cyan-50",
     };
   }
 
   if (error) {
     return {
-      label: "Ошибка",
-      className: "text-rose-200/90",
+      label: "������",
+      className: "border-rose-300/30 bg-rose-500/[0.14] text-rose-100",
     };
   }
 
   if (items.length > 0) {
     return {
-      label: "Загружено",
-      className: "text-emerald-200/85",
+      label: "���������",
+      className: "border-emerald-300/30 bg-emerald-400/[0.14] text-emerald-100",
     };
   }
 
   return {
-    label: "Нет данных",
-    className: "text-slate-400",
+    label: "��� ������",
+    className: "border-slate-300/20 bg-slate-500/[0.12] text-slate-200",
   };
 }
 
 function IconActionButton({ label, onClick, disabled = false, tone = "edit", children }) {
   const toneClassName =
     tone === "danger"
-      ? "border-rose-300/22 bg-rose-500/[0.06] text-rose-100/90 hover:border-rose-300/38 hover:bg-rose-500/[0.14]"
-      : "border-cyan-300/18 bg-cyan-400/[0.04] text-slate-200 hover:border-cyan-300/30 hover:bg-cyan-400/[0.11] hover:text-cyan-50";
+      ? "border-rose-300/30 bg-rose-500/[0.1] text-rose-100 hover:border-rose-300/42 hover:bg-rose-500/[0.18]"
+      : "border-cyan-300/24 bg-cyan-400/[0.07] text-cyan-100/90 hover:border-cyan-300/38 hover:bg-cyan-400/[0.14]";
 
   return (
     <div className="group relative">
@@ -1028,7 +1028,7 @@ function DemandSection() {
       return {
         context: IMPORT_CONTEXT_INVENTORY_BALANCE,
         title: "Остатки",
-        subtitle: "Снимок доступных остатков на выбранную дату.",
+        subtitle: "Проверяйте доступный остаток по номенклатуре перед запуском расчёта потребности.",
       dateLabel: "Дата остатков",
       dateInputType: "select_dates",
         dateValue: balanceDate,
@@ -1057,7 +1057,11 @@ function DemandSection() {
           (accumulator, item) => accumulator + Number(item.available_qty || 0),
           0,
         ),
-        hints: ["По умолчанию используется последняя загруженная дата остатков."],
+        hints: [
+          "Импортируйте остатки в той же единице измерения, что и у номенклатуры.",
+          "После загрузки используйте поиск, чтобы быстро проверить критичные позиции.",
+          "Остатки являются снимком склада на конкретную дату. По умолчанию выбирается последняя загруженная дата.",
+        ],
         checks: [
           "Проверьте, что дата остатка соответствует дате среза склада.",
           "Убедитесь, что в таблице нет пустого кода и наименования.",
@@ -1069,7 +1073,7 @@ function DemandSection() {
       return {
         context: IMPORT_CONTEXT_SAFETY_STOCK,
         title: "Страховой запас",
-        subtitle: "Минимальный запас, учитываемый при расчёте потребности.",
+        subtitle: "Поддерживайте актуальные минимальные запасы, чтобы расчёт выявлял реальные дефициты.",
         dateLabel: null,
         dateInputType: null,
         dateValue: "",
@@ -1089,7 +1093,10 @@ function DemandSection() {
         rowKey: (item) => item.safety_stock_id,
         reload: reloadSafetyStock,
         selectionDateText: "Без даты",
-        hints: ["Если позиции нет в страховом запасе, норматив считается нулевым."],
+        hints: [
+          "Страховой запас нужен для стабильности плана между пересчётами.",
+          "Если позиция отсутствует, она не участвует в ограничении потребности.",
+        ],
         checks: [
           "Количество страхового запаса должно быть неотрицательным.",
           "Проверьте, что единицы измерения совпадают с номенклатурой.",
@@ -1100,7 +1107,7 @@ function DemandSection() {
     return {
       context: IMPORT_CONTEXT_SALES_PLAN,
       title: "План продаж",
-      subtitle: "Плановые объёмы продаж за выбранный месяц.",
+      subtitle: "Выберите период планирования и проверьте входные объёмы до запуска расчёта потребности.",
       dateLabel: "Период планирования",
       dateInputType: "month",
       dateValue: planMonth,
@@ -1120,7 +1127,10 @@ function DemandSection() {
         rowKey: (item) => item.sales_plan_id,
         reload: reloadSalesPlan,
       selectionDateText: `Период планирования: ${formatMonthLabel(planMonth)}`,
-      hints: ["План продаж задаётся на месяц. Импорт обновляет существующие позиции."],
+      hints: [
+        "Загружайте план продаж на период, по которому будете считать потребность.",
+        "Проверяйте позиции с большими объёмами через поиск перед запуском расчёта.",
+      ],
       checks: [
         "Убедитесь, что количество указано в единице номенклатуры.",
         "Проверьте, что периоды в импорте соответствуют выбранному фильтру.",
@@ -1172,10 +1182,10 @@ function DemandSection() {
   return (
     <section className="space-y-6">
       <header className="glass-panel p-4 sm:p-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">
+        <h1 className="font-['Space_Grotesk'] text-3xl font-semibold text-slate-50 sm:text-4xl">
           Потребность
         </h1>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
+        <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300 sm:text-[15px]">
           Подготовьте входные данные, запустите расчёт потребности и проверьте результат.
         </p>
       </header>
@@ -1204,7 +1214,7 @@ function DemandSection() {
       </section>
 
       {activeModuleTab === MODULE_TAB_SOURCE_DATA ? (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.26fr)_minmax(0,0.74fr)] 2xl:grid-cols-[minmax(0,1.32fr)_minmax(0,0.68fr)]">
           <div className="space-y-4">
             <section className="grid gap-3 sm:grid-cols-3">
               {summaryCards.map((card) => {
@@ -1236,15 +1246,23 @@ function DemandSection() {
                         </span>
                         <div className="text-sm font-semibold text-slate-100">{card.title}</div>
                       </div>
-                      <span className={["inline-flex items-center gap-1.5 px-1.5 py-1 text-xs", card.status.className].join(" ")}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-90" />
+                      <span
+                        className={[
+                          "inline-flex border px-2 py-1 text-[11px] uppercase tracking-[0.14em]",
+                          card.status.className,
+                        ].join(" ")}
+                      >
                         {card.status.label}
                       </span>
                     </div>
                     <div className="mt-4 space-y-1 text-sm text-slate-300">
                       <div>Позиций: {card.rowsCount}</div>
                       <div className="text-xs text-slate-500">{card.dateText}</div>
-                      {card.dateBadgeText ? <div className="text-xs text-cyan-200/70">{card.dateBadgeText}</div> : null}
+                      {card.dateBadgeText ? (
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-cyan-200/75">
+                          {card.dateBadgeText}
+                        </div>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -1252,27 +1270,20 @@ function DemandSection() {
             </section>
 
             <section className="glass-panel p-4 sm:p-5">
-              <div className="space-y-4">
-                <div className="w-full">
-                  <h2 className="text-xl font-semibold tracking-tight text-slate-50">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div className="max-w-2xl">
+                  <h2 className="font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
                     {currentSourceDataset.title}
                   </h2>
-                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">{currentSourceDataset.subtitle}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">{currentSourceDataset.subtitle}</p>
                 </div>
 
-                <div
-                  className={[
-                    "grid w-full gap-3 sm:grid-cols-2",
-                    currentSourceDataset.dateLabel
-                      ? "xl:grid-cols-[minmax(220px,260px)_minmax(360px,1fr)_auto_auto]"
-                      : "xl:grid-cols-[minmax(360px,1fr)_auto_auto]",
-                  ].join(" ")}
-                >
+                <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-[minmax(0,220px)_minmax(0,260px)_auto]">
                   {currentSourceDataset.dateLabel ? (
                     <div>
                       <label
                         htmlFor="demand-date-filter"
-                        className="mb-2 block text-xs tracking-[0.08em] text-slate-500"
+                        className="mb-2 block text-xs uppercase tracking-[0.18em] text-slate-500"
                       >
                         {currentSourceDataset.dateLabel}
                       </label>
@@ -1285,7 +1296,7 @@ function DemandSection() {
                             currentSourceDataset.isDateOptionsLoading ||
                             currentSourceDataset.dateOptions.length === 0
                           }
-                          className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {currentSourceDataset.dateOptions.length > 0 ? (
                             currentSourceDataset.dateOptions.map((optionDate, index) => (
@@ -1303,27 +1314,34 @@ function DemandSection() {
                           type={currentSourceDataset.dateInputType || "date"}
                           value={currentSourceDataset.dateValue}
                           onChange={(event) => currentSourceDataset.onDateChange(event.target.value)}
-                          className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
+                          className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
                         />
                       )}
+                      {currentSourceDataset.dateInputType === "select_dates" ? (
+                        <div className="mt-2 text-xs text-slate-400">
+                          Для расчёта по умолчанию используется последняя загруженная дата остатков.
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="flex items-end text-sm text-slate-400">Фильтр даты не требуется</div>
+                  )}
 
                   <div>
                     <label
                       htmlFor="demand-search-filter"
-                      className="mb-2 block text-xs tracking-[0.08em] text-slate-500"
+                      className="mb-2 block text-xs uppercase tracking-[0.18em] text-slate-500"
                     >
                       Поиск
                     </label>
-                    <div className="flex h-10 items-center border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3">
+                    <div className="flex items-center border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5">
                       <Search className="h-4 w-4 text-slate-400" />
                       <input
                         id="demand-search-filter"
                         type="search"
                         value={currentSourceDataset.searchValue}
                         onChange={(event) => currentSourceDataset.onSearchChange(event.target.value)}
-                        placeholder="Поиск по коду или наименованию..."
+                        placeholder="По коду или наименованию"
                         className="w-full bg-transparent pl-2 text-sm text-slate-100 outline-none placeholder:text-slate-500"
                       />
                     </div>
@@ -1335,7 +1353,7 @@ function DemandSection() {
                         type="button"
                         onClick={handleOpenCreateSalesPlanForm}
                         disabled={isSalesPlanSaving || deletingSalesPlanId !== null}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Plus className="h-4 w-4" />
                         Добавить позицию
@@ -1346,7 +1364,7 @@ function DemandSection() {
                         type="button"
                         onClick={handleOpenCreateInventoryForm}
                         disabled={!balanceDate || isInventorySaving || deletingInventoryId !== null}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Plus className="h-4 w-4" />
                         Добавить позицию
@@ -1357,7 +1375,7 @@ function DemandSection() {
                         type="button"
                         onClick={handleOpenCreateSafetyStockForm}
                         disabled={isSafetyStockSaving || deletingSafetyStockId !== null}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Plus className="h-4 w-4" />
                         Добавить позицию
@@ -1367,7 +1385,7 @@ function DemandSection() {
                       type="button"
                       onClick={currentSourceDataset.reload}
                       disabled={currentSourceDataset.isLoading}
-                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60 xl:w-auto"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60 xl:w-auto"
                     >
                       <RefreshCw
                         className={["h-4 w-4", currentSourceDataset.isLoading ? "animate-spin" : ""].join(
@@ -1405,22 +1423,22 @@ function DemandSection() {
                     <table className="min-w-full border-collapse">
                       <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))]">
                         <tr className="text-left">
-                          <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-slate-400">
                             Код
                           </th>
-                          <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-slate-400">
                             Наименование
                           </th>
-                          <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 text-right">
+                          <th className="px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-slate-400">
                             {currentSourceDataset.qtyHeader}
                           </th>
-                          <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-slate-400">
                             Ед.
                           </th>
                           {activeSourceTab === IMPORT_CONTEXT_SALES_PLAN ||
                           activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE ||
                           activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK ? (
-                            <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                            <th className="px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-slate-400">
                               Действия
                             </th>
                           ) : null}
@@ -1430,18 +1448,18 @@ function DemandSection() {
                         {currentSourceDataset.filteredItems.map((item) => (
                           <tr
                             key={currentSourceDataset.rowKey(item)}
-                            className="border-t border-white/[0.05] transition hover:bg-cyan-300/[0.03]"
+                            className="border-t border-white/[0.05] transition hover:bg-cyan-400/[0.05]"
                           >
-                            <td className="px-3 py-2.5 text-sm font-medium text-slate-100">{item.nomenclature_code || "—"}</td>
-                            <td className="px-3 py-2.5 text-sm text-slate-300">{item.nomenclature_name || "—"}</td>
-                            <td className="px-3 py-2.5 text-right text-sm tabular-nums text-slate-200">
+                            <td className="px-3 py-2 text-sm text-slate-100">{item.nomenclature_code || "—"}</td>
+                            <td className="px-3 py-2 text-sm text-slate-200">{item.nomenclature_name || "—"}</td>
+                            <td className="px-3 py-2 text-sm text-slate-200">
                               {formatQty(item[currentSourceDataset.qtyKey])}
                             </td>
-                            <td className="px-3 py-2.5 text-sm text-slate-300">{item.unit_of_measure || "—"}</td>
+                            <td className="px-3 py-2 text-sm text-slate-300">{item.unit_of_measure || "—"}</td>
                             {activeSourceTab === IMPORT_CONTEXT_SALES_PLAN ||
                             activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE ||
                             activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK ? (
-                              <td className="px-3 py-2.5">
+                              <td className="px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   {activeSourceTab === IMPORT_CONTEXT_SALES_PLAN ? (
                                     <>
@@ -1520,11 +1538,11 @@ function DemandSection() {
                       </tbody>
                       <tfoot>
                         <tr className="border-t border-cyan-300/14 bg-cyan-400/[0.06]">
-                          <td className="px-3 py-2 text-xs tracking-[0.08em] text-slate-300">Итого</td>
+                          <td className="px-3 py-2 text-xs uppercase tracking-[0.14em] text-slate-300">Итого</td>
                           <td className="px-3 py-2 text-sm text-slate-300">
                             Позиций: {currentSourceDataset.filteredItems.length}
                           </td>
-                          <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-cyan-50">
+                          <td className="px-3 py-2 text-sm font-medium text-cyan-50">
                             {formatQty(currentTotalQty)}
                           </td>
                           <td className="px-3 py-2 text-sm text-slate-400">—</td>
@@ -1549,7 +1567,7 @@ function DemandSection() {
               <div className="panel-title">
                 {salesPlanFormMode === "create" ? "Добавление" : "Редактирование"}
               </div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-50">
+              <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
                 {salesPlanFormMode === "create" ? "Добавить позицию плана" : "Редактировать позицию плана"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -1562,7 +1580,7 @@ function DemandSection() {
 
               <div className="mt-5 space-y-4">
                 <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                     Период планирования
                   </div>
                   <input
@@ -1590,7 +1608,7 @@ function DemandSection() {
                 )}
 
                 <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Количество</div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Количество</div>
                   <input
                     type="number"
                     step="0.001"
@@ -1634,7 +1652,7 @@ function DemandSection() {
               <div className="panel-title">
                 {inventoryFormMode === "create" ? "Добавление" : "Редактирование"}
               </div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-50">
+              <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
                 {inventoryFormMode === "create" ? "Добавить позицию остатков" : "Редактировать остаток"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -1647,7 +1665,7 @@ function DemandSection() {
 
               <div className="mt-5 space-y-4">
                 <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Дата остатков</div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Дата остатков</div>
                   <input
                     type="text"
                     readOnly
@@ -1673,7 +1691,7 @@ function DemandSection() {
                 )}
 
                 <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Доступный остаток</div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Доступный остаток</div>
                   <input
                     type="number"
                     step="0.001"
@@ -1717,7 +1735,7 @@ function DemandSection() {
               <div className="panel-title">
                 {safetyStockFormMode === "create" ? "Добавление" : "Редактирование"}
               </div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-50">
+              <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
                 {safetyStockFormMode === "create" ? "Добавить страховой запас" : "Редактировать страховой запас"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -1746,7 +1764,7 @@ function DemandSection() {
                 )}
 
                 <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Страховой запас</div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Страховой запас</div>
                   <input
                     type="number"
                     step="0.001"
@@ -1788,7 +1806,7 @@ function DemandSection() {
           ) : (
             <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
               <div className="panel-title">Контекст</div>
-              <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-50">
+              <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
                 {currentSourceDataset.title}
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -1801,7 +1819,7 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={() => handleOpenImportPanel(currentSourceDataset.context)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
+                  className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
                 >
                   <Upload className="h-4 w-4" />
                   Импорт Excel
@@ -1809,12 +1827,61 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={() => handleDownloadTemplate(currentSourceDataset.context)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
+                  className="inline-flex items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
                 >
                   <Download className="h-4 w-4" />
                   Скачать шаблон
                 </button>
               </div>
+
+              {activeSourceTab === IMPORT_CONTEXT_SALES_PLAN ? (
+                <div className="mt-4 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4">
+                  <div className="text-sm font-medium text-slate-100">Ручная корректировка</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    Для точечных изменений можно добавить позицию вручную, изменить количество или удалить лишнюю строку.
+                  </p>
+                </div>
+              ) : null}
+              {activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE ? (
+                <div className="mt-4 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4">
+                  <div className="text-sm font-medium text-slate-100">Ручная корректировка</div>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateInventoryForm}
+                      disabled={!balanceDate}
+                      className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Добавить позицию
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    Для точечных изменений можно добавить позицию вручную, изменить доступный остаток или удалить лишнюю строку из выбранного снимка.
+                  </p>
+                  {!balanceDate ? (
+                    <p className="mt-2 text-xs text-amber-200/80">Сначала загрузите или выберите дату остатков.</p>
+                  ) : null}
+                </div>
+              ) : null}
+              {activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK ? (
+                <div className="mt-4 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4">
+                  <div className="text-sm font-medium text-slate-100">Ручная корректировка</div>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateSafetyStockForm}
+                      className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18]"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Добавить позицию
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    Для точечных изменений можно добавить позицию вручную, изменить страховой запас или удалить лишнюю строку.
+                  </p>
+                </div>
+              ) : null}
 
               {showImportErrorInContext ? (
                 <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
@@ -1824,12 +1891,12 @@ function DemandSection() {
               ) : null}
 
               <div className="mt-6 space-y-4">
-                <div className="rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
-                  <div className="flex items-center gap-2 text-slate-200">
+                <div className="rounded-none border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(18,76,97,0.2),rgba(8,28,40,0.72))] px-4 py-4">
+                  <div className="flex items-center gap-2 text-cyan-100">
                     <FileSpreadsheet className="h-4 w-4" />
                     <span className="text-sm font-medium">Текущая выборка</span>
                   </div>
-                  <div className="mt-3 space-y-1 text-sm text-slate-300">
+                  <div className="mt-3 space-y-1 text-sm text-slate-200">
                     {activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE ? (
                       <>
                         <div>Источник: Остатки</div>
@@ -1848,36 +1915,30 @@ function DemandSection() {
                   </div>
                 </div>
 
-                <div className="rounded-none border border-white/8 bg-white/[0.025] px-4 py-3">
-                  <div className="text-sm font-medium text-slate-100">Проверка данных</div>
-                  <div
-                    className={[
-                      "mt-2 flex items-start gap-2 text-sm leading-6",
-                      currentSourceDataset.error ? "text-rose-100" : "text-emerald-100",
-                    ].join(" ")}
-                  >
-                    {currentSourceDataset.error ? (
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    ) : (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    )}
-                    <span>
-                      {currentSourceDataset.error
-                        ? "Есть ошибка загрузки данных."
-                        : currentSourceDataset.isLoading
-                          ? "Данные обновляются."
-                          : currentSourceDataset.items.length > 0
-                            ? "Набор данных загружен, можно переходить к расчёту."
-                            : "Набор данных не загружен."}
-                    </span>
+                <div className="rounded-none border border-white/10 bg-white/[0.03] px-4 py-4">
+                  <div className="text-sm font-medium text-slate-100">Подсказки</div>
+                  <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                    {currentSourceDataset.hints.map((hint) => (
+                      <p key={hint}>{hint}</p>
+                    ))}
                   </div>
                 </div>
 
-                <div className="rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
-                  <div className="text-sm font-medium text-slate-100">Подсказка</div>
-                  <div className="mt-2 space-y-1 text-sm leading-6 text-slate-400">
-                    {currentSourceDataset.hints.map((hint) => (
-                      <p key={hint}>{hint}</p>
+                <div className="rounded-none border border-white/10 bg-white/[0.03] px-4 py-4">
+                  <div className="text-sm font-medium text-slate-100">Проверка данных</div>
+                  <div className="mt-3 flex items-start gap-2 text-sm text-emerald-100">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      {currentSourceDataset.error
+                        ? "Есть ошибка загрузки, проверьте источник данных или повторите импорт."
+                        : currentSourceDataset.isLoading
+                          ? "Данные обновляются, проверка будет доступна после загрузки."
+                          : "Набор данных загружен, можно переходить к расчёту потребности."}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+                    {currentSourceDataset.checks.map((check) => (
+                      <p key={check}>{check}</p>
                     ))}
                   </div>
                 </div>
@@ -1889,14 +1950,14 @@ function DemandSection() {
 
       <V2ConfirmDialog
         isOpen={Boolean(salesPlanDeleteCandidate)}
-        title="Удалить позицию из плана продаж?"
+        title="������� ������� �� ����� ������?"
         message={
           salesPlanDeleteCandidate
-            ? `Позиция ${salesPlanDeleteCandidate.nomenclature_code} — ${salesPlanDeleteCandidate.nomenclature_name} будет удалена из плана продаж за выбранный период. Номенклатура в справочнике не удаляется.`
+            ? `������� ${salesPlanDeleteCandidate.nomenclature_code} � ${salesPlanDeleteCandidate.nomenclature_name} ����� ������� �� ����� ������ �� ��������� ������. ������������ � ����������� �� ���������.`
             : ""
         }
-        confirmText={deletingSalesPlanId ? "Удаляем..." : "Удалить"}
-        cancelText="Отмена"
+        confirmText={deletingSalesPlanId ? "�������..." : "�������"}
+        cancelText="������"
         isConfirmDisabled={Boolean(deletingSalesPlanId)}
         isCancelDisabled={Boolean(deletingSalesPlanId)}
         onCancel={() => {
@@ -1909,14 +1970,14 @@ function DemandSection() {
 
       <V2ConfirmDialog
         isOpen={Boolean(inventoryDeleteCandidate)}
-        title="Удалить позицию из остатков?"
+        title="������� ������� �� ��������?"
         message={
           inventoryDeleteCandidate
-            ? `Позиция ${inventoryDeleteCandidate.nomenclature_code} — ${inventoryDeleteCandidate.nomenclature_name} будет удалена из снимка остатков на ${inventoryDeleteCandidate.as_of_date}. Номенклатура в справочнике не удаляется.`
+            ? `������� ${inventoryDeleteCandidate.nomenclature_code} � ${inventoryDeleteCandidate.nomenclature_name} ����� ������� �� ������ �������� �� ${inventoryDeleteCandidate.as_of_date}. ������������ � ����������� �� ���������.`
             : ""
         }
-        confirmText={deletingInventoryId ? "Удаляем..." : "Удалить"}
-        cancelText="Отмена"
+        confirmText={deletingInventoryId ? "�������..." : "�������"}
+        cancelText="������"
         isConfirmDisabled={Boolean(deletingInventoryId)}
         isCancelDisabled={Boolean(deletingInventoryId)}
         onCancel={() => {
@@ -1929,14 +1990,14 @@ function DemandSection() {
 
       <V2ConfirmDialog
         isOpen={Boolean(safetyStockDeleteCandidate)}
-        title="Удалить позицию страхового запаса?"
+        title="������� ������� ���������� ������?"
         message={
           safetyStockDeleteCandidate
-            ? `Позиция ${safetyStockDeleteCandidate.nomenclature_code} — ${safetyStockDeleteCandidate.nomenclature_name} будет удалена из страхового запаса. Номенклатура в справочнике не удаляется.`
+            ? `������� ${safetyStockDeleteCandidate.nomenclature_code} � ${safetyStockDeleteCandidate.nomenclature_name} ����� ������� �� ���������� ������. ������������ � ����������� �� ���������.`
             : ""
         }
-        confirmText={deletingSafetyStockId ? "Удаляем..." : "Удалить"}
-        cancelText="Отмена"
+        confirmText={deletingSafetyStockId ? "�������..." : "�������"}
+        cancelText="������"
         isConfirmDisabled={Boolean(deletingSafetyStockId)}
         isCancelDisabled={Boolean(deletingSafetyStockId)}
         onCancel={() => {
@@ -1964,208 +2025,152 @@ function DemandSection() {
       ) : null}
 
       {activeModuleTab === MODULE_TAB_CALCULATE ? (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
-          <div className="space-y-4">
-            <section className="glass-panel p-5 sm:p-6">
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">Расчёт потребности</h2>
-              <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">
-                Расчёт выполняется на выбранный месяц планирования с учётом плана продаж, страхового запаса и выбранного снимка остатков.
-              </p>
-
-              <div className="mt-4 flex flex-wrap items-end gap-3">
-                <div className="w-full max-w-[320px]">
-                  <label className="mb-2 block text-xs tracking-[0.08em] text-slate-500">Период планирования</label>
-                  <input
-                    type="month"
-                    value={planMonth}
-                    onChange={(event) => setPlanMonth(event.target.value)}
-                    className="h-11 w-full rounded-none border border-cyan-300/16 bg-[rgba(8,24,38,0.85)] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/55 focus:ring-2 focus:ring-cyan-400/15"
-                  />
-                </div>
+        <section className="space-y-4">
+          <section className="glass-panel p-5 sm:p-6">
+            <div className="panel-title">������</div>
+            <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">������ �����������</h2>
+            <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
+              ������ ����������� �� ��������� ����� ������������ � ������ ����� ������, ���������� ������ � ���������� ������ ��������.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                <div className="text-xs tracking-[0.08em] text-slate-400">������ ������������</div>
+                <div className="mt-1 font-medium text-slate-100">{formatMonthLabel(planMonth)}</div>
+              </div>
+              <div className="rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                <div className="text-xs tracking-[0.08em] text-slate-400">���� ��������</div>
+                <div className="mt-1 font-medium text-slate-100">{balanceDate || "�"}</div>
+              </div>
+              <div className="rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                <div className="text-xs tracking-[0.08em] text-slate-400">���� ������</div>
+                <div className="mt-1 font-medium text-slate-100">{salesPlanItems.length} �����</div>
+              </div>
+              <div className="rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                <div className="text-xs tracking-[0.08em] text-slate-400">������� / ��������� �����</div>
+                <div className="mt-1 font-medium text-slate-100">{inventoryItems.length} / {safetyStockItems.length} �����</div>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-slate-300">��� ������� �� ��������� ������������ ��������� ����������� ���� ��������.</p>
+            {salesPlanItems.length === 0 ? (
+              <div className="mt-3 border border-amber-300/30 bg-amber-500/[0.1] px-4 py-3 text-sm text-amber-100">�� ��������� ������ ���� ������ �� ��������.</div>
+            ) : null}
+            {demandCalculateError ? (
+              <div className="mt-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{demandCalculateError}</div>
+            ) : null}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCalculateDemand}
+                disabled={isDemandCalculating}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw className={["h-4 w-4", isDemandCalculating ? "animate-spin" : ""].join(" ")} />
+                {isDemandCalculating ? "������������..." : "���������� �����������"}
+              </button>
+              {!planMonth || !balanceDate ? (
                 <button
                   type="button"
-                  onClick={handleCalculateDemand}
-                  disabled={isDemandCalculating}
-                  className="inline-flex h-11 items-center gap-2 rounded-none border border-cyan-300/38 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/[0.2] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => setActiveModuleTab(MODULE_TAB_SOURCE_DATA)}
+                  className="inline-flex items-center rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
                 >
-                  <RefreshCw className={["h-4 w-4", isDemandCalculating ? "animate-spin" : ""].join(" ")} />
-                  {isDemandCalculating ? "Рассчитываем..." : "Рассчитать потребность"}
+                  ������� � �������� ������
                 </button>
-              </div>
-
-              {!planMonth || !balanceDate ? (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setActiveModuleTab(MODULE_TAB_SOURCE_DATA)}
-                    className="inline-flex items-center rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
-                  >
-                    Перейти к исходным данным
-                  </button>
-                </div>
               ) : null}
-            </section>
+              {lastCalculatedAt ? <span className="text-xs text-slate-400">��������� ������: {new Date(lastCalculatedAt).toLocaleString("ru-RU")}</span> : null}
+            </div>
+          </section>
 
-            {demandCalculateError ? (
-              <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{demandCalculateError}</div>
-            ) : null}
-
-            {!demandResult ? (
-              <section className="glass-panel px-4 py-5 text-sm text-slate-400">
-                Запустите расчёт, чтобы увидеть потребность к выпуску.
+          {demandResult ? (
+            <>
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="glass-panel p-4"><div className="text-xs tracking-[0.08em] text-slate-400">������� �����</div><div className="mt-2 text-lg font-semibold text-cyan-100">{demandTopLevelItems.length}</div></div>
+                <div className="glass-panel p-4"><div className="text-xs tracking-[0.08em] text-slate-400">����������� � �������</div><div className="mt-2 text-lg font-semibold text-cyan-100">{demandInternalItems.length}</div></div>
+                <div className="glass-panel p-4"><div className="text-xs tracking-[0.08em] text-slate-400">������� �����������</div><div className="mt-2 text-lg font-semibold text-cyan-100">{demandExternalItems.length}</div></div>
+                <div className="glass-panel p-4"><div className="text-xs tracking-[0.08em] text-slate-400">��������</div><div className="mt-2 text-lg font-semibold text-cyan-100">{demandProblemItems.length}</div></div>
               </section>
-            ) : (
-              <>
-                <section className="glass-panel p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3">
-                    <h3 className="text-xl font-semibold text-slate-50">Верхний спрос</h3>
-                    <div className="text-sm text-slate-400">Сумма к выпуску: <span className="font-medium tabular-nums text-cyan-100">{formatQty(demandTopLevelNetSum)}</span></div>
-                  </div>
-                  <div className="mt-4 max-h-[420px] overflow-auto border border-cyan-300/10">
-                    <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
-                      <tbody>
-                        {demandTopLevelItems.length > 0 ? demandTopLevelItems.map((item, index) => (
-                          <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || "—"}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.sales_plan_qty)}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.safety_stock_qty)}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.available_qty)}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.gross_demand_qty)}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.net_production_demand_qty)}</td>
-                          </tr>
-                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={7}>Верхний спрос не сформирован.</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
 
-                <section className="glass-panel p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Потребность к выпуску</h3><div className="text-sm text-slate-400">Сумма количеств по разным ед. изм.: <span className="tabular-nums text-slate-100">{formatQty(demandInternalSum)}</span></div></div>
-                  <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
-                    <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
-                      <tbody>
-                        {demandInternalItems.length > 0 ? demandInternalItems.map((item, index) => (
-                          <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || "—"}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.required_qty)}</td>
-                          </tr>
-                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={3}>Потребность к выпуску не сформирована.</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                <section className="glass-panel p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешняя потребность</h3><div className="text-sm text-slate-400">Сумма количеств по разным ед. изм.: <span className="tabular-nums text-slate-100">{formatQty(demandExternalSum)}</span></div></div>
-                  <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
-                    <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код / Внешний вход</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
-                      <tbody>
-                        {demandExternalItems.length > 0 ? demandExternalItems.map((item, index) => (
-                          <tr key={`${item.nomenclature_code || item.external_input_name || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || item.external_input_name || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || item.external_input_name || "—"}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.required_qty)}</td>
-                          </tr>
-                        )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={3}>Внешняя потребность не сформирована.</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                <section className={["glass-panel p-5", demandProblemItems.length > 0 ? "border-amber-300/30 bg-amber-400/[0.05]" : ""].join(" ")}>
-                  <h3 className="text-lg font-semibold text-slate-50">Проблемы расчёта</h3>
-                  {demandProblemItems.length > 0 ? (
-                    <div className="mt-4 max-h-[320px] overflow-auto border border-amber-300/20">
-                      <table className="min-w-full text-left text-sm text-slate-200">
-                        <thead className="sticky top-0 bg-[rgba(24,20,10,0.55)] text-[11px] uppercase tracking-[0.08em] text-amber-100/70"><tr><th className="px-3 py-2">Код проблемы</th><th className="px-3 py-2">Сообщение</th><th className="px-3 py-2">Номенклатура</th><th className="px-3 py-2">Маршрут</th><th className="px-3 py-2">Детали</th></tr></thead>
-                        <tbody>
-                          {demandProblemItems.map((problem, index) => (
-                            <tr key={`${problem.problem_code || "problem"}-${index}`} className="border-t border-white/[0.05]">
-                              <td className="px-3 py-2.5 font-medium text-amber-50">{problem.problem_code || "—"}</td>
-                              <td className="px-3 py-2.5 text-slate-200">{problem.message || "—"}</td>
-                              <td className="px-3 py-2.5 text-slate-300">{problem.nomenclature_code || "—"}</td>
-                              <td className="px-3 py-2.5 tabular-nums text-slate-300">{problem.route_id ?? "—"}</td>
-                              <td className="px-3 py-2.5 text-slate-300">{problem.details ? JSON.stringify(problem.details) : "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="mt-3 border border-emerald-300/30 bg-emerald-500/[0.1] px-4 py-3 text-sm text-emerald-100">Проблемы расчёта не обнаружены.</div>
-                  )}
-                </section>
-              </>
-            )}
-          </div>
-
-          <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
-            <div className="panel-title">Контекст</div>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-50">Параметры расчёта</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Проверьте период, дату остатков и состав исходных данных перед запуском расчёта.
-            </p>
-
-            <div className="panel-divider mt-5" />
-
-            <div className="mt-4 rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
-              <div className="text-sm font-medium text-slate-100">Параметры</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Период планирования</span><span className="font-medium text-slate-100">{formatMonthLabel(planMonth)}</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Дата остатков</span><span className="font-medium text-slate-100">{balanceDate || "—"}</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">План продаж</span><span className="font-medium tabular-nums text-slate-100">{salesPlanItems.length} строк</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Остатки / страховой запас</span><span className="font-medium tabular-nums text-slate-100">{inventoryItems.length} / {safetyStockItems.length}</span></div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
-              <div className="text-sm font-medium text-slate-100">Сводка результата</div>
-              {demandResult ? (
-                <div className="mt-3 space-y-2 text-sm">
-                  <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Верхний спрос</span><span className="font-medium tabular-nums text-slate-100">{demandTopLevelItems.length}</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Потребность к выпуску</span><span className="font-medium tabular-nums text-slate-100">{demandInternalItems.length}</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Внешняя потребность</span><span className="font-medium tabular-nums text-slate-100">{demandExternalItems.length}</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className={demandProblemItems.length > 0 ? "text-amber-200" : "text-slate-500"}>Проблемы</span><span className={["font-medium tabular-nums", demandProblemItems.length > 0 ? "text-amber-100" : "text-emerald-100"].join(" ")}>{demandProblemItems.length}</span></div>
+              <section className="glass-panel p-4 sm:p-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <h3 className="text-lg font-semibold text-slate-100">������� �����</h3>
+                  <div className="text-xs text-slate-400">����� � �������: {formatQty(demandTopLevelNetSum)}</div>
                 </div>
-              ) : (
-                <p className="mt-3 text-sm text-slate-400">Расчёт ещё не выполнен.</p>
-              )}
-            </div>
-
-            <div className="mt-4 rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
-              <div className="text-sm font-medium text-slate-100">Статус</div>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3"><span className="text-slate-500">Последний расчёт</span><span className="font-medium text-slate-100">{lastCalculatedAt ? new Date(lastCalculatedAt).toLocaleString("ru-RU") : "—"}</span></div>
-                <div className="text-slate-400">
-                  {!balanceDate
-                    ? "Дата остатков не выбрана."
-                    : inventoryBalanceDates.length > 0 && balanceDate === inventoryBalanceDates[0]
-                      ? "Остатки: используется последняя загрузка."
-                      : "Остатки: выбран прошлый снимок."}
+                <div className="mt-4 max-h-[420px] overflow-auto border border-white/10">
+                  <table className="min-w-full text-left text-sm text-slate-100">
+                    <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.14em] text-slate-300"><tr><th className="px-3 py-2">���</th><th className="px-3 py-2">������������</th><th className="px-3 py-2">���� ������</th><th className="px-3 py-2">��������� �����</th><th className="px-3 py-2">�������</th><th className="px-3 py-2">������� �����������</th><th className="px-3 py-2">����������� � �������</th></tr></thead>
+                    <tbody>
+                      {demandTopLevelItems.length > 0 ? demandTopLevelItems.map((item, index) => (
+                        <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/6">
+                          <td className="px-3 py-2">{item.nomenclature_code || "�"}</td><td className="px-3 py-2">{item.nomenclature_name || "�"}</td><td className="px-3 py-2">{formatQty(item.sales_plan_qty)}</td><td className="px-3 py-2">{formatQty(item.safety_stock_qty)}</td><td className="px-3 py-2">{formatQty(item.available_qty)}</td><td className="px-3 py-2">{formatQty(item.gross_demand_qty)}</td><td className="px-3 py-2">{formatQty(item.net_production_demand_qty)}</td>
+                        </tr>
+                      )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={7}>������� ����� �� �����������.</td></tr>}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            </div>
+              </section>
 
-            {demandResult?.problems?.length > 0 ? (
-              <div className="mt-4 rounded-none border border-amber-300/30 bg-amber-400/[0.08] px-4 py-3 text-sm text-amber-100">
-                Есть проблемы расчёта. Проверьте таблицу “Проблемы расчёта” ниже.
-              </div>
-            ) : null}
-          </aside>
+              <section className="glass-panel p-4 sm:p-5">
+                <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-100">����������� � �������</h3><div className="text-xs text-slate-400">����� ��������� �� ������ ��. ���.: {formatQty(demandInternalSum)}</div></div>
+                <div className="mt-4 max-h-[360px] overflow-auto border border-white/10">
+                  <table className="min-w-full text-left text-sm text-slate-100">
+                    <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.14em] text-slate-300"><tr><th className="px-3 py-2">���</th><th className="px-3 py-2">������������</th><th className="px-3 py-2">���������� � �������</th></tr></thead>
+                    <tbody>
+                      {demandInternalItems.length > 0 ? demandInternalItems.map((item, index) => (
+                        <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/6">
+                          <td className="px-3 py-2">{item.nomenclature_code || "�"}</td><td className="px-3 py-2">{item.nomenclature_name || "�"}</td><td className="px-3 py-2">{formatQty(item.required_qty)}</td>
+                        </tr>
+                      )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={3}>����������� � ������� �� ������������.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="glass-panel p-4 sm:p-5">
+                <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-100">������� �����������</h3><div className="text-xs text-slate-400">����� ��������� �� ������ ��. ���.: {formatQty(demandExternalSum)}</div></div>
+                <div className="mt-4 max-h-[360px] overflow-auto border border-white/10">
+                  <table className="min-w-full text-left text-sm text-slate-100">
+                    <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.14em] text-slate-300"><tr><th className="px-3 py-2">��� / ������� ����</th><th className="px-3 py-2">������������</th><th className="px-3 py-2">����������</th></tr></thead>
+                    <tbody>
+                      {demandExternalItems.length > 0 ? demandExternalItems.map((item, index) => (
+                        <tr key={`${item.nomenclature_code || item.external_input_name || index}-${index}`} className="border-t border-white/6">
+                          <td className="px-3 py-2">{item.nomenclature_code || item.external_input_name || "�"}</td><td className="px-3 py-2">{item.nomenclature_name || item.external_input_name || "�"}</td><td className="px-3 py-2">{formatQty(item.required_qty)}</td>
+                        </tr>
+                      )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={3}>������� ����������� �� ������������.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="glass-panel p-4 sm:p-5">
+                <h3 className="text-lg font-semibold text-slate-100">�������� �������</h3>
+                {demandProblemItems.length > 0 ? (
+                  <div className="mt-4 max-h-[320px] overflow-auto border border-white/10">
+                    <table className="min-w-full text-left text-sm text-slate-100">
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.14em] text-slate-300"><tr><th className="px-3 py-2">��� ��������</th><th className="px-3 py-2">���������</th><th className="px-3 py-2">������������</th><th className="px-3 py-2">�������</th><th className="px-3 py-2">������</th></tr></thead>
+                      <tbody>
+                        {demandProblemItems.map((problem, index) => (
+                          <tr key={`${problem.problem_code || "problem"}-${index}`} className="border-t border-white/6">
+                            <td className="px-3 py-2">{problem.problem_code || "�"}</td><td className="px-3 py-2">{problem.message || "�"}</td><td className="px-3 py-2">{problem.nomenclature_code || "�"}</td><td className="px-3 py-2">{problem.route_id ?? "�"}</td><td className="px-3 py-2">{problem.details ? JSON.stringify(problem.details) : "�"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="mt-3 border border-emerald-300/30 bg-emerald-500/[0.1] px-4 py-3 text-sm text-emerald-100">�������� ������� �� ����������.</div>
+                )}
+                {lastCalculationParams ? <div className="mt-3 text-xs text-slate-400">���������: ������ {lastCalculationParams.plan_date}, ���� �������� {lastCalculationParams.balance_date}</div> : null}
+              </section>
+            </>
+          ) : null}
         </section>
       ) : null}
 
       {activeModuleTab === MODULE_TAB_RESULTS ? (
         <section className="glass-panel p-6 sm:p-7">
-          <div className="panel-title">Результаты</div>
-          <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">Результаты расчёта</h2>
+          <div className="panel-title">����������</div>
+          <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">���������� �������</h2>
           <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
-            {demandResult ? "Последний расчёт доступен во вкладке Расчёт потребности." : "Результаты пока не сформированы. Выполните расчёт потребности во вкладке Расчёт потребности."}
+            {demandResult ? "��������� ������ �������� �� ������� ������ �����������." : "���������� ���� �� ������������. ��������� ������ ����������� �� ������� ������ �����������."}
           </p>
         </section>
       ) : null}
@@ -2174,6 +2179,5 @@ function DemandSection() {
 }
 
 export default DemandSection;
-
 
 
