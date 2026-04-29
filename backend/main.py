@@ -8,6 +8,7 @@ from routers.inventory_balance import router as inventory_balance_router
 from routers.machines import router as machines_router
 from routers.nomenclature import router as nomenclature_router
 from routers.processes import router as processes_router
+from routers.production_plans import router as production_plans_router
 from routers.route_step_equipment import router as route_step_equipment_router
 from routers.route_step_inputs import router as route_step_inputs_router
 from routers.route_steps import router as route_steps_router
@@ -38,6 +39,7 @@ app.include_router(demand_router)
 app.include_router(sales_plan_router)
 app.include_router(inventory_balance_router)
 app.include_router(safety_stock_router)
+app.include_router(production_plans_router)
 
 
 @app.get("/")

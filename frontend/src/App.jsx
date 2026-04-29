@@ -1,4 +1,4 @@
-﻿import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
+import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
@@ -7,6 +7,7 @@ import MachinesSection from "./sections/MachinesSection";
 import DemandSection from "./sections/DemandSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
+import ProductionPlanningSection from "./sections/ProductionPlanningSection";
 import RoutesSection from "./sections/RoutesSection";
 
 const navigationItems = [
@@ -15,6 +16,7 @@ const navigationItems = [
   { id: "routes", label: "Маршруты", icon: ScrollText },
   { id: "machines", label: "Оборудование", icon: Cog },
   { id: "demand", label: "Потребность", icon: BarChart3 },
+  { id: "production_planning", label: "Планирование выпуска", icon: BarChart3 },
 ];
 
 const sectionDescriptions = {
@@ -28,6 +30,8 @@ const sectionDescriptions = {
     "Справочник оборудования с ролями, производительностью и привязкой к шагам маршрутов.",
   demand:
     "Подготовка исходных данных, запуск расчёта потребности и проверка результатов.",
+  production_planning:
+    "Месячный план выпуска по производимой номенклатуре с приоритетами и комментариями.",
 };
 
 function App() {
@@ -74,6 +78,8 @@ function App() {
               <MachinesSection />
             ) : activeSection === "demand" ? (
               <DemandSection />
+            ) : activeSection === "production_planning" ? (
+              <ProductionPlanningSection />
             ) : (
               <SectionPlaceholder
                 title={activeItem.label}

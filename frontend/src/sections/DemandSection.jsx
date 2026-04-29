@@ -50,6 +50,11 @@ import {
   updateSalesPlanItem,
 } from "../services/salesPlanApi";
 import { calculateDemand } from "../services/demandApi";
+import {
+  createProductionPlanFromDemand,
+  getProductionPlans,
+  refreshProductionPlanFromDemand,
+} from "../services/productionPlansApi";
 
 const MODULE_TAB_SOURCE_DATA = "source_data";
 const MODULE_TAB_CALCULATE = "demand_calculate";
@@ -248,6 +253,12 @@ function DemandSection() {
   const [demandCalculateError, setDemandCalculateError] = useState("");
   const [lastCalculatedAt, setLastCalculatedAt] = useState("");
   const [lastCalculationParams, setLastCalculationParams] = useState(null);
+  const [isCreatingProductionPlan, setIsCreatingProductionPlan] = useState(false);
+  const [productionPlanCreateError, setProductionPlanCreateError] = useState("");
+  const [productionPlanCreateSuccess, setProductionPlanCreateSuccess] = useState("");
+  const [productionPlanRefreshCandidate, setProductionPlanRefreshCandidate] = useState(null);
+  const [isRefreshingProductionPlan, setIsRefreshingProductionPlan] = useState(false);
+  const [isRefreshProductionPlanConfirmOpen, setIsRefreshProductionPlanConfirmOpen] = useState(false);
 
   const reloadSalesPlan = useCallback(async () => {
     setIsSalesPlanLoading(true);
@@ -422,6 +433,7 @@ function DemandSection() {
     () => (Array.isArray(demandResult?.problems) ? demandResult.problems : []),
     [demandResult],
   );
+  const canCreateProductionPlan = demandResult && demandInternalItems.length > 0;
 
   const salesPlanStatus = resolveStatusMeta({
     isLoading: isSalesPlanLoading,
@@ -682,6 +694,10 @@ function DemandSection() {
 
   const handleCalculateDemand = async () => {
     setDemandCalculateError("");
+    setProductionPlanCreateError("");
+    setProductionPlanCreateSuccess("");
+    setProductionPlanRefreshCandidate(null);
+    setIsRefreshProductionPlanConfirmOpen(false);
 
     if (!planMonth) {
       setDemandCalculateError("Для расчёта потребности выберите период планирования.");
@@ -709,6 +725,130 @@ function DemandSection() {
       setDemandCalculateError(error.message || "Не удалось выполнить расчёт потребности.");
     } finally {
       setIsDemandCalculating(false);
+    }
+  };
+
+  const handleCreateProductionPlan = async () => {
+    setProductionPlanCreateError("");
+    setProductionPlanCreateSuccess("");
+    setProductionPlanRefreshCandidate(null);
+    setIsRefreshProductionPlanConfirmOpen(false);
+
+    if (!demandResult) {
+      setProductionPlanCreateError("Сначала выполните расчёт потребности.");
+      return;
+    }
+
+    const planDate = demandResult?.plan_date || monthToApiDate(planMonth);
+    if (!planDate) {
+      setProductionPlanCreateError("Не определён период планирования для формирования плана.");
+      return;
+    }
+
+    const demandLines = Array.isArray(demandResult?.internal_production_demand)
+      ? demandResult.internal_production_demand
+      : [];
+    const lines = demandLines
+      .filter((row) => Number(row?.nomenclature_id) > 0 && Number(row?.required_qty) > 0)
+      .map((row) => ({
+        nomenclature_id: Number(row.nomenclature_id),
+        required_qty: row.required_qty,
+        is_priority: false,
+        priority_note: null,
+        line_comment: null,
+      }));
+
+    if (lines.length === 0) {
+      setProductionPlanCreateError("Нет корректных строк потребности к выпуску для формирования плана.");
+      return;
+    }
+
+    const planMonthLabel = String(planDate).slice(0, 7);
+    const payload = {
+      plan_month: planDate,
+      source_balance_date: demandResult?.balance_date || balanceDate || null,
+      source_calculated_at: lastCalculatedAt || new Date().toISOString(),
+      plan_name: `План выпуска на ${planMonthLabel}`,
+      comment: "Сформирован из расчёта потребности",
+      lines,
+    };
+
+    setIsCreatingProductionPlan(true);
+    try {
+      const createdPlan = await createProductionPlanFromDemand(payload);
+      setProductionPlanCreateSuccess(
+        `План выпуска создан. ${createdPlan?.plan_name || payload.plan_name} · ${String(createdPlan?.plan_month || planDate).slice(0, 7)} · строк: ${Array.isArray(createdPlan?.lines) ? createdPlan.lines.length : lines.length}. Откройте раздел “Планирование выпуска”, чтобы продолжить работу с планом.`,
+      );
+      setProductionPlanRefreshCandidate(null);
+      setIsRefreshProductionPlanConfirmOpen(false);
+    } catch (error) {
+      const message = error?.message || "Не удалось сформировать план выпуска.";
+      if (message.includes("План выпуска за выбранный месяц уже существует")) {
+        setProductionPlanCreateError(
+          "План выпуска за этот месяц уже существует.",
+        );
+        try {
+          const plans = await getProductionPlans();
+          const existingPlan = (Array.isArray(plans) ? plans : []).find(
+            (plan) => String(plan?.plan_month || "").slice(0, 10) === String(planDate).slice(0, 10),
+          );
+          if (!existingPlan) {
+            setProductionPlanCreateError("План за этот месяц не найден в списке планов.");
+          } else {
+            setProductionPlanRefreshCandidate({
+              productionPlanId: existingPlan.production_plan_id,
+              planName: existingPlan.plan_name,
+              planMonth: existingPlan.plan_month,
+              payload: {
+                source_balance_date: demandResult?.balance_date || balanceDate || null,
+                source_calculated_at: lastCalculatedAt || new Date().toISOString(),
+                comment: null,
+                lines: lines.map((line) => ({
+                  nomenclature_id: line.nomenclature_id,
+                  required_qty: line.required_qty,
+                })),
+              },
+            });
+          }
+        } catch (lookupError) {
+          setProductionPlanCreateError(
+            lookupError?.message || "Не удалось получить список планов для обновления.",
+          );
+        }
+      } else {
+        setProductionPlanCreateError(message);
+      }
+    } finally {
+      setIsCreatingProductionPlan(false);
+    }
+  };
+
+  const handleConfirmRefreshProductionPlan = async () => {
+    if (!productionPlanRefreshCandidate) {
+      return;
+    }
+
+    setProductionPlanCreateError("");
+    setProductionPlanCreateSuccess("");
+    setIsRefreshingProductionPlan(true);
+
+    try {
+      const refreshedPlan = await refreshProductionPlanFromDemand(
+        productionPlanRefreshCandidate.productionPlanId,
+        productionPlanRefreshCandidate.payload,
+      );
+      const linesCount = Array.isArray(refreshedPlan?.lines)
+        ? refreshedPlan.lines.length
+        : productionPlanRefreshCandidate.payload.lines.length;
+      setProductionPlanCreateSuccess(
+        `План выпуска обновлён из расчёта. ${refreshedPlan?.plan_name || productionPlanRefreshCandidate.planName} · ${String(refreshedPlan?.plan_month || productionPlanRefreshCandidate.planMonth).slice(0, 7)} · строк: ${linesCount}. Откройте раздел “Планирование выпуска”, чтобы продолжить работу с планом.`,
+      );
+      setProductionPlanRefreshCandidate(null);
+      setIsRefreshProductionPlanConfirmOpen(false);
+    } catch (error) {
+      setProductionPlanCreateError(error?.message || "Не удалось обновить существующий план из расчёта.");
+    } finally {
+      setIsRefreshingProductionPlan(false);
     }
   };
 
@@ -1863,6 +2003,22 @@ function DemandSection() {
       ) : null}
 
       <V2ConfirmDialog
+        isOpen={Boolean(productionPlanRefreshCandidate) && isRefreshProductionPlanConfirmOpen}
+        title="Обновить план выпуска из расчёта?"
+        message="План выпуска будет обновлён по новому расчёту. Объёмы будут пересчитаны. Приоритеты и комментарии для совпадающих позиций сохранятся. Позиции, которых больше нет в расчёте, будут удалены."
+        confirmText={isRefreshingProductionPlan ? "Обновляем..." : "Обновить план"}
+        cancelText="Отмена"
+        isConfirmDisabled={isRefreshingProductionPlan}
+        isCancelDisabled={isRefreshingProductionPlan}
+        onCancel={() => {
+          if (!isRefreshingProductionPlan) {
+            setIsRefreshProductionPlanConfirmOpen(false);
+          }
+        }}
+        onConfirm={handleConfirmRefreshProductionPlan}
+      />
+
+      <V2ConfirmDialog
         isOpen={Boolean(salesPlanDeleteCandidate)}
         title="Удалить позицию из плана продаж?"
         message={
@@ -1983,6 +2139,25 @@ function DemandSection() {
 
             {demandCalculateError ? (
               <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{demandCalculateError}</div>
+            ) : null}
+            {productionPlanCreateError ? (
+              <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{productionPlanCreateError}</div>
+            ) : null}
+            {productionPlanRefreshCandidate ? (
+              <div className="glass-panel border-cyan-300/30 bg-cyan-500/[0.08] px-4 py-3 text-sm text-cyan-100">
+                <div>План выпуска за этот месяц уже существует.</div>
+                <button
+                  type="button"
+                  onClick={() => setIsRefreshProductionPlanConfirmOpen(true)}
+                  className="mt-2 inline-flex h-9 items-center rounded-none border border-cyan-300/40 bg-cyan-400/[0.14] px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.22]"
+                  disabled={isRefreshingProductionPlan}
+                >
+                  Обновить существующий план из расчёта
+                </button>
+              </div>
+            ) : null}
+            {productionPlanCreateSuccess ? (
+              <div className="glass-panel border-emerald-300/30 bg-emerald-500/[0.1] px-4 py-3 text-sm text-emerald-100">{productionPlanCreateSuccess}</div>
             ) : null}
 
             {!demandResult ? (
@@ -2134,6 +2309,27 @@ function DemandSection() {
                 Есть проблемы расчёта. Проверьте таблицу “Проблемы расчёта” ниже.
               </div>
             ) : null}
+
+            <div className="mt-4 rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
+              <div className="text-sm font-medium text-slate-100">Действия</div>
+              <button
+                type="button"
+                onClick={handleCreateProductionPlan}
+                disabled={!canCreateProductionPlan || isCreatingProductionPlan || isRefreshingProductionPlan}
+                className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCreatingProductionPlan ? "Формируем план..." : "Сформировать план выпуска"}
+              </button>
+              {!canCreateProductionPlan ? (
+                <p className="mt-2 text-sm text-slate-400">
+                  Нет потребности к выпуску для формирования плана.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-slate-400">
+                  План будет создан из строк “Потребность к выпуску”. Закупаемые позиции остаются во внешнем обеспечении.
+                </p>
+              )}
+            </div>
           </aside>
         </section>
       ) : null}
