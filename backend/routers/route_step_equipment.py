@@ -22,6 +22,7 @@ SELECT_COLUMNS = """
     equipment_role,
     priority,
     nominal_rate,
+    min_batch_qty,
     rate_uom,
     is_active
 """
@@ -208,10 +209,11 @@ def create_route_step_equipment(payload: RouteStepEquipmentCreate, route_step_id
                     equipment_role,
                     priority,
                     nominal_rate,
+                    min_batch_qty,
                     rate_uom,
                     is_active
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING {SELECT_COLUMNS};
                 """,
                 (
@@ -220,6 +222,7 @@ def create_route_step_equipment(payload: RouteStepEquipmentCreate, route_step_id
                     payload.equipment_role,
                     payload.priority,
                     payload.nominal_rate,
+                    payload.min_batch_qty,
                     payload.rate_uom,
                     payload.is_active,
                 ),
@@ -299,6 +302,7 @@ def update_route_step_equipment(payload: RouteStepEquipmentUpdate, step_equipmen
                     equipment_role = %s,
                     priority = %s,
                     nominal_rate = %s,
+                    min_batch_qty = %s,
                     rate_uom = %s,
                     is_active = %s,
                     updated_at = NOW()
@@ -310,6 +314,7 @@ def update_route_step_equipment(payload: RouteStepEquipmentUpdate, step_equipmen
                     payload.equipment_role,
                     payload.priority,
                     payload.nominal_rate,
+                    payload.min_batch_qty,
                     payload.rate_uom,
                     payload.is_active,
                     step_equipment_id,

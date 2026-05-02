@@ -1,7 +1,22 @@
 import { Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const RATE_UOM_OPTIONS = ["м²/мин", "м.п./мин"];
+const RATE_UOM_OPTIONS = [
+  { value: "м²/мин", label: "м²/мин" },
+  { value: "м.п./мин", label: "м.п./мин" },
+];
+
+const LEGACY_RATE_UOM_ALIASES = {
+  "РјВІ/РјРёРЅ": "м²/мин",
+  "Рј.Рї./РјРёРЅ": "м.п./мин",
+  "Р СР’Р†/Р СР С‘Р Р…": "м²/мин",
+  "Р С.Р С—./Р СР С‘Р Р…": "м.п./мин",
+};
+
+function normalizeRateUom(value) {
+  if (!value) return RATE_UOM_OPTIONS[0].value;
+  return LEGACY_RATE_UOM_ALIASES[value] || value;
+}
 
 function createInitialState(item, machines) {
   const fallbackMachineId = machines[0]?.machine_id ?? "";
@@ -11,7 +26,8 @@ function createInitialState(item, machines) {
     equipment_role: item?.equipment_role ?? "primary",
     priority: item?.priority ?? 1,
     nominal_rate: item?.nominal_rate ?? "1.000",
-    rate_uom: item?.rate_uom ?? RATE_UOM_OPTIONS[0],
+    min_batch_qty: item?.min_batch_qty ?? "",
+    rate_uom: normalizeRateUom(item?.rate_uom),
     is_active: item?.is_active ?? true,
   };
 }
@@ -55,6 +71,8 @@ function RouteStepEquipmentFormPanel({
     const normalizedMachineId = Number(formValues.machine_id);
     const normalizedPriority = Number(formValues.priority);
     const normalizedRate = Number(formValues.nominal_rate);
+    const minBatchRaw = String(formValues.min_batch_qty ?? "").trim();
+    const normalizedMinBatch = minBatchRaw === "" ? null : Number(minBatchRaw);
 
     if (!Number.isInteger(normalizedMachineId) || normalizedMachineId <= 0) {
       setLocalError("Выберите оборудование.");
@@ -76,7 +94,15 @@ function RouteStepEquipmentFormPanel({
       return;
     }
 
-    if (!RATE_UOM_OPTIONS.includes(formValues.rate_uom)) {
+    if (
+      normalizedMinBatch !== null &&
+      (!Number.isFinite(normalizedMinBatch) || normalizedMinBatch <= 0)
+    ) {
+      setLocalError("Минимальная партия должна быть больше 0.");
+      return;
+    }
+
+    if (!RATE_UOM_OPTIONS.some((rateUom) => rateUom.value === formValues.rate_uom)) {
       setLocalError("Выберите единицу производительности.");
       return;
     }
@@ -87,6 +113,7 @@ function RouteStepEquipmentFormPanel({
       equipment_role: formValues.equipment_role,
       priority: normalizedPriority,
       nominal_rate: Number(normalizedRate.toFixed(3)),
+      min_batch_qty: normalizedMinBatch === null ? null : Number(normalizedMinBatch.toFixed(3)),
       rate_uom: formValues.rate_uom,
       is_active: Boolean(formValues.is_active),
     });
@@ -192,6 +219,23 @@ function RouteStepEquipmentFormPanel({
         </label>
 
         <label className="block">
+          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Минимальная партия</div>
+          <input
+            type="number"
+            min="0.001"
+            step="0.001"
+            value={formValues.min_batch_qty}
+            onChange={(event) => handleFieldChange("min_batch_qty", event.target.value)}
+            placeholder="Не задана"
+            className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
+          />
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            Минимальный объём запуска на выбранном оборудовании. Используется позже при недельном планировании.
+            Минимальная партия указывается в единице выхода шага.
+          </p>
+        </label>
+
+        <label className="block">
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Единица производительности</div>
           <select
             value={formValues.rate_uom}
@@ -199,8 +243,8 @@ function RouteStepEquipmentFormPanel({
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           >
             {RATE_UOM_OPTIONS.map((rateUom) => (
-              <option key={rateUom} value={rateUom} className="bg-slate-950 text-slate-100">
-                {rateUom}
+              <option key={rateUom.value} value={rateUom.value} className="bg-slate-950 text-slate-100">
+                {rateUom.label}
               </option>
             ))}
           </select>

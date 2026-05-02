@@ -14,6 +14,7 @@ class RouteStepEquipmentBase(BaseModel):
     equipment_role: str = Field(min_length=1)
     priority: int = Field(gt=0)
     nominal_rate: Decimal = Field(gt=0)
+    min_batch_qty: Decimal | None = Field(default=None, gt=0)
     rate_uom: str = Field(min_length=1)
     is_active: bool = True
 

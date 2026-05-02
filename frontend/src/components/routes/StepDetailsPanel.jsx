@@ -175,7 +175,7 @@ function StepDetailsPanel({
                   return (
                     <div key={equipmentItem.step_equipment_id} className={["rounded-none border px-4 py-4", isPrimary ? "border-cyan-200/20 bg-[linear-gradient(180deg,rgba(25,88,114,0.28),rgba(11,30,44,0.62))]" : "border-slate-200/18 bg-[linear-gradient(180deg,rgba(52,63,82,0.28),rgba(19,25,34,0.62))]"].join(" ")}>
                       <div className="mb-3 flex items-center justify-between gap-3"><div className={["text-xs uppercase tracking-[0.18em]", isPrimary ? "text-cyan-100/62" : "text-slate-300/78"].join(" ")}>{getEquipmentRoleLabel(equipmentItem.equipment_role)}</div><div className="flex items-center gap-2"><IconActionButton label="Редактировать" onClick={() => onEditEquipment(equipmentItem)}><PencilLine className="h-3.5 w-3.5" /></IconActionButton><IconActionButton label="Удалить" onClick={() => onDeleteEquipment(equipmentItem)} disabled={isDeletingEquipment} tone="danger"><Trash2 className="h-3.5 w-3.5" /></IconActionButton></div></div>
-                      <div className="flex items-start justify-between gap-3"><div><div className="text-base font-medium text-slate-50">{buildEquipmentTitle(equipmentItem)}</div><div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">Приоритет {equipmentItem.priority}</div></div><div className="text-right"><div className="text-xl font-semibold text-slate-50">{formatQty(equipmentItem.nominal_rate)}</div><div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{equipmentItem.rate_uom || "ед./мин"}</div>{!equipmentItem.is_active ? <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-amber-200/80">Неактивно</div> : null}</div></div>
+                      <div className="flex items-start justify-between gap-3"><div><div className="text-base font-medium text-slate-50">{buildEquipmentTitle(equipmentItem)}</div><div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">Приоритет {equipmentItem.priority}</div></div><div className="text-right"><div className="text-xl font-semibold text-slate-50">{formatQty(equipmentItem.nominal_rate)}</div><div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{equipmentItem.rate_uom || "ед./мин"}</div><div className="mt-2 text-xs text-slate-300">Мин. партия: {equipmentItem.min_batch_qty == null ? "—" : `${formatQty(equipmentItem.min_batch_qty)} ${outputNomenclatureUom || ""}`}</div>{!equipmentItem.is_active ? <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-amber-200/80">Неактивно</div> : null}</div></div>
                     </div>
                   );
                 })}
@@ -191,3 +191,4 @@ function StepDetailsPanel({
 }
 
 export default StepDetailsPanel;
+
