@@ -1,4 +1,4 @@
-import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
+﻿import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
@@ -10,13 +10,36 @@ import ProcessesSection from "./sections/ProcessesSection";
 import ProductionPlanningSection from "./sections/ProductionPlanningSection";
 import RoutesSection from "./sections/RoutesSection";
 
+function ProductionPlanningIcon({ className }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 20h18" />
+      <path d="M5 20V7" />
+      <path d="M12 20V5" />
+      <path d="M19 20V3.5" />
+      <path d="M5 7l4 1.9L5 10.8V7z" />
+      <path d="M12 5l4.2 2L12 9V5z" />
+      <path d="M19 3.5l3 1.5L19 6.5v-3z" />
+    </svg>
+  );
+}
+
 const navigationItems = [
   { id: "nomenclature", label: "Номенклатура", icon: Boxes },
   { id: "processes", label: "Технологические операции", icon: Workflow },
   { id: "routes", label: "Маршруты", icon: ScrollText },
   { id: "machines", label: "Оборудование", icon: Cog },
   { id: "demand", label: "Потребность", icon: BarChart3 },
-  { id: "production_planning", label: "Планирование выпуска", icon: BarChart3 },
+  { id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon },
 ];
 
 const sectionDescriptions = {
@@ -95,3 +118,6 @@ function App() {
 }
 
 export default App;
+
+
+

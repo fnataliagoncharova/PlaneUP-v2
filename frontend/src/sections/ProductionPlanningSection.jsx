@@ -1,4 +1,4 @@
-﻿import { AlertCircle, CheckCircle2, Lock, Pencil, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+﻿import { AlertCircle, CheckCircle2, Lock, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
@@ -434,6 +434,14 @@ function ProductionPlanningSection() {
   };
 
   const selectedPlanLines = selectedPlan?.lines ?? [];
+  const sortedPlanLines = useMemo(() => {
+    return [...selectedPlanLines].sort((a, b) => {
+      if (a.is_priority !== b.is_priority) {
+        return a.is_priority ? -1 : 1;
+      }
+      return String(a.nomenclature_code || "").localeCompare(String(b.nomenclature_code || ""), "ru");
+    });
+  }, [selectedPlanLines]);
   const priorityCount = selectedPlanLines.filter((line) => line.is_priority).length;
 
   const renderRightPanel = () => {
@@ -648,15 +656,17 @@ function ProductionPlanningSection() {
               />
               Приоритетная позиция
             </label>
-            <div>
-              <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Комментарий к приоритету</div>
-              <input
-                type="text"
-                value={linePriorityNote}
-                onChange={(event) => setLinePriorityNote(event.target.value)}
-                className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
-              />
-            </div>
+            {linePriority ? (
+              <div>
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Комментарий к приоритету</div>
+                <input
+                  type="text"
+                  value={linePriorityNote}
+                  onChange={(event) => setLinePriorityNote(event.target.value)}
+                  className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+                />
+              </div>
+            ) : null}
             <div>
               <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Комментарий</div>
               <textarea
@@ -730,8 +740,8 @@ function ProductionPlanningSection() {
             </div>
 
             {isApproved ? (
-              <div className="mt-4 rounded-none border border-amber-300/30 bg-amber-400/[0.08] px-4 py-3 text-sm text-amber-100">
-                План утверждён. Изменения заблокированы.
+              <div className="mt-4 rounded-none border border-emerald-300/25 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">
+                План утверждён и защищён от изменений.
               </div>
             ) : null}
 
@@ -744,7 +754,13 @@ function ProductionPlanningSection() {
                 ) : (
                   <AlertCircle className="mt-0.5 h-4 w-4 text-slate-400" />
                 )}
-                <span>{selectedPlanLines.length > 0 ? "План содержит позиции выпуска." : "План пока не содержит позиций."}</span>
+                <span>
+                  {isApproved
+                    ? "План утверждён и защищён от изменений."
+                    : selectedPlanLines.length > 0
+                      ? "План содержит позиции выпуска."
+                      : "План пока не содержит позиций."}
+                </span>
               </div>
             </div>
 
@@ -755,42 +771,6 @@ function ProductionPlanningSection() {
               </div>
             </div>
 
-            <div className="panel-divider mt-5" />
-            <div className="mt-4 flex flex-wrap gap-2">
-              {!isApproved ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={openEditPlanForm}
-                    className="h-10 flex-1 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
-                  >
-                    Редактировать план
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApproveCandidate(selectedPlan)}
-                    className="h-10 rounded-none border border-emerald-300/30 bg-emerald-400/[0.1] px-3 text-sm text-emerald-100 transition hover:bg-emerald-400/[0.16]"
-                  >
-                    Утвердить план
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPlanDeleteCandidate(selectedPlan)}
-                    className="h-10 rounded-none border border-rose-300/30 bg-rose-400/[0.08] px-3 text-sm text-rose-100 transition hover:bg-rose-400/[0.16]"
-                  >
-                    Удалить план
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setReturnDraftCandidate(selectedPlan)}
-                  className="h-10 w-full rounded-none border border-cyan-300/30 bg-cyan-400/[0.12] px-3 text-sm text-cyan-50 transition hover:bg-cyan-400/[0.2]"
-                >
-                  Вернуть в черновик
-                </button>
-              )}
-            </div>
           </>
         ) : (
           <div className="mt-5 text-sm text-slate-400">Выберите или создайте план выпуска.</div>
@@ -804,7 +784,7 @@ function ProductionPlanningSection() {
       <header className="glass-panel p-4 sm:p-5">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">Планирование выпуска</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Создавайте и ведите месячный план выпуска по производимой номенклатуре.
+          Сформируйте месячный план выпуска по производимой номенклатуре и зафиксируйте его перед дальнейшим планированием.
         </p>
       </header>
 
@@ -818,14 +798,9 @@ function ProductionPlanningSection() {
         <div className="space-y-5">
           <section className="glass-panel p-5 sm:p-6">
             <div className="text-xs tracking-[0.08em] text-slate-500">План на месяц</div>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-50">План на месяц</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Сформируйте месячный план выпуска по производимой номенклатуре и отметьте приоритетные позиции.
-            </p>
 
-            <div className="mt-5 flex flex-wrap items-end gap-3">
+            <div className="mt-3 flex flex-wrap items-end gap-3">
               <div className="min-w-[280px] flex-1">
-                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Выбор плана выпуска</div>
                 <select
                   value={selectedPlanId}
                   onChange={(event) => handleSelectPlan(event.target.value)}
@@ -865,12 +840,66 @@ function ProductionPlanningSection() {
 
           {selectedPlan ? (
             <section className="glass-panel p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="rounded-none border border-white/[0.08] bg-white/[0.02] p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-tight text-slate-50">{selectedPlan.plan_name}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Период: {formatPlanMonth(selectedPlan.plan_month)} · Статус:{" "}
+                      <span className={["inline-flex items-center rounded-none border px-2 py-0.5 text-xs", getStatusBadgeClass(selectedPlan.status)].join(" ")}>
+                        {getStatusLabel(selectedPlan.status)}
+                      </span>{" "}
+                      · Позиций: {selectedPlanLines.length} · Приоритетных: {priorityCount}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!isApproved ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={openEditPlanForm}
+                          className="h-10 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
+                        >
+                          Редактировать план
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApproveCandidate(selectedPlan)}
+                          className="h-10 rounded-none border border-emerald-300/30 bg-emerald-400/[0.1] px-3 text-sm text-emerald-100 transition hover:bg-emerald-400/[0.16]"
+                        >
+                          Утвердить план
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPlanDeleteCandidate(selectedPlan)}
+                          className="h-10 rounded-none border border-rose-300/30 bg-rose-400/[0.08] px-3 text-sm text-rose-100 transition hover:bg-rose-400/[0.16]"
+                        >
+                          Удалить план
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setReturnDraftCandidate(selectedPlan)}
+                        className="h-10 rounded-none border border-cyan-300/30 bg-cyan-400/[0.12] px-3 text-sm text-cyan-50 transition hover:bg-cyan-400/[0.2]"
+                      >
+                        Вернуть в черновик
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {isApproved ? (
+                <div className="mt-4 rounded-none border border-emerald-300/25 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">
+                  План утверждён. Изменения заблокированы. Чтобы внести изменения, верните план в черновик.
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-xl font-semibold tracking-tight text-slate-50">{selectedPlan.plan_name}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Период: {formatPlanMonth(selectedPlan.plan_month)} · Позиций: {selectedPlanLines.length}
-                  </p>
+                  <h3 className="text-xl font-semibold tracking-tight text-slate-50">Позиции плана выпуска</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">Позиций: {selectedPlanLines.length}</p>
                 </div>
                 <button
                   type="button"
@@ -891,7 +920,10 @@ function ProductionPlanningSection() {
                 <div className="mt-4 text-sm text-slate-400">Загружаем план...</div>
               ) : selectedPlanLines.length === 0 ? (
                 <div className="mt-4 rounded-none border border-white/[0.08] bg-white/[0.02] px-4 py-5 text-sm text-slate-400">
-                  План пока не содержит позиций.
+                  <div>В плане пока нет позиций выпуска.</div>
+                  <div className="mt-1 text-slate-500">
+                    Добавьте производимую номенклатуру вручную или сформируйте план из расчёта потребности.
+                  </div>
                 </div>
               ) : (
                 <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10">
@@ -909,8 +941,14 @@ function ProductionPlanningSection() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedPlanLines.map((line) => (
-                          <tr key={line.production_plan_line_id} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
+                        {sortedPlanLines.map((line) => (
+                          <tr
+                            key={line.production_plan_line_id}
+                            className={[
+                              "border-t border-white/[0.05] hover:bg-cyan-300/[0.03]",
+                              line.is_priority ? "bg-amber-400/[0.03]" : "",
+                            ].join(" ")}
+                          >
                             <td className="px-3 py-2.5 font-medium text-slate-100">{line.nomenclature_code}</td>
                             <td className="px-3 py-2.5 text-slate-300">{line.nomenclature_name}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{line.planned_qty}</td>
@@ -957,7 +995,16 @@ function ProductionPlanningSection() {
               )}
             </section>
           ) : (
-            <section className="glass-panel px-4 py-5 text-sm text-slate-400">Планы выпуска ещё не созданы.</section>
+            <section className="glass-panel px-4 py-5 text-sm text-slate-400">
+              <div>Планы выпуска ещё не созданы.</div>
+              <button
+                type="button"
+                onClick={openCreatePlanForm}
+                className="mt-3 inline-flex h-10 items-center rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22]"
+              >
+                Создать план
+              </button>
+            </section>
           )}
         </div>
 
@@ -1020,4 +1067,6 @@ function ProductionPlanningSection() {
 }
 
 export default ProductionPlanningSection;
+
+
 

@@ -2122,7 +2122,21 @@ function DemandSection() {
                   <RefreshCw className={["h-4 w-4", isDemandCalculating ? "animate-spin" : ""].join(" ")} />
                   {isDemandCalculating ? "Рассчитываем..." : "Рассчитать потребность"}
                 </button>
+                <button
+                  type="button"
+                  onClick={handleCreateProductionPlan}
+                  disabled={!canCreateProductionPlan || isCreatingProductionPlan || isRefreshingProductionPlan}
+                  className="inline-flex h-11 items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isCreatingProductionPlan ? "Формируем план..." : "Сформировать план выпуска"}
+                </button>
               </div>
+
+              {!canCreateProductionPlan ? (
+                <p className="mt-2 text-sm text-slate-400">
+                  Нет потребности к выпуску для формирования плана.
+                </p>
+              ) : null}
 
               {!planMonth || !balanceDate ? (
                 <div className="mt-3">
@@ -2311,24 +2325,10 @@ function DemandSection() {
             ) : null}
 
             <div className="mt-4 rounded-none border border-white/8 bg-white/[0.025] px-4 py-4">
-              <div className="text-sm font-medium text-slate-100">Действия</div>
-              <button
-                type="button"
-                onClick={handleCreateProductionPlan}
-                disabled={!canCreateProductionPlan || isCreatingProductionPlan || isRefreshingProductionPlan}
-                className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isCreatingProductionPlan ? "Формируем план..." : "Сформировать план выпуска"}
-              </button>
-              {!canCreateProductionPlan ? (
-                <p className="mt-2 text-sm text-slate-400">
-                  Нет потребности к выпуску для формирования плана.
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-slate-400">
-                  План будет создан из строк “Потребность к выпуску”. Закупаемые позиции остаются во внешнем обеспечении.
-                </p>
-              )}
+              <div className="text-sm font-medium text-slate-100">Подсказка</div>
+              <p className="mt-2 text-sm text-slate-400">
+                План выпуска формируется из строк “Потребность к выпуску”.
+              </p>
             </div>
           </aside>
         </section>
