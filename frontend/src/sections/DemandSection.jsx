@@ -795,6 +795,14 @@ function DemandSection() {
           if (!existingPlan) {
             setProductionPlanCreateError("План за этот месяц не найден в списке планов.");
           } else {
+            if (existingPlan.status === "approved") {
+              setProductionPlanRefreshCandidate(null);
+              setIsRefreshProductionPlanConfirmOpen(false);
+              setProductionPlanCreateError(
+                "План выпуска за этот месяц уже утверждён. Чтобы обновить его из расчёта, откройте раздел “Планирование выпуска” и верните план в черновик.",
+              );
+              return;
+            }
             setProductionPlanRefreshCandidate({
               productionPlanId: existingPlan.production_plan_id,
               planName: existingPlan.plan_name,
@@ -846,7 +854,16 @@ function DemandSection() {
       setProductionPlanRefreshCandidate(null);
       setIsRefreshProductionPlanConfirmOpen(false);
     } catch (error) {
-      setProductionPlanCreateError(error?.message || "Не удалось обновить существующий план из расчёта.");
+      const message = error?.message || "Не удалось обновить существующий план из расчёта.";
+      if (message.includes("Утверждённый план выпуска нельзя обновить из расчёта")) {
+        setProductionPlanRefreshCandidate(null);
+        setIsRefreshProductionPlanConfirmOpen(false);
+        setProductionPlanCreateError(
+          "План выпуска уже утверждён. Верните его в черновик в разделе “Планирование выпуска”, затем повторите обновление из расчёта.",
+        );
+      } else {
+        setProductionPlanCreateError(message);
+      }
     } finally {
       setIsRefreshingProductionPlan(false);
     }
