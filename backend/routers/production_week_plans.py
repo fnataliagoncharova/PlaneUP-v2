@@ -243,7 +243,63 @@ def validate_weekly_qty_limit(
         )
 
 
-def build_line_warnings(line_row: dict[str, Any]) -> list[str]:
+def get_manufactured_inputs_for_nomenclature(
+    cursor: RealDictCursor,
+    nomenclature_id: int,
+) -> list[dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT route_id
+        FROM routes
+        WHERE result_nomenclature_id = %s
+          AND is_active = TRUE
+        ORDER BY route_id
+        LIMIT 1;
+        """,
+        (nomenclature_id,),
+    )
+    route_row = cursor.fetchone()
+    if route_row is None:
+        return []
+
+    cursor.execute(
+        """
+        SELECT DISTINCT
+            n.nomenclature_id,
+            n.nomenclature_code,
+            n.nomenclature_name
+        FROM route_steps AS rs
+        INNER JOIN route_step_inputs AS rsi ON rsi.route_step_id = rs.route_step_id
+        INNER JOIN nomenclature AS n ON n.nomenclature_id = rsi.input_nomenclature_id
+        WHERE rs.route_id = %s
+          AND n.item_type = 'manufactured'
+        ORDER BY n.nomenclature_code ASC, n.nomenclature_id ASC;
+        """,
+        (route_row["route_id"],),
+    )
+    return cursor.fetchall()
+
+
+def build_manufactured_inputs_warning(manufactured_inputs: list[dict[str, Any]]) -> str | None:
+    if not manufactured_inputs:
+        return None
+
+    component_labels: list[str] = []
+    for component in manufactured_inputs:
+        code = str(component.get("nomenclature_code") or "-")
+        name = str(component.get("nomenclature_name") or "").strip()
+        component_labels.append(f"{code} {name}".strip())
+
+    if len(component_labels) == 1:
+        return f"Проверьте обеспеченность производимого компонента: {component_labels[0]}."
+
+    return "Проверьте обеспеченность: " + ", ".join(component_labels) + "."
+
+
+def build_line_warnings(
+    line_row: dict[str, Any],
+    manufactured_inputs: list[dict[str, Any]] | None = None,
+) -> list[str]:
     warnings: list[str] = []
     if line_row.get("route_step_equipment_id") is None:
         warnings.append("Оборудование не выбрано.")
@@ -251,6 +307,10 @@ def build_line_warnings(line_row: dict[str, Any]) -> list[str]:
     batch_qty = line_row.get("batch_qty")
     if min_batch_qty is not None and batch_qty is not None and Decimal(batch_qty) < Decimal(min_batch_qty):
         warnings.append("Размер партии меньше минимальной партии для выбранного оборудования.")
+    manufactured_warning = build_manufactured_inputs_warning(manufactured_inputs or [])
+    if manufactured_warning:
+        warnings.append(manufactured_warning)
+
     return warnings
 
 
@@ -323,10 +383,17 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
         )
         lines = cursor.fetchall()
 
+        manufactured_inputs_cache: dict[int, list[dict[str, Any]]] = {}
         prepared_lines: list[dict[str, Any]] = []
         for row in lines:
             line_total = totals_map.get(int(row["production_plan_line_id"]), Decimal(0))
             remaining_qty = Decimal(row["monthly_planned_qty"]) - line_total
+            line_nomenclature_id = int(row["nomenclature_id"])
+            if line_nomenclature_id not in manufactured_inputs_cache:
+                manufactured_inputs_cache[line_nomenclature_id] = get_manufactured_inputs_for_nomenclature(
+                    cursor,
+                    line_nomenclature_id,
+                )
             line_payload = {
                 "production_week_line_id": row["production_week_line_id"],
                 "production_plan_week_id": row["production_plan_week_id"],
@@ -353,7 +420,10 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
             }
-            line_payload["warnings"] = build_line_warnings(line_payload)
+            line_payload["warnings"] = build_line_warnings(
+                line_payload,
+                manufactured_inputs=manufactured_inputs_cache[line_nomenclature_id],
+            )
             prepared_lines.append(line_payload)
 
         week_row["lines"] = prepared_lines

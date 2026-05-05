@@ -1,7 +1,7 @@
 ﻿from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProductionWeekLineRead(BaseModel):
@@ -79,6 +79,13 @@ class ProductionWeekLineCreate(BaseModel):
     sequence_no: int = Field(default=1, gt=0)
     comment: str | None = None
 
+    @field_validator("planned_qty")
+    @classmethod
+    def validate_planned_qty_is_integer(cls, value: Decimal) -> Decimal:
+        if value != value.to_integral_value():
+            raise ValueError("План недели должен быть целым числом.")
+        return value
+
 
 class ProductionWeekLineUpdate(BaseModel):
     route_step_equipment_id: int | None = None
@@ -86,6 +93,13 @@ class ProductionWeekLineUpdate(BaseModel):
     batch_count: int = Field(gt=0)
     sequence_no: int = Field(gt=0)
     comment: str | None = None
+
+    @field_validator("planned_qty")
+    @classmethod
+    def validate_planned_qty_is_integer(cls, value: Decimal) -> Decimal:
+        if value != value.to_integral_value():
+            raise ValueError("План недели должен быть целым числом.")
+        return value
 
 
 class ProductionWeekDeleteResponse(BaseModel):

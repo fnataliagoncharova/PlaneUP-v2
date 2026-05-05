@@ -328,6 +328,9 @@ function WeeklyPlanningPanel() {
         const monthQty = asNumber(planLine.planned_qty);
         const distributedQty = asNumber(distributedTotals[String(lineId)]);
         const currentWeekQty = weekLine ? asNumber(weekLine.planned_qty) : 0;
+        const isPlannedInWeek = Boolean(weekLine) || currentWeekQty > 0;
+        const rawSequence = Number(weekLine?.sequence_no);
+        const weekSequenceNo = Number.isFinite(rawSequence) && rawSequence > 0 ? rawSequence : null;
         return {
           ...planLine,
           row_key: String(lineId),
@@ -336,12 +339,23 @@ function WeeklyPlanningPanel() {
           distributed_qty: distributedQty,
           remaining_qty: monthQty - (distributedQty - currentWeekQty),
           initial_sequence: weekLine?.sequence_no || index + 1,
+          is_planned_in_week: isPlannedInWeek,
+          week_sequence_no: weekSequenceNo,
         };
       })
       .sort((a, b) => {
-        if (Boolean(a.is_priority) !== Boolean(b.is_priority)) {
-          return a.is_priority ? -1 : 1;
+        if (Boolean(a.is_planned_in_week) !== Boolean(b.is_planned_in_week)) {
+          return a.is_planned_in_week ? -1 : 1;
         }
+
+        if (a.is_planned_in_week && b.is_planned_in_week) {
+          const aHasSequence = Number.isFinite(a.week_sequence_no);
+          const bHasSequence = Number.isFinite(b.week_sequence_no);
+          if (aHasSequence && bHasSequence && a.week_sequence_no !== b.week_sequence_no) {
+            return a.week_sequence_no - b.week_sequence_no;
+          }
+        }
+
         return String(a.nomenclature_code || "").localeCompare(String(b.nomenclature_code || ""), "ru");
       });
   }, [distributedTotals, selectedPlan, selectedWeek]);
@@ -445,6 +459,39 @@ function WeeklyPlanningPanel() {
     }
     return Array.from(new Set(warnings));
   };
+
+  const isSelectedWeekPersisted = Boolean(selectedMergedWeek?.production_plan_week_id);
+  const selectedWeekStatusLabel = useMemo(() => {
+    if (!isSelectedWeekPersisted) {
+      return "Не сохранена";
+    }
+    const rawStatus = selectedWeek?.status || selectedMergedWeek?.status || "draft";
+    if (String(rawStatus).toLowerCase() === "draft") {
+      return "Черновик";
+    }
+    return rawStatus;
+  }, [isSelectedWeekPersisted, selectedMergedWeek?.status, selectedWeek?.status]);
+
+  const weekWarnings = useMemo(() => {
+    const uniqueWarnings = new Map();
+
+    tableRows.forEach((row) => {
+      const edit = rowEdits[row.row_key] || {};
+      const rowWarnings = getRowWarnings(row, edit);
+      rowWarnings.forEach((warningText) => {
+        const warningKey = `${row.nomenclature_code || "—"}::${warningText}`;
+        if (!uniqueWarnings.has(warningKey)) {
+          uniqueWarnings.set(warningKey, {
+            warningKey,
+            nomenclatureCode: row.nomenclature_code || "—",
+            warningText,
+          });
+        }
+      });
+    });
+
+    return Array.from(uniqueWarnings.values());
+  }, [equipmentByPlanLine, rowEdits, tableRows]);
 
   const ensureSelectedWeekExists = async () => {
     if (!selectedPlanId || !selectedMergedWeek) {
@@ -584,6 +631,13 @@ function WeeklyPlanningPanel() {
               </select>
             </div>
 
+            <div className="min-w-[170px]">
+              <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Статус недели</div>
+              <div className="inline-flex h-11 w-full items-center rounded-none border border-cyan-300/20 bg-cyan-400/[0.08] px-3 text-sm font-medium text-cyan-100">
+                {selectedWeekStatusLabel}
+              </div>
+            </div>
+
             <button type="button" onClick={handleSaveWeekPlan} disabled={isSaveDisabled} className="h-11 rounded-none border border-cyan-300/35 bg-cyan-400/[0.18] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.28] disabled:opacity-50">
               {isSaving ? "Сохраняем..." : "Сохранить план недели"}
             </button>
@@ -591,6 +645,17 @@ function WeeklyPlanningPanel() {
               <RefreshCw className={["h-4 w-4", isLoading ? "animate-spin" : ""].join(" ")} />
               Обновить
             </button>
+            {isSelectedWeekPersisted ? (
+              <button
+                type="button"
+                onClick={() => setWeekDeleteCandidate(selectedMergedWeek)}
+                disabled={isDeleting || isLoading || isSaving}
+                className="inline-flex h-11 items-center gap-2 rounded-none border border-rose-300/30 bg-rose-500/[0.1] px-4 text-sm text-rose-100 transition hover:bg-rose-500/[0.15] disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Удалить неделю
+              </button>
+            ) : null}
           </div>
         )}
       </section>
@@ -599,7 +664,7 @@ function WeeklyPlanningPanel() {
       {errorText ? <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{errorText}</div> : null}
 
       {hasApprovedPlans ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="space-y-5">
           <div className="space-y-5">
             {!selectedPlan ? null : !selectedPlan.lines?.length ? (
               <section className="glass-panel px-4 py-5 text-sm text-slate-400">В месячном плане нет позиций для распределения.</section>
@@ -691,39 +756,44 @@ function WeeklyPlanningPanel() {
             )}
           </div>
 
-          <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
-            <div className="text-xs tracking-[0.08em] text-slate-500">Контекст</div>
-            <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-50">План по неделям</h3>
-            <div className="panel-divider mt-5" />
-            <div className="mt-4 space-y-2 text-sm text-slate-300">
-              <div>Месяц: {selectedPlan ? formatPlanMonth(selectedPlan.plan_month) : "—"}</div>
-              <div>Неделя: {selectedMergedWeek ? `Неделя ${selectedMergedWeek.week_no}` : "—"}</div>
-              <div>Статус: {selectedWeek?.status || "draft"}</div>
+          <section className="glass-panel px-5 py-4 sm:px-6">
+            <div className="text-xs tracking-[0.08em] text-slate-500">Предупреждения по неделе</div>
+            <div className="mt-2 rounded-none border border-amber-300/15 bg-amber-500/[0.04] p-3">
+              {weekWarnings.length ? (
+                <ul className="space-y-2 text-sm text-slate-200">
+                  {weekWarnings.map((warning) => (
+                    <li key={warning.warningKey} className="flex items-start gap-2">
+                      <span className="mt-0.5 text-amber-300">⚠</span>
+                      <span>
+                        <span className="font-medium text-slate-100">{warning.nomenclatureCode}</span>
+                        {" — "}
+                        <span className="text-slate-300">{warning.warningText}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-sm text-slate-400">Предупреждений нет</div>
+              )}
             </div>
-            <div className="mt-4 rounded-none border border-white/[0.08] bg-white/[0.02] p-3 text-sm text-slate-400">
-              <div className="mb-2 font-medium text-slate-200">Правила:</div>
-              <div>✓ Превышение месячного плана запрещено</div>
-              <div>⚠ Мин. партия — предупреждение</div>
-              <div>⚠ Оборудование можно оставить пустым</div>
+          </section>
+
+          <details className="glass-panel px-5 py-4 text-sm text-slate-300 sm:px-6">
+            <summary className="cursor-pointer select-none text-slate-300 marker:text-cyan-200">ⓘ Правила планирования</summary>
+            <div className="mt-3 space-y-1 text-slate-400">
+              <div>Превышение месячного плана запрещено.</div>
+              <div>Минимальная партия — предупреждение.</div>
+              <div>Оборудование можно оставить пустым.</div>
+              <div>Производимые компоненты — предупреждение.</div>
             </div>
-            {selectedMergedWeek?.production_plan_week_id ? (
-              <button
-                type="button"
-                onClick={() => setWeekDeleteCandidate(selectedMergedWeek)}
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-none border border-rose-300/30 bg-rose-500/[0.1] px-3 text-sm text-rose-100 transition hover:bg-rose-500/[0.15]"
-              >
-                <Trash2 className="h-4 w-4" />
-                Удалить неделю
-              </button>
-            ) : null}
-          </aside>
+          </details>
         </div>
       ) : null}
 
       <V2ConfirmDialog
         open={Boolean(weekDeleteCandidate)}
         title="Удалить недельный план?"
-        message="Неделя и все её строки будут удалены. Месячный план выпуска не изменится."
+        message="Будут удалены сохранённые строки выбранной недели. Месячный план не изменится."
         confirmText={isDeleting ? "Удаляем..." : "Удалить"}
         cancelText="Отмена"
         onConfirm={handleDeleteWeek}
