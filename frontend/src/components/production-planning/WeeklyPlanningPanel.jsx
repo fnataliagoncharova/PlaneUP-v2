@@ -429,8 +429,16 @@ function WeeklyPlanningPanel() {
     const qty = asNumber(edit?.planned_qty);
     const selectedEquipment = getSelectedEquipment(row.row_key, edit?.route_step_equipment_id);
     const minBatch = asNumber(selectedEquipment?.min_batch_qty);
+    const monthlyQty = asNumber(row.month_qty);
+    const allowedQty = asNumber(row.remaining_qty);
     if (qty > 0 && !edit?.route_step_equipment_id) {
       warnings.push("Оборудование не выбрано.");
+    }
+    if (qty > monthlyQty) {
+      warnings.push("План недели больше объёма месячного плана по позиции.");
+    }
+    if (qty > allowedQty) {
+      warnings.push("План недели превышает доступный остаток по месячному плану.");
     }
     if (qty > 0 && minBatch > 0 && qty < minBatch) {
       warnings.push("План недели меньше минимальной партии для выбранного оборудования.");
@@ -606,7 +614,7 @@ function WeeklyPlanningPanel() {
                           <th className="px-3 py-2 text-left font-medium">Код</th>
                           <th className="px-3 py-2 text-left font-medium">Номенклатура</th>
                           <th className="px-3 py-2 text-right font-medium">План месяца</th>
-                          <th className="px-3 py-2 text-right font-medium">Уже распр.</th>
+                          <th className="px-3 py-2 text-right font-medium">Распределено</th>
                           <th className="px-3 py-2 text-right font-medium">Осталось</th>
                           <th className="px-3 py-2 text-right font-medium">План нед.</th>
                           <th className="px-3 py-2 text-left font-medium">Оборудование</th>
@@ -627,6 +635,7 @@ function WeeklyPlanningPanel() {
                               <td className="px-3 py-2.5 text-slate-300">
                                 <span className="inline-flex items-center gap-1.5">
                                   {row.nomenclature_name}
+                                  <span className="text-slate-500">({row.unit_of_measure || "—"})</span>
                                   {row.is_priority ? <span className="text-amber-200" title={row.priority_note || "Приоритетная позиция"}>★</span> : null}
                                 </span>
                               </td>

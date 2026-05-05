@@ -15,6 +15,15 @@ function formatQty(value) {
   return normalizedValue.toFixed(3);
 }
 
+function formatPostProcessWaitHours(value) {
+  const normalizedValue = Number(value);
+  if (!Number.isFinite(normalizedValue) || normalizedValue <= 0) {
+    return "не требуется";
+  }
+
+  return `${normalizedValue.toFixed(2).replace(/\.?0+$/, "")} ч`;
+}
+
 function buildInputTitle(input) {
   const code = input.input_nomenclature_code || "NM";
   const name = input.input_nomenclature_name || "Номенклатура";
@@ -142,6 +151,7 @@ function StepDetailsPanel({
           <div className="mt-4 space-y-3">
             <div className="rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,rgba(15,24,35,0.42),rgba(10,18,27,0.52))] px-4 py-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">Технологическая операция</div><div className="mt-2 text-sm font-medium text-slate-100">{processLabel}</div></div>
             <div className="rounded-none border border-cyan-100/56 bg-[linear-gradient(180deg,rgba(32,174,207,0.4),rgba(16,78,107,0.86))] px-5 py-5 shadow-[0_0_0_1px_rgba(125,246,255,0.22),inset_0_1px_0_rgba(255,255,255,0.08),0_0_48px_rgba(34,211,238,0.34)]"><div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-cyan-100/65"><PackageCheck className="h-3.5 w-3.5" />Выход</div><div className="text-[1.22rem] font-semibold leading-tight text-cyan-50">{outputNomenclatureLabel}</div><div className="mt-3 text-sm font-medium text-cyan-100/85">{formatQty(step.output_qty)} {outputNomenclatureUom || "ед."}</div></div>
+            {step.step_no === 1 ? <div className="rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,rgba(15,24,35,0.42),rgba(10,18,27,0.52))] px-4 py-3"><div className="text-sm font-medium text-slate-100">Дегазация: {formatPostProcessWaitHours(step.post_process_wait_hours)}</div></div> : null}
             <div className="rounded-none border border-white/[0.06] bg-[linear-gradient(180deg,rgba(15,24,35,0.42),rgba(10,18,27,0.52))] px-4 py-3"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">Примечание</div><p className="mt-2 text-sm leading-6 text-slate-300">{step.notes || "Примечание не заполнено."}</p></div>
           </div>
 

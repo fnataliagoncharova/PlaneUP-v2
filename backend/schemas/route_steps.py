@@ -10,6 +10,7 @@ class RouteStepBase(BaseModel):
     process_id: int = Field(gt=0)
     output_nomenclature_id: int = Field(gt=0)
     output_qty: Decimal = Field(gt=0)
+    post_process_wait_hours: Decimal | None = Field(default=None, ge=0)
     notes: str | None = None
 
     @field_validator("notes")

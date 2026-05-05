@@ -35,12 +35,14 @@ CREATE TABLE route_steps (
     process_id BIGINT NOT NULL REFERENCES processes(process_id),
     output_nomenclature_id BIGINT NOT NULL REFERENCES nomenclature(nomenclature_id),
     output_qty NUMERIC(12,3) NOT NULL DEFAULT 1.000,
+    post_process_wait_hours NUMERIC(8,2) NULL,
     notes TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (route_id, step_no),
     CHECK (step_no > 0),
-    CHECK (output_qty > 0)
+    CHECK (output_qty > 0),
+    CHECK (post_process_wait_hours IS NULL OR post_process_wait_hours >= 0)
 );
 
 CREATE TABLE route_step_inputs (

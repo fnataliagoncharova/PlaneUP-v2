@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import List
 
 import psycopg2
@@ -11,6 +12,13 @@ from schemas.route_steps import RouteStepCreate, RouteStepRead, RouteStepUpdate
 
 router = APIRouter(tags=["route_steps"])
 
+DEGASSING_ONLY_FIRST_STEP_MESSAGE = (
+    "\u0414\u0435\u0433\u0430\u0437\u0430\u0446\u0438\u044f \u043c\u043e\u0436\u0435\u0442 "
+    "\u0431\u044b\u0442\u044c \u0443\u043a\u0430\u0437\u0430\u043d\u0430 \u0442\u043e\u043b\u044c"
+    "\u043a\u043e \u0434\u043b\u044f \u043f\u0435\u0440\u0432\u043e\u0433\u043e \u0448\u0430\u0433"
+    "\u0430 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0430."
+)
+
 SELECT_COLUMNS = """
     route_step_id,
     route_id,
@@ -18,10 +26,17 @@ SELECT_COLUMNS = """
     process_id,
     output_nomenclature_id,
     output_qty,
+    post_process_wait_hours,
     notes
 """
 
-STRUCTURE_FIELDS = ("step_no", "process_id", "output_nomenclature_id", "output_qty")
+STRUCTURE_FIELDS = (
+    "step_no",
+    "process_id",
+    "output_nomenclature_id",
+    "output_qty",
+    "post_process_wait_hours",
+)
 
 
 def get_constraint_name(exc: Exception) -> str | None:
@@ -45,6 +60,14 @@ def ensure_route_exists(cursor: RealDictCursor, route_id: int) -> None:
         )
 
 
+def validate_post_process_wait_hours(step_no: int, wait_hours: Decimal | None) -> None:
+    if step_no > 1 and wait_hours is not None and wait_hours > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=DEGASSING_ONLY_FIRST_STEP_MESSAGE,
+        )
+
+
 def get_route_step_for_update(cursor: RealDictCursor, route_step_id: int) -> dict:
     cursor.execute(
         """
@@ -54,7 +77,8 @@ def get_route_step_for_update(cursor: RealDictCursor, route_step_id: int) -> dic
             step_no,
             process_id,
             output_nomenclature_id,
-            output_qty
+            output_qty,
+            post_process_wait_hours
         FROM route_steps
         WHERE route_step_id = %s
         FOR UPDATE;
@@ -164,6 +188,7 @@ def create_route_step(payload: RouteStepCreate, route_id: int = Path(..., gt=0))
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             ensure_route_exists(cursor, route_id)
+            validate_post_process_wait_hours(payload.step_no, payload.post_process_wait_hours)
             cursor.execute(
                 f"""
                 INSERT INTO route_steps (
@@ -172,9 +197,10 @@ def create_route_step(payload: RouteStepCreate, route_id: int = Path(..., gt=0))
                     process_id,
                     output_nomenclature_id,
                     output_qty,
+                    post_process_wait_hours,
                     notes
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING {SELECT_COLUMNS};
                 """,
                 (
@@ -183,6 +209,7 @@ def create_route_step(payload: RouteStepCreate, route_id: int = Path(..., gt=0))
                     payload.process_id,
                     payload.output_nomenclature_id,
                     payload.output_qty,
+                    payload.post_process_wait_hours,
                     payload.notes,
                 ),
             )
@@ -225,6 +252,8 @@ def create_route_step(payload: RouteStepCreate, route_id: int = Path(..., gt=0))
             detail = "Номер шага должен быть больше 0."
         elif constraint_name == "route_steps_output_qty_check":
             detail = "Количество результата должно быть больше 0."
+        elif constraint_name == "route_steps_post_process_wait_hours_check":
+            detail = "Значение технологической выдержки должно быть больше или равно 0."
         else:
             detail = "Некорректные данные шага маршрута."
 
@@ -250,6 +279,7 @@ def update_route_step(payload: RouteStepUpdate, route_step_id: int = Path(..., g
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             previous_step = get_route_step_for_update(cursor, route_step_id)
+            validate_post_process_wait_hours(payload.step_no, payload.post_process_wait_hours)
             is_structure_changed = is_step_structure_changed(previous_step, payload)
 
             cursor.execute(
@@ -260,6 +290,7 @@ def update_route_step(payload: RouteStepUpdate, route_step_id: int = Path(..., g
                     process_id = %s,
                     output_nomenclature_id = %s,
                     output_qty = %s,
+                    post_process_wait_hours = %s,
                     notes = %s,
                     updated_at = NOW()
                 WHERE route_step_id = %s
@@ -270,6 +301,7 @@ def update_route_step(payload: RouteStepUpdate, route_step_id: int = Path(..., g
                     payload.process_id,
                     payload.output_nomenclature_id,
                     payload.output_qty,
+                    payload.post_process_wait_hours,
                     payload.notes,
                     route_step_id,
                 ),
@@ -321,6 +353,8 @@ def update_route_step(payload: RouteStepUpdate, route_step_id: int = Path(..., g
             detail = "Номер шага должен быть больше 0."
         elif constraint_name == "route_steps_output_qty_check":
             detail = "Количество результата должно быть больше 0."
+        elif constraint_name == "route_steps_post_process_wait_hours_check":
+            detail = "Значение технологической выдержки должно быть больше или равно 0."
         else:
             detail = "Некорректные данные шага маршрута."
 

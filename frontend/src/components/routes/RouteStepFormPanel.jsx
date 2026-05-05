@@ -4,12 +4,15 @@ import NomenclatureSearchSelect from "../shared/NomenclatureSearchSelect";
 
 function createInitialState(item, processItems) {
   const fallbackProcessId = processItems[0]?.process_id ?? "";
+  const waitHoursValue = item?.post_process_wait_hours;
 
   return {
     step_no: item?.step_no ?? "",
     process_id: item?.process_id ?? fallbackProcessId,
     output_nomenclature_id: item?.output_nomenclature_id ?? "",
     output_qty: item?.output_qty ?? "1.000",
+    post_process_wait_hours:
+      waitHoursValue === null || waitHoursValue === undefined ? "" : String(waitHoursValue),
     notes: item?.notes ?? "",
   };
 }
@@ -32,6 +35,9 @@ function RouteStepFormPanel({
   const [localError, setLocalError] = useState("");
   const [pendingPayload, setPendingPayload] = useState(null);
   const [isDuplicateProcessWarningOpen, setIsDuplicateProcessWarningOpen] = useState(false);
+  const isCreatingFirstStep = !isEditMode && routeSteps.length === 0;
+  const isFirstStepSelected = Number(formValues.step_no) === 1;
+  const shouldShowPostProcessWaitField = isFirstStepSelected || isCreatingFirstStep;
 
   const sortedProcessItems = useMemo(
     () =>
@@ -94,6 +100,7 @@ function RouteStepFormPanel({
     const normalizedProcessId = Number(formValues.process_id);
     const normalizedOutputNomenclatureId = Number(formValues.output_nomenclature_id);
     const normalizedOutputQty = Number(formValues.output_qty);
+    const waitHoursRawValue = String(formValues.post_process_wait_hours ?? "").trim();
 
     if (!Number.isInteger(normalizedStepNo) || normalizedStepNo <= 0) {
       setLocalError("Номер шага должен быть целым числом больше 0.");
@@ -118,12 +125,25 @@ function RouteStepFormPanel({
       return;
     }
 
+    let normalizedPostProcessWaitHours = null;
+    if (normalizedStepNo === 1 && waitHoursRawValue !== "") {
+      const parsedWaitHours = Number(waitHoursRawValue);
+      if (!Number.isFinite(parsedWaitHours) || parsedWaitHours < 0) {
+        setLocalError("Время технологической выдержки должно быть больше или равно 0.");
+        return;
+      }
+
+      normalizedPostProcessWaitHours = Number(parsedWaitHours.toFixed(2));
+    }
+
     setLocalError("");
     const payload = {
       step_no: normalizedStepNo,
       process_id: normalizedProcessId,
       output_nomenclature_id: normalizedOutputNomenclatureId,
       output_qty: Number(normalizedOutputQty.toFixed(3)),
+      post_process_wait_hours:
+        normalizedStepNo === 1 ? normalizedPostProcessWaitHours : null,
       notes: formValues.notes.trim() || null,
     };
 
@@ -216,6 +236,29 @@ function RouteStepFormPanel({
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           />
         </label>
+
+        {shouldShowPostProcessWaitField ? (
+          <label className="block">
+            <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+              Дегазация после шага, часов
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="0.25"
+              value={formValues.post_process_wait_hours}
+              onChange={(event) =>
+                handleFieldChange("post_process_wait_hours", event.target.value)
+              }
+              placeholder="Например 24"
+              className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
+            />
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              Укажите время технологической выдержки после первого шага. Используется позже при
+              планировании очередности.
+            </p>
+          </label>
+        ) : null}
 
         <label className="block">
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Примечание</div>
