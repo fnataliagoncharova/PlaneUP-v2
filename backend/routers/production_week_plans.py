@@ -1,4 +1,5 @@
-﻿from decimal import Decimal
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import psycopg2
@@ -35,6 +36,59 @@ WEEK_COLUMNS = """
     pw.created_at,
     pw.updated_at
 """
+
+
+def get_system_week_bounds(plan_month: date, week_no: int) -> tuple[date, date] | None:
+    year = plan_month.year
+    month = plan_month.month
+    if week_no == 1:
+        return date(year, month, 1), date(year, month, 7)
+    if week_no == 2:
+        return date(year, month, 8), date(year, month, 14)
+    if week_no == 3:
+        return date(year, month, 15), date(year, month, 21)
+    if week_no == 4:
+        if month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, month + 1, 1)
+        last_date = date.fromordinal(next_month.toordinal() - 1)
+        return date(year, month, 22), last_date
+    return None
+
+
+def ensure_week_matches_plan_month(
+    cursor: RealDictCursor,
+    production_plan_id: int,
+    week_no: int,
+    week_start_date: date,
+    week_end_date: date,
+) -> None:
+    cursor.execute(
+        """
+        SELECT plan_month
+        FROM production_plans
+        WHERE production_plan_id = %s;
+        """,
+        (production_plan_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План выпуска не найден.")
+
+    expected = get_system_week_bounds(row["plan_month"], week_no)
+    if expected is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неделя должна соответствовать периоду месяца планирования.",
+        )
+
+    expected_start, expected_end = expected
+    if week_start_date != expected_start or week_end_date != expected_end:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неделя должна соответствовать периоду месяца планирования.",
+        )
 
 
 def require_monthly_plan(cursor: RealDictCursor, production_plan_id: int, lock: bool = False) -> dict[str, Any]:
@@ -365,6 +419,13 @@ def create_production_plan_week(
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             ensure_approved_monthly_plan(cursor, production_plan_id, lock=True)
+            ensure_week_matches_plan_month(
+                cursor=cursor,
+                production_plan_id=production_plan_id,
+                week_no=payload.week_no,
+                week_start_date=payload.week_start_date,
+                week_end_date=payload.week_end_date,
+            )
             cursor.execute(
                 f"""
                 INSERT INTO production_plan_weeks (

@@ -73,3 +73,51 @@ export function deleteProductionPlanLine(lineId) {
     method: "DELETE",
   });
 }
+
+export function getProductionPlanWeeks(productionPlanId) {
+  return apiRequest(`/production-plans/${productionPlanId}/weeks`);
+}
+
+export function createProductionPlanWeek(productionPlanId, payload) {
+  return apiRequest(`/production-plans/${productionPlanId}/weeks`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getProductionWeekPlan(weekId) {
+  return apiRequest(`/production-week-plans/${weekId}`);
+}
+
+export function updateProductionWeekPlan(weekId, payload) {
+  return apiRequest(`/production-week-plans/${weekId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteProductionWeekPlan(weekId) {
+  return apiRequest(`/production-week-plans/${weekId}`, {
+    method: "DELETE",
+  });
+}
+
+export function addProductionWeekLine(weekId, payload) {
+  return apiRequest(`/production-week-plans/${weekId}/lines`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProductionWeekLine(lineId, payload) {
+  return apiRequest(`/production-week-plans/lines/${lineId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteProductionWeekLine(lineId) {
+  return apiRequest(`/production-week-plans/lines/${lineId}`, {
+    method: "DELETE",
+  });
+}

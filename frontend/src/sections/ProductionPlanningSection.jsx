@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
+import WeeklyPlanningPanel from "../components/production-planning/WeeklyPlanningPanel";
 import NomenclatureSearchSelect from "../components/shared/NomenclatureSearchSelect";
 import { getNomenclatureList } from "../services/nomenclatureApi";
 import {
@@ -73,6 +74,7 @@ function toErrorMessage(error, fallbackText) {
 }
 
 function ProductionPlanningSection() {
+  const [activeTab, setActiveTab] = useState("monthly");
   const [plans, setPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -788,6 +790,37 @@ function ProductionPlanningSection() {
         </p>
       </header>
 
+      <nav className="glass-panel p-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("monthly")}
+            className={[
+              "h-10 rounded-none border px-4 text-sm transition",
+              activeTab === "monthly"
+                ? "border-cyan-300/35 bg-cyan-400/[0.15] font-semibold text-cyan-50"
+                : "border-white/[0.08] bg-[rgba(8,22,34,0.7)] text-slate-300 hover:border-cyan-300/30",
+            ].join(" ")}
+          >
+            Месячный план
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("weekly")}
+            className={[
+              "h-10 rounded-none border px-4 text-sm transition",
+              activeTab === "weekly"
+                ? "border-cyan-300/35 bg-cyan-400/[0.15] font-semibold text-cyan-50"
+                : "border-white/[0.08] bg-[rgba(8,22,34,0.7)] text-slate-300 hover:border-cyan-300/30",
+            ].join(" ")}
+          >
+            План по неделям
+          </button>
+        </div>
+      </nav>
+
+      {activeTab === "monthly" ? (
+        <>
       {statusSuccess ? (
         <div className="glass-panel border-emerald-300/30 bg-emerald-500/[0.1] px-4 py-3 text-sm text-emerald-100">
           {statusSuccess}
@@ -834,72 +867,48 @@ function ProductionPlanningSection() {
                 <RefreshCw className={["h-4 w-4", isPlansLoading || isPlanLoading ? "animate-spin" : ""].join(" ")} />
                 Обновить
               </button>
+              {selectedPlan && isApproved ? (
+                <button
+                  type="button"
+                  onClick={() => setReturnDraftCandidate(selectedPlan)}
+                  className="h-11 rounded-none border border-cyan-300/30 bg-cyan-400/[0.12] px-4 text-sm text-cyan-50 transition hover:bg-cyan-400/[0.2]"
+                >
+                  Вернуть в черновик
+                </button>
+              ) : null}
             </div>
             {plansError ? <div className="mt-3 text-sm text-rose-200">{plansError}</div> : null}
           </section>
 
           {selectedPlan ? (
             <section className="glass-panel p-5 sm:p-6">
-              <div className="rounded-none border border-white/[0.08] bg-white/[0.02] p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-slate-50">{selectedPlan.plan_name}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">
-                      Период: {formatPlanMonth(selectedPlan.plan_month)} · Статус:{" "}
-                      <span className={["inline-flex items-center rounded-none border px-2 py-0.5 text-xs", getStatusBadgeClass(selectedPlan.status)].join(" ")}>
-                        {getStatusLabel(selectedPlan.status)}
-                      </span>{" "}
-                      · Позиций: {selectedPlanLines.length} · Приоритетных: {priorityCount}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {!isApproved ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={openEditPlanForm}
-                          className="h-10 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
-                        >
-                          Редактировать план
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproveCandidate(selectedPlan)}
-                          className="h-10 rounded-none border border-emerald-300/30 bg-emerald-400/[0.1] px-3 text-sm text-emerald-100 transition hover:bg-emerald-400/[0.16]"
-                        >
-                          Утвердить план
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPlanDeleteCandidate(selectedPlan)}
-                          className="h-10 rounded-none border border-rose-300/30 bg-rose-400/[0.08] px-3 text-sm text-rose-100 transition hover:bg-rose-400/[0.16]"
-                        >
-                          Удалить план
-                        </button>
-                      </>
-                    ) : (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap gap-2">
+                  {!isApproved ? (
+                    <>
                       <button
                         type="button"
-                        onClick={() => setReturnDraftCandidate(selectedPlan)}
-                        className="h-10 rounded-none border border-cyan-300/30 bg-cyan-400/[0.12] px-3 text-sm text-cyan-50 transition hover:bg-cyan-400/[0.2]"
+                        onClick={openEditPlanForm}
+                        className="h-10 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
                       >
-                        Вернуть в черновик
+                        Редактировать план
                       </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {isApproved ? (
-                <div className="mt-4 rounded-none border border-emerald-300/25 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">
-                  План утверждён. Изменения заблокированы. Чтобы внести изменения, верните план в черновик.
-                </div>
-              ) : null}
-
-              <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-semibold tracking-tight text-slate-50">Позиции плана выпуска</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">Позиций: {selectedPlanLines.length}</p>
+                      <button
+                        type="button"
+                        onClick={() => setApproveCandidate(selectedPlan)}
+                        className="h-10 rounded-none border border-emerald-300/30 bg-emerald-400/[0.1] px-3 text-sm text-emerald-100 transition hover:bg-emerald-400/[0.16]"
+                      >
+                        Утвердить план
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlanDeleteCandidate(selectedPlan)}
+                        className="h-10 rounded-none border border-rose-300/30 bg-rose-400/[0.08] px-3 text-sm text-rose-100 transition hover:bg-rose-400/[0.16]"
+                      >
+                        Удалить план
+                      </button>
+                    </>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -1062,6 +1071,10 @@ function ProductionPlanningSection() {
         isConfirmDisabled={deletingPlan}
         isCancelDisabled={deletingPlan}
       />
+        </>
+      ) : (
+        <WeeklyPlanningPanel />
+      )}
     </section>
   );
 }
