@@ -37,6 +37,40 @@ WEEK_COLUMNS = """
     pw.updated_at
 """
 
+DECIMAL_ZERO = Decimal("0")
+QTY_SCALE = Decimal("0.001")
+
+
+def to_decimal(value: Any) -> Decimal:
+    if value is None:
+        return DECIMAL_ZERO
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def format_warning_qty(value: Decimal) -> str:
+    normalized = value.quantize(QTY_SCALE)
+    text = format(normalized, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    if not text:
+        return "0"
+
+    sign = ""
+    if text.startswith("-"):
+        sign = "-"
+        text = text[1:]
+
+    integer_part, _, fractional_part = text.partition(".")
+    reversed_digits = integer_part[::-1]
+    grouped_reversed = " ".join(reversed_digits[index : index + 3] for index in range(0, len(reversed_digits), 3))
+    grouped_integer = grouped_reversed[::-1] or "0"
+
+    if fractional_part:
+        return f"{sign}{grouped_integer}.{fractional_part}"
+    return f"{sign}{grouped_integer}"
+
 
 def get_system_week_bounds(plan_month: date, week_no: int) -> tuple[date, date] | None:
     year = plan_month.year
@@ -243,10 +277,21 @@ def validate_weekly_qty_limit(
         )
 
 
-def get_manufactured_inputs_for_nomenclature(
+def build_line_warnings(line_row: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    if line_row.get("route_step_equipment_id") is None:
+        warnings.append("Оборудование не выбрано.")
+    min_batch_qty = line_row.get("min_batch_qty")
+    batch_qty = line_row.get("batch_qty")
+    if min_batch_qty is not None and batch_qty is not None and Decimal(batch_qty) < Decimal(min_batch_qty):
+        warnings.append("Размер партии меньше минимальной партии для выбранного оборудования.")
+    return warnings
+
+
+def get_route_manufactured_component_requirements(
     cursor: RealDictCursor,
     nomenclature_id: int,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     cursor.execute(
         """
         SELECT route_id
@@ -260,58 +305,211 @@ def get_manufactured_inputs_for_nomenclature(
     )
     route_row = cursor.fetchone()
     if route_row is None:
-        return []
+        return {"output_qty": None, "components": []}
 
     cursor.execute(
         """
-        SELECT DISTINCT
+        SELECT
+            route_step_id,
+            output_qty
+        FROM route_steps
+        WHERE route_id = %s
+          AND output_nomenclature_id = %s
+        ORDER BY step_no DESC, route_step_id DESC
+        LIMIT 1;
+        """,
+        (route_row["route_id"], nomenclature_id),
+    )
+    step_row = cursor.fetchone()
+    if step_row is None:
+        return {"output_qty": None, "components": []}
+
+    cursor.execute(
+        """
+        SELECT
             n.nomenclature_id,
             n.nomenclature_code,
-            n.nomenclature_name
-        FROM route_steps AS rs
-        INNER JOIN route_step_inputs AS rsi ON rsi.route_step_id = rs.route_step_id
+            n.nomenclature_name,
+            n.unit_of_measure,
+            SUM(rsi.input_qty) AS input_qty
+        FROM route_step_inputs AS rsi
         INNER JOIN nomenclature AS n ON n.nomenclature_id = rsi.input_nomenclature_id
-        WHERE rs.route_id = %s
+        WHERE rsi.route_step_id = %s
           AND n.item_type = 'manufactured'
+        GROUP BY
+            n.nomenclature_id,
+            n.nomenclature_code,
+            n.nomenclature_name,
+            n.unit_of_measure
         ORDER BY n.nomenclature_code ASC, n.nomenclature_id ASC;
         """,
-        (route_row["route_id"],),
+        (step_row["route_step_id"],),
     )
-    return cursor.fetchall()
+    return {
+        "output_qty": step_row["output_qty"],
+        "components": cursor.fetchall(),
+    }
 
 
-def build_manufactured_inputs_warning(manufactured_inputs: list[dict[str, Any]]) -> str | None:
-    if not manufactured_inputs:
-        return None
+def get_initial_component_balances(
+    cursor: RealDictCursor,
+    production_plan_id: int,
+    component_ids: set[int],
+) -> dict[int, Decimal]:
+    if not component_ids:
+        return {}
 
-    component_labels: list[str] = []
-    for component in manufactured_inputs:
-        code = str(component.get("nomenclature_code") or "-")
-        name = str(component.get("nomenclature_name") or "").strip()
-        component_labels.append(f"{code} {name}".strip())
+    balances = {component_id: DECIMAL_ZERO for component_id in component_ids}
 
-    if len(component_labels) == 1:
-        return f"Проверьте обеспеченность производимого компонента: {component_labels[0]}."
+    cursor.execute(
+        """
+        SELECT source_balance_date
+        FROM production_plans
+        WHERE production_plan_id = %s;
+        """,
+        (production_plan_id,),
+    )
+    plan_row = cursor.fetchone()
+    source_balance_date = plan_row["source_balance_date"] if plan_row else None
+    if source_balance_date is None:
+        return balances
 
-    return "Проверьте обеспеченность: " + ", ".join(component_labels) + "."
+    cursor.execute(
+        """
+        SELECT
+            nomenclature_id,
+            COALESCE(available_qty, 0) AS available_qty
+        FROM inventory_balance
+        WHERE as_of_date = %s
+          AND nomenclature_id = ANY(%s);
+        """,
+        (source_balance_date, list(component_ids)),
+    )
+    for row in cursor.fetchall():
+        balances[int(row["nomenclature_id"])] = to_decimal(row["available_qty"])
+    return balances
 
 
-def build_line_warnings(
-    line_row: dict[str, Any],
-    manufactured_inputs: list[dict[str, Any]] | None = None,
-) -> list[str]:
-    warnings: list[str] = []
-    if line_row.get("route_step_equipment_id") is None:
-        warnings.append("Оборудование не выбрано.")
-    min_batch_qty = line_row.get("min_batch_qty")
-    batch_qty = line_row.get("batch_qty")
-    if min_batch_qty is not None and batch_qty is not None and Decimal(batch_qty) < Decimal(min_batch_qty):
-        warnings.append("Размер партии меньше минимальной партии для выбранного оборудования.")
-    manufactured_warning = build_manufactured_inputs_warning(manufactured_inputs or [])
-    if manufactured_warning:
-        warnings.append(manufactured_warning)
+def build_component_availability_warning(
+    component_row: dict[str, Any],
+    required_qty: Decimal,
+    available_qty: Decimal,
+) -> str:
+    deficit_qty = required_qty - available_qty
+    code = str(component_row.get("nomenclature_code") or "-")
+    name = str(component_row.get("nomenclature_name") or "").strip()
+    component_label = f"{code} {name}".strip()
+    unit_of_measure = str(component_row.get("unit_of_measure") or "").strip()
+    deficit_label = f"{format_warning_qty(deficit_qty)} {unit_of_measure}".strip()
+    return (
+        f"{component_label}: дефицит {deficit_label}. "
+        f"Нужно {format_warning_qty(required_qty)}, доступно {format_warning_qty(available_qty)}."
+    )
 
-    return warnings
+
+def build_component_availability_warnings(
+    cursor: RealDictCursor,
+    production_plan_id: int,
+    production_plan_week_id: int,
+    current_week_no: int,
+) -> dict[int, list[str]]:
+    cursor.execute(
+        """
+        SELECT
+            pwl.production_week_line_id,
+            pwl.production_plan_week_id,
+            pw.week_no,
+            pwl.sequence_no,
+            pwl.planned_qty,
+            ppl.nomenclature_id,
+            n.nomenclature_code
+        FROM production_week_lines AS pwl
+        INNER JOIN production_plan_weeks AS pw ON pw.production_plan_week_id = pwl.production_plan_week_id
+        INNER JOIN production_plan_lines AS ppl ON ppl.production_plan_line_id = pwl.production_plan_line_id
+        INNER JOIN nomenclature AS n ON n.nomenclature_id = ppl.nomenclature_id
+        WHERE pw.production_plan_id = %s
+          AND (pw.week_no < %s OR pw.production_plan_week_id = %s)
+        ORDER BY
+            pw.week_no ASC,
+            pwl.sequence_no ASC,
+            pwl.production_week_line_id ASC,
+            n.nomenclature_code ASC;
+        """,
+        (production_plan_id, current_week_no, production_plan_week_id),
+    )
+    timeline_rows = cursor.fetchall()
+    if not timeline_rows:
+        return {}
+
+    requirements_cache: dict[int, dict[str, Any]] = {}
+    component_ids: set[int] = set()
+    for row in timeline_rows:
+        line_nomenclature_id = int(row["nomenclature_id"])
+        if line_nomenclature_id not in requirements_cache:
+            requirements_cache[line_nomenclature_id] = get_route_manufactured_component_requirements(
+                cursor,
+                line_nomenclature_id,
+            )
+        route_requirements = requirements_cache[line_nomenclature_id]
+        for component in route_requirements["components"]:
+            component_ids.add(int(component["nomenclature_id"]))
+
+    running_balances = get_initial_component_balances(
+        cursor=cursor,
+        production_plan_id=production_plan_id,
+        component_ids=component_ids,
+    )
+    warnings_by_line: dict[int, list[str]] = {}
+
+    for row in timeline_rows:
+        line_id = int(row["production_week_line_id"])
+        line_week_id = int(row["production_plan_week_id"])
+        line_nomenclature_id = int(row["nomenclature_id"])
+        line_planned_qty = to_decimal(row["planned_qty"])
+
+        route_requirements = requirements_cache.get(line_nomenclature_id, {"output_qty": None, "components": []})
+        output_qty = to_decimal(route_requirements.get("output_qty"))
+        if output_qty > DECIMAL_ZERO:
+            runs_qty = line_planned_qty / output_qty
+            for component in route_requirements["components"]:
+                component_id = int(component["nomenclature_id"])
+                required_qty = runs_qty * to_decimal(component["input_qty"])
+                if required_qty <= DECIMAL_ZERO:
+                    continue
+
+                available_qty = running_balances.get(component_id, DECIMAL_ZERO)
+                if line_week_id == production_plan_week_id and required_qty > available_qty:
+                    warnings_by_line.setdefault(line_id, []).append(
+                        build_component_availability_warning(component, required_qty, available_qty)
+                    )
+
+                running_balances[component_id] = available_qty - required_qty
+
+        # Planned output of the current line can be consumed only by later lines.
+        running_balances[line_nomenclature_id] = running_balances.get(line_nomenclature_id, DECIMAL_ZERO) + line_planned_qty
+
+    return warnings_by_line
+
+
+def apply_component_availability_warnings_to_week(
+    lines: list[dict[str, Any]],
+    component_warnings_by_line: dict[int, list[str]],
+) -> None:
+    if not component_warnings_by_line:
+        return
+
+    for line in lines:
+        line_id = int(line["production_week_line_id"])
+        extra_warnings = component_warnings_by_line.get(line_id, [])
+        if not extra_warnings:
+            continue
+
+        existing = set(line.get("warnings", []))
+        for warning in extra_warnings:
+            if warning in existing:
+                continue
+            line["warnings"].append(warning)
+            existing.add(warning)
 
 
 def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[str, Any] | None:
@@ -383,17 +581,10 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
         )
         lines = cursor.fetchall()
 
-        manufactured_inputs_cache: dict[int, list[dict[str, Any]]] = {}
         prepared_lines: list[dict[str, Any]] = []
         for row in lines:
             line_total = totals_map.get(int(row["production_plan_line_id"]), Decimal(0))
             remaining_qty = Decimal(row["monthly_planned_qty"]) - line_total
-            line_nomenclature_id = int(row["nomenclature_id"])
-            if line_nomenclature_id not in manufactured_inputs_cache:
-                manufactured_inputs_cache[line_nomenclature_id] = get_manufactured_inputs_for_nomenclature(
-                    cursor,
-                    line_nomenclature_id,
-                )
             line_payload = {
                 "production_week_line_id": row["production_week_line_id"],
                 "production_plan_week_id": row["production_plan_week_id"],
@@ -420,11 +611,16 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
             }
-            line_payload["warnings"] = build_line_warnings(
-                line_payload,
-                manufactured_inputs=manufactured_inputs_cache[line_nomenclature_id],
-            )
+            line_payload["warnings"] = build_line_warnings(line_payload)
             prepared_lines.append(line_payload)
+
+        component_warnings_by_line = build_component_availability_warnings(
+            cursor=cursor,
+            production_plan_id=int(week_row["production_plan_id"]),
+            production_plan_week_id=production_plan_week_id,
+            current_week_no=int(week_row["week_no"]),
+        )
+        apply_component_availability_warnings_to_week(prepared_lines, component_warnings_by_line)
 
         week_row["lines"] = prepared_lines
         return week_row

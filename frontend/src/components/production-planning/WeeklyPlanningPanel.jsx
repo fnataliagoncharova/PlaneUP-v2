@@ -65,8 +65,11 @@ function formatNumber(value) {
   }).format(number);
 }
 
-function normalizeNumericInput(value) {
-  return String(value).replace(/[^\d.,\s-]/g, "");
+function normalizeIntegerInput(value) {
+  const raw = String(value).replace(/\s+/g, "");
+  const decimalSeparatorIndex = raw.search(/[.,]/);
+  const integerPart = decimalSeparatorIndex >= 0 ? raw.slice(0, decimalSeparatorIndex) : raw;
+  return integerPart.replace(/\D/g, "");
 }
 
 function buildSystemWeeks(planMonthValue) {
@@ -365,14 +368,15 @@ function WeeklyPlanningPanel() {
     tableRows.forEach((row) => {
       const options = equipmentByPlanLine[row.row_key] || [];
       const defaultOption = options.find((item) => item.equipment_role === "primary") || options[0];
+      const parsedPlannedQty = Number.parseInt(normalizeIntegerInput(String(row.week_line?.planned_qty ?? "")), 10);
       nextEdits[row.row_key] = {
-        planned_qty: row.week_line ? String(row.week_line.planned_qty ?? "") : "",
+        planned_qty: row.week_line && Number.isFinite(parsedPlannedQty) && parsedPlannedQty > 0 ? formatNumber(parsedPlannedQty) : "",
         route_step_equipment_id: row.week_line?.route_step_equipment_id
           ? String(row.week_line.route_step_equipment_id)
           : defaultOption
             ? String(defaultOption.step_equipment_id)
             : "",
-        sequence_no: row.week_line ? String(row.week_line.sequence_no ?? row.initial_sequence) : String(row.initial_sequence),
+        sequence_no: row.week_line?.sequence_no != null ? String(row.week_line.sequence_no) : "",
         comment: row.week_line?.comment || "",
       };
     });
@@ -425,11 +429,12 @@ function WeeklyPlanningPanel() {
 
   const handleWeekQtyBlur = (rowKey) => {
     const rawValue = rowEdits[rowKey]?.planned_qty ?? "";
-    if (!String(rawValue).trim()) {
+    const normalized = normalizeIntegerInput(rawValue);
+    if (!normalized) {
       return;
     }
-    const numberValue = asNumber(rawValue);
-    if (numberValue <= 0) {
+    const numberValue = Number.parseInt(normalized, 10);
+    if (!Number.isFinite(numberValue) || numberValue <= 0) {
       return;
     }
     handleEditRow(rowKey, "planned_qty", formatNumber(numberValue));
@@ -536,7 +541,7 @@ function WeeklyPlanningPanel() {
 
       for (const row of tableRows) {
         const edit = rowEdits[row.row_key];
-        const qty = asNumber(edit?.planned_qty);
+        const qty = Number.parseInt(normalizeIntegerInput(edit?.planned_qty || ""), 10) || 0;
         const sequence = Math.max(1, parseInt(edit?.sequence_no || `${row.initial_sequence}`, 10) || row.initial_sequence);
         const routeStepEquipmentId = edit?.route_step_equipment_id ? Number(edit.route_step_equipment_id) : null;
         const comment = edit?.comment?.trim() || null;
@@ -710,9 +715,9 @@ function WeeklyPlanningPanel() {
                               <td className="px-3 py-2.5">
                                 <input
                                   type="text"
-                                  inputMode="decimal"
+                                  inputMode="numeric"
                                   value={edit.planned_qty || ""}
-                                  onChange={(event) => handleEditRow(row.row_key, "planned_qty", normalizeNumericInput(event.target.value))}
+                                  onChange={(event) => handleEditRow(row.row_key, "planned_qty", normalizeIntegerInput(event.target.value))}
                                   onBlur={() => handleWeekQtyBlur(row.row_key)}
                                   className="h-9 w-[92px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                                 />
