@@ -20,6 +20,10 @@ class ProductionWeekLineRead(BaseModel):
     already_planned_qty: Decimal
     remaining_qty: Decimal
     planned_qty: Decimal
+    actual_qty: Decimal
+    remaining_to_produce_qty: Decimal
+    completion_percent: Decimal
+    overproduction_qty: Decimal
     batch_count: int
     batch_qty: Decimal
     min_batch_qty: Decimal | None = None

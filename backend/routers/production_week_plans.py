@@ -568,12 +568,20 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 pwl.comment,
                 pwl.created_at,
                 pwl.updated_at,
-                ppl.is_priority
+                ppl.is_priority,
+                COALESCE(pa.actual_qty, 0) AS actual_qty
             FROM production_week_lines AS pwl
             INNER JOIN production_plan_lines AS ppl ON ppl.production_plan_line_id = pwl.production_plan_line_id
             INNER JOIN nomenclature AS n ON n.nomenclature_id = ppl.nomenclature_id
             LEFT JOIN route_step_equipment AS rse ON rse.step_equipment_id = pwl.route_step_equipment_id
             LEFT JOIN machines AS m ON m.machine_id = rse.machine_id
+            LEFT JOIN (
+                SELECT
+                    production_week_line_id,
+                    COALESCE(SUM(actual_qty), 0) AS actual_qty
+                FROM production_actuals
+                GROUP BY production_week_line_id
+            ) AS pa ON pa.production_week_line_id = pwl.production_week_line_id
             WHERE pwl.production_plan_week_id = %s
             ORDER BY pwl.sequence_no ASC, ppl.is_priority DESC, n.nomenclature_code ASC;
             """,
@@ -583,8 +591,20 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
 
         prepared_lines: list[dict[str, Any]] = []
         for row in lines:
-            line_total = totals_map.get(int(row["production_plan_line_id"]), Decimal(0))
+            line_total = totals_map.get(int(row["production_plan_line_id"]), DECIMAL_ZERO)
             remaining_qty = Decimal(row["monthly_planned_qty"]) - line_total
+            planned_qty = to_decimal(row["planned_qty"])
+            actual_qty_raw = to_decimal(row["actual_qty"])
+            remaining_to_produce_qty_raw = planned_qty - actual_qty_raw if actual_qty_raw < planned_qty else DECIMAL_ZERO
+            overproduction_qty_raw = actual_qty_raw - planned_qty if actual_qty_raw > planned_qty else DECIMAL_ZERO
+            completion_percent = DECIMAL_ZERO
+            if planned_qty > DECIMAL_ZERO:
+                completion_percent = (actual_qty_raw / planned_qty) * Decimal("100")
+
+            actual_qty = actual_qty_raw.quantize(QTY_SCALE)
+            remaining_to_produce_qty = remaining_to_produce_qty_raw.quantize(QTY_SCALE)
+            overproduction_qty = overproduction_qty_raw.quantize(QTY_SCALE)
+            completion_percent = completion_percent.quantize(QTY_SCALE)
             line_payload = {
                 "production_week_line_id": row["production_week_line_id"],
                 "production_plan_week_id": row["production_plan_week_id"],
@@ -601,6 +621,10 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 "already_planned_qty": line_total,
                 "remaining_qty": remaining_qty,
                 "planned_qty": row["planned_qty"],
+                "actual_qty": actual_qty,
+                "remaining_to_produce_qty": remaining_to_produce_qty,
+                "completion_percent": completion_percent,
+                "overproduction_qty": overproduction_qty,
                 "batch_count": row["batch_count"],
                 "batch_qty": row["batch_qty"],
                 "min_batch_qty": row["min_batch_qty"],
