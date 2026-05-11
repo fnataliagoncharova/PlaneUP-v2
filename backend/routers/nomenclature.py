@@ -20,6 +20,7 @@ from schemas.nomenclature import (
     NomenclatureRead,
     NomenclatureUpdate,
 )
+from schemas.nomenclature_route_chain import NomenclatureRouteChainResponse
 
 
 router = APIRouter(prefix="/nomenclature", tags=["nomenclature"])
@@ -51,6 +52,350 @@ def select_columns_with_item_type(item_type_column_exists: bool) -> str:
     if item_type_column_exists:
         return f"{SELECT_COLUMNS}, item_type"
     return f"{SELECT_COLUMNS}, 'manufactured'::text AS item_type"
+
+
+MAX_ROUTE_CHAIN_DEPTH = 10
+ROUTE_CHAIN_ROOT_NO_ACTIVE_ROUTE_WARNING = "Активный маршрут получения не найден."
+ROUTE_CHAIN_MULTIPLE_ACTIVE_ROUTES_WARNING = (
+    "Для позиции найдено несколько активных маршрутов. Использован первый."
+)
+ROUTE_CHAIN_MAX_DEPTH_WARNING = "Превышена максимальная глубина раскрытия маршрута."
+
+
+def select_item_type_expression(item_type_column_exists: bool, table_alias: str) -> str:
+    if item_type_column_exists:
+        return f"{table_alias}.item_type"
+    return "'manufactured'::text"
+
+
+def append_warning(warnings: list[str], warning: str) -> None:
+    if warning not in warnings:
+        warnings.append(warning)
+
+
+def format_nomenclature_label(code: str | None, name: str | None) -> str:
+    code_value = (code or "").strip()
+    name_value = (name or "").strip()
+
+    if code_value and name_value:
+        return f"{code_value} {name_value}"
+    if code_value:
+        return code_value
+    if name_value:
+        return name_value
+    return "без кода"
+
+
+def build_missing_component_route_warning(code: str | None, name: str | None) -> str:
+    component_label = format_nomenclature_label(code, name)
+    return f"Для производимого компонента {component_label} не найден активный маршрут."
+
+
+def build_multiple_active_routes_warning(code: str | None, name: str | None) -> str:
+    component_label = format_nomenclature_label(code, name)
+    return f"Для позиции {component_label} найдено несколько активных маршрутов. Использован первый."
+
+
+def build_cycle_warning(path_codes: list[str], repeated_code: str) -> str:
+    cycle_path = " -> ".join(path_codes + [repeated_code])
+    return f"Обнаружена циклическая зависимость маршрутов: {cycle_path}."
+
+
+def build_route_chain_nomenclature_node(nomenclature_row: dict) -> dict:
+    item_type = (nomenclature_row.get("item_type") or "manufactured").strip().lower()
+    if item_type not in {"manufactured", "purchased"}:
+        item_type = "manufactured"
+
+    return {
+        "nomenclature_id": nomenclature_row["nomenclature_id"],
+        "nomenclature_code": nomenclature_row["nomenclature_code"],
+        "nomenclature_name": nomenclature_row["nomenclature_name"],
+        "unit_of_measure": nomenclature_row["unit_of_measure"],
+        "item_type": item_type,
+        "route": None,
+    }
+
+
+def fetch_nomenclature_for_route_chain(
+    cursor: RealDictCursor,
+    nomenclature_id: int,
+    item_type_column_exists: bool,
+) -> dict | None:
+    item_type_expression = select_item_type_expression(item_type_column_exists, "n")
+    cursor.execute(
+        f"""
+        SELECT
+            n.nomenclature_id,
+            n.nomenclature_code,
+            n.nomenclature_name,
+            n.unit_of_measure,
+            {item_type_expression} AS item_type
+        FROM nomenclature AS n
+        WHERE n.nomenclature_id = %s;
+        """,
+        (nomenclature_id,),
+    )
+    return cursor.fetchone()
+
+
+def fetch_active_routes_for_nomenclature(cursor: RealDictCursor, nomenclature_id: int) -> list[dict]:
+    cursor.execute(
+        """
+        SELECT
+            route_id,
+            route_code,
+            route_name,
+            is_active
+        FROM routes
+        WHERE result_nomenclature_id = %s
+          AND is_active = TRUE
+        ORDER BY route_id;
+        """,
+        (nomenclature_id,),
+    )
+    return cursor.fetchall()
+
+
+def fetch_route_steps_for_chain(cursor: RealDictCursor, route_id: int) -> list[dict]:
+    cursor.execute(
+        """
+        SELECT
+            rs.route_step_id,
+            rs.step_no,
+            rs.process_id,
+            p.process_code,
+            p.process_name,
+            rs.output_nomenclature_id,
+            n.nomenclature_code AS output_nomenclature_code,
+            n.nomenclature_name AS output_nomenclature_name,
+            rs.output_qty,
+            rs.post_process_wait_hours
+        FROM route_steps AS rs
+        INNER JOIN processes AS p ON p.process_id = rs.process_id
+        INNER JOIN nomenclature AS n ON n.nomenclature_id = rs.output_nomenclature_id
+        WHERE rs.route_id = %s
+        ORDER BY rs.step_no, rs.route_step_id;
+        """,
+        (route_id,),
+    )
+    return cursor.fetchall()
+
+
+def fetch_route_step_inputs_for_chain(
+    cursor: RealDictCursor,
+    route_step_ids: list[int],
+    item_type_column_exists: bool,
+) -> dict[int, list[dict]]:
+    if not route_step_ids:
+        return {}
+
+    item_type_expression = select_item_type_expression(item_type_column_exists, "n")
+    cursor.execute(
+        f"""
+        SELECT
+            rsi.route_step_id,
+            rsi.step_input_id,
+            rsi.input_nomenclature_id,
+            rsi.input_qty,
+            n.nomenclature_code AS input_nomenclature_code,
+            n.nomenclature_name AS input_nomenclature_name,
+            n.unit_of_measure,
+            {item_type_expression} AS input_item_type
+        FROM route_step_inputs AS rsi
+        INNER JOIN nomenclature AS n ON n.nomenclature_id = rsi.input_nomenclature_id
+        WHERE rsi.route_step_id = ANY(%s)
+        ORDER BY rsi.route_step_id, rsi.step_input_id;
+        """,
+        (route_step_ids,),
+    )
+    rows = cursor.fetchall()
+
+    grouped_rows: dict[int, list[dict]] = {}
+    for row in rows:
+        grouped_rows.setdefault(row["route_step_id"], []).append(row)
+
+    return grouped_rows
+
+
+def fetch_route_step_equipment_for_chain(
+    cursor: RealDictCursor, route_step_ids: list[int]
+) -> dict[int, list[dict]]:
+    if not route_step_ids:
+        return {}
+
+    cursor.execute(
+        """
+        SELECT
+            rse.route_step_id,
+            rse.step_equipment_id,
+            rse.machine_id,
+            m.machine_code,
+            m.machine_name,
+            rse.equipment_role,
+            rse.priority,
+            rse.nominal_rate,
+            rse.rate_uom,
+            rse.min_batch_qty
+        FROM route_step_equipment AS rse
+        INNER JOIN machines AS m ON m.machine_id = rse.machine_id
+        WHERE rse.route_step_id = ANY(%s)
+        ORDER BY rse.route_step_id, rse.priority, rse.step_equipment_id;
+        """,
+        (route_step_ids,),
+    )
+    rows = cursor.fetchall()
+
+    grouped_rows: dict[int, list[dict]] = {}
+    for row in rows:
+        grouped_rows.setdefault(row["route_step_id"], []).append(row)
+
+    return grouped_rows
+
+
+def build_nomenclature_route_chain(
+    cursor: RealDictCursor,
+    nomenclature_row: dict,
+    item_type_column_exists: bool,
+    warnings: list[str],
+    path_nomenclature_ids: list[int],
+    path_nomenclature_codes: list[str],
+    depth: int,
+    is_root: bool,
+) -> dict | None:
+    node = build_route_chain_nomenclature_node(nomenclature_row)
+
+    active_routes = fetch_active_routes_for_nomenclature(cursor, node["nomenclature_id"])
+    if not active_routes:
+        if is_root:
+            append_warning(warnings, ROUTE_CHAIN_ROOT_NO_ACTIVE_ROUTE_WARNING)
+            return node
+        else:
+            append_warning(
+                warnings,
+                build_missing_component_route_warning(
+                    node["nomenclature_code"],
+                    node["nomenclature_name"],
+                ),
+            )
+            return None
+
+    if len(active_routes) > 1:
+        if is_root:
+            append_warning(warnings, ROUTE_CHAIN_MULTIPLE_ACTIVE_ROUTES_WARNING)
+        else:
+            append_warning(
+                warnings,
+                build_multiple_active_routes_warning(
+                    node["nomenclature_code"],
+                    node["nomenclature_name"],
+                ),
+            )
+
+    selected_route = active_routes[0]
+    route_steps = fetch_route_steps_for_chain(cursor, selected_route["route_id"])
+    route_step_ids = [step["route_step_id"] for step in route_steps]
+
+    inputs_by_step_id = fetch_route_step_inputs_for_chain(
+        cursor=cursor,
+        route_step_ids=route_step_ids,
+        item_type_column_exists=item_type_column_exists,
+    )
+    equipment_by_step_id = fetch_route_step_equipment_for_chain(cursor, route_step_ids)
+
+    steps_payload: list[dict] = []
+    for step_row in route_steps:
+        step_inputs_payload: list[dict] = []
+        for input_row in inputs_by_step_id.get(step_row["route_step_id"], []):
+            input_item_type = (input_row.get("input_item_type") or "manufactured").strip().lower()
+            if input_item_type not in {"manufactured", "purchased"}:
+                input_item_type = "manufactured"
+
+            child_chain = None
+            if input_item_type == "manufactured":
+                input_nomenclature_id = int(input_row["input_nomenclature_id"])
+                input_nomenclature_code = (
+                    (input_row.get("input_nomenclature_code") or "").strip()
+                    or f"ID:{input_nomenclature_id}"
+                )
+
+                if input_nomenclature_id in path_nomenclature_ids:
+                    append_warning(
+                        warnings,
+                        build_cycle_warning(path_nomenclature_codes, input_nomenclature_code),
+                    )
+                elif depth >= MAX_ROUTE_CHAIN_DEPTH:
+                    append_warning(warnings, ROUTE_CHAIN_MAX_DEPTH_WARNING)
+                else:
+                    child_chain = build_nomenclature_route_chain(
+                        cursor=cursor,
+                        nomenclature_row={
+                            "nomenclature_id": input_nomenclature_id,
+                            "nomenclature_code": input_row["input_nomenclature_code"],
+                            "nomenclature_name": input_row["input_nomenclature_name"],
+                            "unit_of_measure": input_row["unit_of_measure"],
+                            "item_type": input_item_type,
+                        },
+                        item_type_column_exists=item_type_column_exists,
+                        warnings=warnings,
+                        path_nomenclature_ids=path_nomenclature_ids + [input_nomenclature_id],
+                        path_nomenclature_codes=path_nomenclature_codes + [input_nomenclature_code],
+                        depth=depth + 1,
+                        is_root=False,
+                    )
+
+            step_inputs_payload.append(
+                {
+                    "step_input_id": input_row["step_input_id"],
+                    "input_nomenclature_id": input_row["input_nomenclature_id"],
+                    "input_nomenclature_code": input_row["input_nomenclature_code"],
+                    "input_nomenclature_name": input_row["input_nomenclature_name"],
+                    "input_item_type": input_item_type,
+                    "input_qty": input_row["input_qty"],
+                    "unit_of_measure": input_row["unit_of_measure"],
+                    "child_chain": child_chain,
+                }
+            )
+
+        step_equipment_payload = [
+            {
+                "step_equipment_id": equipment_row["step_equipment_id"],
+                "machine_id": equipment_row["machine_id"],
+                "machine_code": equipment_row["machine_code"],
+                "machine_name": equipment_row["machine_name"],
+                "equipment_role": equipment_row["equipment_role"],
+                "priority": equipment_row["priority"],
+                "nominal_rate": equipment_row["nominal_rate"],
+                "rate_uom": equipment_row["rate_uom"],
+                "min_batch_qty": equipment_row["min_batch_qty"],
+            }
+            for equipment_row in equipment_by_step_id.get(step_row["route_step_id"], [])
+        ]
+
+        steps_payload.append(
+            {
+                "route_step_id": step_row["route_step_id"],
+                "step_no": step_row["step_no"],
+                "process_id": step_row["process_id"],
+                "process_code": step_row["process_code"],
+                "process_name": step_row["process_name"],
+                "output_nomenclature_id": step_row["output_nomenclature_id"],
+                "output_nomenclature_code": step_row["output_nomenclature_code"],
+                "output_nomenclature_name": step_row["output_nomenclature_name"],
+                "output_qty": step_row["output_qty"],
+                "post_process_wait_hours": step_row["post_process_wait_hours"],
+                "inputs": step_inputs_payload,
+                "equipment": step_equipment_payload,
+            }
+        )
+
+    node["route"] = {
+        "route_id": selected_route["route_id"],
+        "route_code": selected_route["route_code"],
+        "route_name": selected_route["route_name"],
+        "is_active": selected_route["is_active"],
+        "steps": steps_payload,
+    }
+    return node
 
 IMPORT_MODE_ADD_ONLY: ImportMode = "add_only"
 IMPORT_MODE_UPSERT: ImportMode = "upsert"
@@ -718,6 +1063,58 @@ async def commit_nomenclature_import(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РёРјРїРѕСЂС‚ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.get("/{nomenclature_id}/route-chain", response_model=NomenclatureRouteChainResponse)
+def get_nomenclature_route_chain(nomenclature_id: int = Path(..., gt=0)):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            item_type_column_exists = has_item_type_column(cursor)
+            nomenclature_row = fetch_nomenclature_for_route_chain(
+                cursor=cursor,
+                nomenclature_id=nomenclature_id,
+                item_type_column_exists=item_type_column_exists,
+            )
+
+            if nomenclature_row is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Позиция номенклатуры не найдена.",
+                )
+
+            root_code = (
+                (nomenclature_row.get("nomenclature_code") or "").strip()
+                or f"ID:{nomenclature_row['nomenclature_id']}"
+            )
+            warnings: list[str] = []
+            route_chain = build_nomenclature_route_chain(
+                cursor=cursor,
+                nomenclature_row=nomenclature_row,
+                item_type_column_exists=item_type_column_exists,
+                warnings=warnings,
+                path_nomenclature_ids=[nomenclature_row["nomenclature_id"]],
+                path_nomenclature_codes=[root_code],
+                depth=1,
+                is_root=True,
+            )
+            if route_chain is None:
+                route_chain = build_route_chain_nomenclature_node(nomenclature_row)
+
+        route_chain["warnings"] = warnings
+        return route_chain
+    except HTTPException:
+        raise
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось получить полную цепочку маршрута номенклатуры.",
         ) from exc
     finally:
         if connection is not None:

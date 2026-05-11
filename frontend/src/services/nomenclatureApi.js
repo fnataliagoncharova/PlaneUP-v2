@@ -8,6 +8,10 @@ export function getNomenclatureItem(nomenclatureId) {
   return apiRequest(`/nomenclature/${nomenclatureId}`);
 }
 
+export function getNomenclatureRouteChain(nomenclatureId) {
+  return apiRequest(`/nomenclature/${nomenclatureId}/route-chain`);
+}
+
 export function createNomenclatureItem(payload) {
   return apiRequest("/nomenclature", {
     method: "POST",

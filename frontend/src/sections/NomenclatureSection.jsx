@@ -10,6 +10,7 @@ import {
   createNomenclatureItem,
   downloadNomenclatureImportTemplate,
   getNomenclatureList,
+  getNomenclatureRouteChain,
   previewNomenclatureImport,
   updateNomenclatureItem,
 } from "../services/nomenclatureApi";
@@ -78,6 +79,9 @@ function NomenclatureSection({ onOpenRoute }) {
   const [loadError, setLoadError] = useState("");
   const [routeContextError, setRouteContextError] = useState("");
   const [routeStepsError, setRouteStepsError] = useState("");
+  const [routeChain, setRouteChain] = useState(null);
+  const [isRouteChainLoading, setIsRouteChainLoading] = useState(false);
+  const [routeChainError, setRouteChainError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -295,6 +299,52 @@ function NomenclatureSection({ onOpenRoute }) {
     routes,
     selectedNomenclatureId,
   ]);
+
+  useEffect(() => {
+    if (!selectedNomenclatureId) {
+      setRouteChain(null);
+      setRouteChainError("");
+      setIsRouteChainLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadRouteChain() {
+      setIsRouteChainLoading(true);
+      setRouteChainError("");
+      setRouteChain(null);
+
+      try {
+        const response = await getNomenclatureRouteChain(selectedNomenclatureId);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setRouteChain(response);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setRouteChain(null);
+        setRouteChainError(
+          error.message || "Не удалось загрузить полную цепочку маршрута.",
+        );
+      } finally {
+        if (!isCancelled) {
+          setIsRouteChainLoading(false);
+        }
+      }
+    }
+
+    loadRouteChain();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedNomenclatureId]);
 
   const handleOpenRoute = useCallback(() => {
     if (!selectedProductionRoute || !onOpenRoute) {
@@ -555,6 +605,9 @@ function NomenclatureSection({ onOpenRoute }) {
           isProductionRouteLoading={isRouteContextLoading || isRouteStepsLoading}
           productionRouteError={routeContextError || routeStepsError}
           onOpenRoute={handleOpenRoute}
+          routeChain={routeChain}
+          isRouteChainLoading={isRouteChainLoading}
+          routeChainError={routeChainError}
         />
       )}
     </section>
