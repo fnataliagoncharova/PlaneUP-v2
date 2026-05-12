@@ -39,7 +39,7 @@ function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, erro
 
     const normalizedNomenclatureId = Number(formValues.input_nomenclature_id);
     if (!Number.isInteger(normalizedNomenclatureId) || normalizedNomenclatureId <= 0) {
-      setLocalError("Вход шага должен быть выбран из номенклатуры.");
+      setLocalError("Вход операции должен быть выбран из номенклатуры.");
       return;
     }
 
@@ -54,10 +54,10 @@ function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, erro
     <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="panel-title">{isEditMode ? "Редактирование входа" : "Новый вход шага"}</div>
+          <div className="panel-title">{isEditMode ? "Редактирование входа" : "Новый вход операции"}</div>
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">{isEditMode ? "Изменение входа" : "Создание входа"}</h2>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            Выберите номенклатуру для входа шага. Если компонента нет в списке, сначала добавьте его в справочник номенклатуры как закупаемую позицию.
+            Выберите номенклатуру для входа операции. Если компонента нет в списке, сначала добавьте его в справочник номенклатуры как закупаемую позицию.
           </p>
         </div>
       </div>

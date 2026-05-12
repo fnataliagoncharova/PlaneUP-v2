@@ -5,6 +5,7 @@ import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
 import MachinesSection from "./sections/MachinesSection";
 import DemandSection from "./sections/DemandSection";
+import MasterWorkspaceSection from "./sections/MasterWorkspaceSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
 import ProductionPlanningSection from "./sections/ProductionPlanningSection";
@@ -33,6 +34,27 @@ function ProductionPlanningIcon({ className }) {
   );
 }
 
+function MasterWorkspaceIcon({ className }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 20h18" />
+      <path d="M6 20V8h12v12" />
+      <path d="M9 8V5h6v3" />
+      <path d="M9 12h6" />
+      <path d="M9 15h3" />
+    </svg>
+  );
+}
+
 const navigationItems = [
   { id: "nomenclature", label: "Номенклатура", icon: Boxes },
   { id: "processes", label: "Технологические операции", icon: Workflow },
@@ -40,6 +62,7 @@ const navigationItems = [
   { id: "machines", label: "Оборудование", icon: Cog },
   { id: "demand", label: "Потребность", icon: BarChart3 },
   { id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon },
+  { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
 ];
 
 const sectionDescriptions = {
@@ -55,6 +78,8 @@ const sectionDescriptions = {
     "Подготовка исходных данных, запуск расчёта потребности и проверка результатов.",
   production_planning:
     "Месячный план выпуска по производимой номенклатуре с приоритетами и комментариями.",
+  master_workspace:
+    "Фиксация факта выпуска за смену по строкам недельного плана для оперативного контроля выполнения.",
 };
 
 function App() {
@@ -103,6 +128,8 @@ function App() {
               <DemandSection />
             ) : activeSection === "production_planning" ? (
               <ProductionPlanningSection />
+            ) : activeSection === "master_workspace" ? (
+              <MasterWorkspaceSection />
             ) : (
               <SectionPlaceholder
                 title={activeItem.label}

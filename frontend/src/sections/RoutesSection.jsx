@@ -7,7 +7,6 @@ import RouteList from "../components/routes/RouteList";
 import RouteStepEquipmentFormPanel from "../components/routes/RouteStepEquipmentFormPanel";
 import RouteStepFormPanel from "../components/routes/RouteStepFormPanel";
 import RouteStepInputFormPanel from "../components/routes/RouteStepInputFormPanel";
-import RouteStepsFlow from "../components/routes/RouteStepsFlow";
 import StepDetailsPanel from "../components/routes/StepDetailsPanel";
 import { getMachinesList } from "../services/machinesApi";
 import { getNomenclatureList } from "../services/nomenclatureApi";
@@ -55,7 +54,13 @@ function sortProcessesByCode(items) {
 }
 
 function sortStepsByNo(items) {
-  return [...items].sort((left, right) => left.step_no - right.step_no);
+  return [...items].sort((left, right) => {
+    if (left.step_no !== right.step_no) {
+      return left.step_no - right.step_no;
+    }
+
+    return left.route_step_id - right.route_step_id;
+  });
 }
 
 function sortInputsById(items) {
@@ -111,6 +116,8 @@ function buildNomenclatureLabel(step) {
 
 const ROUTE_AUTODEACTIVATION_MESSAGE =
   "После изменения маршрут стал неактивным. Активируйте его повторно после проверки.";
+const MULTIPLE_STEPS_WARNING =
+  "В маршруте найдено несколько шагов. В новой модели используется первая операция.";
 
 function RoutesSection({ routeOpenRequest }) {
   const [routes, setRoutes] = useState([]);
@@ -254,17 +261,7 @@ function RoutesSection({ routeOpenRequest }) {
 
         const sortedSteps = sortStepsByNo(response);
         setRouteSteps(sortedSteps);
-        setSelectedStepId((previousStepId) => {
-          const hasPreviousSelection = sortedSteps.some(
-            (step) => step.route_step_id === previousStepId,
-          );
-
-          if (hasPreviousSelection) {
-            return previousStepId;
-          }
-
-          return sortedSteps[0]?.route_step_id ?? null;
-        });
+        setSelectedStepId(sortedSteps[0]?.route_step_id ?? null);
       } catch (error) {
         if (isCancelled) {
           return;
@@ -272,7 +269,7 @@ function RoutesSection({ routeOpenRequest }) {
 
         setRouteSteps([]);
         setSelectedStepId(null);
-        setStepsError(error.message || "Не удалось загрузить шаги маршрута.");
+        setStepsError(error.message || "Не удалось загрузить операцию получения.");
       } finally {
         if (!isCancelled) {
           setIsStepsLoading(false);
@@ -395,7 +392,7 @@ function RoutesSection({ routeOpenRequest }) {
         }
 
         setRouteStepInputs([]);
-        setInputsError(error.message || "Не удалось загрузить входы шага.");
+        setInputsError(error.message || "Не удалось загрузить входы операции.");
       } finally {
         if (!isCancelled) {
           setIsInputsLoading(false);
@@ -441,7 +438,7 @@ function RoutesSection({ routeOpenRequest }) {
         }
 
         setRouteStepEquipment([]);
-        setEquipmentError(error.message || "Не удалось загрузить оборудование шага.");
+        setEquipmentError(error.message || "Не удалось загрузить оборудование операции.");
       } finally {
         if (!isCancelled) {
           setIsEquipmentLoading(false);
@@ -567,6 +564,7 @@ function RoutesSection({ routeOpenRequest }) {
 
   const selectedStepProcessLabel = buildProcessLabel(selectedStep);
   const selectedStepNomenclatureLabel = buildNomenclatureLabel(selectedStep);
+  const stepsModelWarning = hydratedSteps.length > 1 ? MULTIPLE_STEPS_WARNING : "";
 
   const replaceRouteInState = useCallback((updatedRoute) => {
     setRoutes((previousRoutes) =>
@@ -703,7 +701,7 @@ function RoutesSection({ routeOpenRequest }) {
   };
 
   const handleOpenCreateStepForm = () => {
-    if (!selectedRoute) {
+    if (!selectedRoute || selectedStep) {
       return;
     }
 
@@ -736,6 +734,13 @@ function RoutesSection({ routeOpenRequest }) {
       return;
     }
 
+    const normalizedPayload = {
+      ...payload,
+      step_no: 1,
+      output_nomenclature_id:
+        selectedRoute.result_nomenclature_id ?? payload.output_nomenclature_id,
+    };
+
     const routeId = selectedRoute.route_id;
     const wasRouteActive = selectedRoute.is_active;
 
@@ -745,13 +750,16 @@ function RoutesSection({ routeOpenRequest }) {
 
     try {
       if (stepFormMode === "create") {
-        const createdStep = await createRouteStepItem(selectedRoute.route_id, payload);
+        const createdStep = await createRouteStepItem(selectedRoute.route_id, normalizedPayload);
         const nextSteps = sortStepsByNo([...routeSteps, createdStep]);
 
         setRouteSteps(nextSteps);
-        setSelectedStepId(createdStep.route_step_id);
+        setSelectedStepId(nextSteps[0]?.route_step_id ?? null);
       } else if (selectedStep) {
-        const updatedStep = await updateRouteStepItem(selectedStep.route_step_id, payload);
+        const updatedStep = await updateRouteStepItem(
+          selectedStep.route_step_id,
+          normalizedPayload,
+        );
         const nextSteps = sortStepsByNo(
           routeSteps.map((step) =>
             step.route_step_id === selectedStep.route_step_id ? updatedStep : step,
@@ -759,13 +767,13 @@ function RoutesSection({ routeOpenRequest }) {
         );
 
         setRouteSteps(nextSteps);
-        setSelectedStepId(updatedStep.route_step_id);
+        setSelectedStepId(nextSteps[0]?.route_step_id ?? null);
       }
 
       await syncRouteAfterStructuralChange(routeId, wasRouteActive);
       setActivePanel("view");
     } catch (error) {
-      setStepSaveError(error.message || "Не удалось сохранить шаг маршрута.");
+      setStepSaveError(error.message || "Не удалось сохранить операцию получения.");
     } finally {
       setIsSavingStep(false);
     }
@@ -830,7 +838,7 @@ function RoutesSection({ routeOpenRequest }) {
         setActivePanel("view");
       }
     } catch (error) {
-      setStepsError(error.message || "Не удалось удалить шаг маршрута.");
+      setStepsError(error.message || "Не удалось удалить операцию получения.");
     } finally {
       setIsDeletingStep(false);
     }
@@ -904,7 +912,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       setActivePanel("view");
     } catch (error) {
-      setInputSaveError(error.message || "Не удалось сохранить вход шага.");
+      setInputSaveError(error.message || "Не удалось сохранить вход операции.");
     } finally {
       setIsSavingInput(false);
     }
@@ -963,7 +971,7 @@ function RoutesSection({ routeOpenRequest }) {
         setActivePanel("view");
       }
     } catch (error) {
-      setInputsError(error.message || "Не удалось удалить вход шага.");
+      setInputsError(error.message || "Не удалось удалить вход операции.");
     } finally {
       setIsDeletingInput(false);
       setInputPendingDeleteId(null);
@@ -1043,7 +1051,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       setActivePanel("view");
     } catch (error) {
-      setEquipmentSaveError(error.message || "Не удалось сохранить оборудование шага.");
+      setEquipmentSaveError(error.message || "Не удалось сохранить оборудование операции.");
     } finally {
       setIsSavingEquipment(false);
     }
@@ -1107,7 +1115,7 @@ function RoutesSection({ routeOpenRequest }) {
         setActivePanel("view");
       }
     } catch (error) {
-      setEquipmentError(error.message || "Не удалось удалить оборудование шага.");
+      setEquipmentError(error.message || "Не удалось удалить оборудование операции.");
     } finally {
       setIsDeletingEquipment(false);
       setEquipmentPendingDeleteId(null);
@@ -1151,16 +1159,6 @@ function RoutesSection({ routeOpenRequest }) {
             ) : null}
           </header>
 
-          <RouteStepsFlow
-            steps={hydratedSteps}
-            selectedStepId={selectedStepId}
-            onSelectStep={setSelectedStepId}
-            onAddStep={handleOpenCreateStepForm}
-            isLoading={isStepsLoading}
-            errorMessage={stepsError}
-            isRouteSelected={Boolean(selectedRoute)}
-          />
-
           <RouteList
             routes={routes}
             isLoading={isLoading}
@@ -1187,6 +1185,7 @@ function RoutesSection({ routeOpenRequest }) {
             processItems={processItems}
             nomenclatureItems={nomenclatureItems}
             routeSteps={routeSteps}
+            routeResultNomenclatureId={selectedRoute?.result_nomenclature_id}
             isSaving={isSavingStep}
             errorMessage={stepSaveError}
             onCancel={handleCancelStepForm}
@@ -1226,6 +1225,9 @@ function RoutesSection({ routeOpenRequest }) {
             isChangingRouteStatus={isChangingRouteStatus}
             routeStatusError={routeStatusError}
             routeStatusNotice={routeStatusNotice}
+            stepsModelWarning={stepsModelWarning}
+            isStepLoading={isStepsLoading}
+            stepError={stepsError}
             onOpenCreateStep={handleOpenCreateStepForm}
             onEditStep={handleOpenEditStepForm}
             onDeleteStep={handleOpenDeleteStepConfirm}
@@ -1250,7 +1252,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       <V2ConfirmDialog
         isOpen={isDeleteStepConfirmOpen}
-        title={selectedStep ? `Удалить шаг ${selectedStep.step_no}?` : "Удалить шаг?"}
+        title="Удалить операцию получения?"
         confirmText="Удалить"
         cancelText="Отмена"
         onConfirm={handleConfirmDeleteStep}
@@ -1261,7 +1263,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       <V2ConfirmDialog
         isOpen={isDeleteInputConfirmOpen}
-        title="Удалить вход шага?"
+        title="Удалить вход операции?"
         confirmText="Удалить"
         cancelText="Отмена"
         onConfirm={handleConfirmDeleteInput}
@@ -1272,7 +1274,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       <V2ConfirmDialog
         isOpen={isDeleteEquipmentConfirmOpen}
-        title="Удалить оборудование шага?"
+        title="Удалить оборудование операции?"
         confirmText="Удалить"
         cancelText="Отмена"
         onConfirm={handleConfirmDeleteEquipment}
@@ -1285,4 +1287,5 @@ function RoutesSection({ routeOpenRequest }) {
 }
 
 export default RoutesSection;
+
 

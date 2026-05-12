@@ -7,10 +7,10 @@ const RATE_UOM_OPTIONS = [
 ];
 
 const LEGACY_RATE_UOM_ALIASES = {
-  "РјВІ/РјРёРЅ": "м²/мин",
-  "Рј.Рї./РјРёРЅ": "м.п./мин",
   "Р СР’Р†/Р СР С‘Р Р…": "м²/мин",
   "Р С.Р С—./Р СР С‘Р Р…": "м.п./мин",
+  "Р В РЎВР вЂ™Р вЂ /Р В РЎВР В РЎвЂР В Р вЂ¦": "м²/мин",
+  "Р В РЎВ.Р В РЎвЂ”./Р В РЎВР В РЎвЂР В Р вЂ¦": "м.п./мин",
 };
 
 function normalizeRateUom(value) {
@@ -124,13 +124,13 @@ function RouteStepEquipmentFormPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="panel-title">
-            {isEditMode ? "Редактирование оборудования" : "Новое оборудование шага"}
+            {isEditMode ? "Редактирование оборудования" : "Новое оборудование операции"}
           </div>
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
             {isEditMode ? "Изменение оборудования" : "Добавление оборудования"}
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            Укажите оборудование для шага, его роль и производительность.
+            Укажите оборудование для операции, его роль и производительность.
           </p>
         </div>
       </div>
@@ -230,8 +230,8 @@ function RouteStepEquipmentFormPanel({
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           />
           <p className="mt-2 text-xs leading-5 text-slate-400">
-            Минимальный объём запуска на выбранном оборудовании. Используется позже при недельном планировании.
-            Минимальная партия указывается в единице выхода шага.
+            Минимальный объём запуска на выбранном оборудовании. Используется позже при недельном
+            планировании. Минимальная партия указывается в единице выхода операции.
           </p>
         </label>
 

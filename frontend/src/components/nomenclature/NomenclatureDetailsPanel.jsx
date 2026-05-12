@@ -88,10 +88,16 @@ function RouteChainBadge({ itemType }) {
 }
 
 function buildTreePrefix(lineage, isLast) {
+  const safeLineage = Array.isArray(lineage) ? lineage : [];
+  const indentStep = 16;
+  const centerOffset = 7;
+
   return {
-    depth: lineage.length,
-    hasChildrenBelow: !isLast,
-    lineage,
+    width: safeLineage.length * indentStep + 18,
+    indentStep,
+    centerOffset,
+    safeLineage,
+    isLast,
   };
 }
 
@@ -172,39 +178,24 @@ function RouteChainInputRow({
   const hasChildChain = Boolean(input?.child_chain);
   const isExpanded = hasChildChain && expandedKeys.has(path);
   const isPurchased = input?.input_item_type === "purchased";
-  const treePrefix = buildTreePrefix(lineage, isLast);
+  const prefix = buildTreePrefix(lineage, isLast);
   const childLineage = [...lineage, isLast];
-  const connectorStep = 14;
-  const connectorLeft = treePrefix.depth * connectorStep + 4;
-  const connectorWidth = 12;
-  const prefixWidth = connectorLeft + connectorWidth;
 
   return (
     <li className="py-1">
       <div className="flex items-start gap-2">
-        <div className="relative mt-1 h-5 shrink-0" style={{ width: `${prefixWidth}px` }}>
-          {treePrefix.lineage.map((isParentLast, depthIndex) =>
-            isParentLast ? null : (
-              <span
-                key={`lineage-${depthIndex}`}
-                className="pointer-events-none absolute -bottom-2 -top-2 border-l border-cyan-300/38"
-                style={{ left: `${depthIndex * connectorStep + 4}px` }}
-                aria-hidden="true"
-              />
-            ),
-          )}
+        <div
+          className="relative mt-1 h-5 shrink-0"
+          style={{ width: `${prefix.width}px` }}
+          aria-hidden="true"
+        >
           <span
-            className={[
-              "pointer-events-none absolute border-l border-cyan-300/45",
-              treePrefix.hasChildrenBelow ? "bottom-[-0.5rem] top-0" : "top-0 h-[0.62rem]",
-            ].join(" ")}
-            style={{ left: `${connectorLeft}px` }}
-            aria-hidden="true"
-          />
-          <span
-            className="pointer-events-none absolute border-t border-cyan-300/45"
-            style={{ left: `${connectorLeft}px`, top: "0.62rem", width: `${connectorWidth}px` }}
-            aria-hidden="true"
+            className="absolute h-px bg-cyan-400/65"
+            style={{
+              left: `${prefix.safeLineage.length * prefix.indentStep + prefix.centerOffset}px`,
+              right: 0,
+              top: "50%",
+            }}
           />
         </div>
 

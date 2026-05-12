@@ -2,14 +2,18 @@ import { Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import NomenclatureSearchSelect from "../shared/NomenclatureSearchSelect";
 
-function createInitialState(item, processItems) {
+function createInitialState(item, processItems, routeResultNomenclatureId) {
   const fallbackProcessId = processItems[0]?.process_id ?? "";
   const waitHoursValue = item?.post_process_wait_hours;
+  const normalizedRouteResultId = Number(routeResultNomenclatureId);
+  const fallbackOutputId =
+    Number.isInteger(normalizedRouteResultId) && normalizedRouteResultId > 0
+      ? normalizedRouteResultId
+      : "";
 
   return {
-    step_no: item?.step_no ?? "",
     process_id: item?.process_id ?? fallbackProcessId,
-    output_nomenclature_id: item?.output_nomenclature_id ?? "",
+    output_nomenclature_id: item?.output_nomenclature_id ?? fallbackOutputId,
     output_qty: item?.output_qty ?? "1.000",
     post_process_wait_hours:
       waitHoursValue === null || waitHoursValue === undefined ? "" : String(waitHoursValue),
@@ -23,6 +27,7 @@ function RouteStepFormPanel({
   processItems,
   nomenclatureItems,
   routeSteps,
+  routeResultNomenclatureId,
   isSaving,
   errorMessage,
   onCancel,
@@ -30,14 +35,15 @@ function RouteStepFormPanel({
 }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() =>
-    createInitialState(item, processItems),
+    createInitialState(item, processItems, routeResultNomenclatureId),
   );
   const [localError, setLocalError] = useState("");
   const [pendingPayload, setPendingPayload] = useState(null);
   const [isDuplicateProcessWarningOpen, setIsDuplicateProcessWarningOpen] = useState(false);
-  const isCreatingFirstStep = !isEditMode && routeSteps.length === 0;
-  const isFirstStepSelected = Number(formValues.step_no) === 1;
-  const shouldShowPostProcessWaitField = isFirstStepSelected || isCreatingFirstStep;
+
+  const normalizedRouteResultId = Number(routeResultNomenclatureId);
+  const isOutputBoundToRoute =
+    Number.isInteger(normalizedRouteResultId) && normalizedRouteResultId > 0;
 
   const sortedProcessItems = useMemo(
     () =>
@@ -56,11 +62,11 @@ function RouteStepFormPanel({
   );
 
   useEffect(() => {
-    setFormValues(createInitialState(item, sortedProcessItems));
+    setFormValues(createInitialState(item, sortedProcessItems, routeResultNomenclatureId));
     setLocalError("");
     setPendingPayload(null);
     setIsDuplicateProcessWarningOpen(false);
-  }, [item, mode, sortedProcessItems]);
+  }, [item, mode, routeResultNomenclatureId, sortedProcessItems]);
 
   const hasDuplicateProcessInRoute = (processId) =>
     routeSteps.some(
@@ -96,20 +102,18 @@ function RouteStepFormPanel({
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    const normalizedStepNo = Number(formValues.step_no);
     const normalizedProcessId = Number(formValues.process_id);
-    const normalizedOutputNomenclatureId = Number(formValues.output_nomenclature_id);
     const normalizedOutputQty = Number(formValues.output_qty);
     const waitHoursRawValue = String(formValues.post_process_wait_hours ?? "").trim();
-
-    if (!Number.isInteger(normalizedStepNo) || normalizedStepNo <= 0) {
-      setLocalError("Номер шага должен быть целым числом больше 0.");
-      return;
-    }
 
     if (!Number.isInteger(normalizedProcessId) || normalizedProcessId <= 0) {
       setLocalError("Выберите технологическую операцию.");
       return;
+    }
+
+    let normalizedOutputNomenclatureId = Number(formValues.output_nomenclature_id);
+    if (isOutputBoundToRoute) {
+      normalizedOutputNomenclatureId = normalizedRouteResultId;
     }
 
     if (
@@ -126,10 +130,10 @@ function RouteStepFormPanel({
     }
 
     let normalizedPostProcessWaitHours = null;
-    if (normalizedStepNo === 1 && waitHoursRawValue !== "") {
+    if (waitHoursRawValue !== "") {
       const parsedWaitHours = Number(waitHoursRawValue);
       if (!Number.isFinite(parsedWaitHours) || parsedWaitHours < 0) {
-        setLocalError("Время технологической выдержки должно быть больше или равно 0.");
+        setLocalError("Время дегазации должно быть больше или равно 0.");
         return;
       }
 
@@ -138,12 +142,11 @@ function RouteStepFormPanel({
 
     setLocalError("");
     const payload = {
-      step_no: normalizedStepNo,
+      step_no: 1,
       process_id: normalizedProcessId,
       output_nomenclature_id: normalizedOutputNomenclatureId,
       output_qty: Number(normalizedOutputQty.toFixed(3)),
-      post_process_wait_hours:
-        normalizedStepNo === 1 ? normalizedPostProcessWaitHours : null,
+      post_process_wait_hours: normalizedPostProcessWaitHours,
       notes: formValues.notes.trim() || null,
     };
 
@@ -162,14 +165,14 @@ function RouteStepFormPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="panel-title">
-            {isEditMode ? "Редактирование шага" : "Новый шаг маршрута"}
+            {isEditMode ? "Редактирование операции" : "Операция получения"}
           </div>
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
-            {isEditMode ? "Изменение шага" : "Создание шага"}
+            {isEditMode ? "Изменение операции" : "Задать операцию"}
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            Заполните параметры шага маршрута. Входы и оборудование шага будут подключены на
-            следующем этапе.
+            Заполните параметры операции получения. Входы и оборудование операции подключаются
+            после сохранения.
           </p>
         </div>
       </div>
@@ -177,19 +180,6 @@ function RouteStepFormPanel({
       <div className="panel-divider mt-5" />
 
       <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
-        <label className="block">
-          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Номер шага</div>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={formValues.step_no}
-            onChange={(event) => handleFieldChange("step_no", event.target.value)}
-            placeholder="Например 3"
-            className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
-          />
-        </label>
-
         <label className="block">
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
             Технологическая операция
@@ -215,12 +205,15 @@ function RouteStepFormPanel({
           label="Выходная номенклатура"
           items={sortedNomenclatureItems}
           value={formValues.output_nomenclature_id}
-          onChange={(nomenclatureId) =>
-            handleFieldChange("output_nomenclature_id", nomenclatureId)
-          }
+          onChange={(nomenclatureId) => handleFieldChange("output_nomenclature_id", nomenclatureId)}
           placeholder="Начните вводить код или название"
-          disabled={sortedNomenclatureItems.length === 0}
+          disabled={sortedNomenclatureItems.length === 0 || isOutputBoundToRoute}
         />
+        {isOutputBoundToRoute ? (
+          <p className="-mt-2 text-xs leading-5 text-slate-400">
+            Выходная номенклатура операции фиксируется по результату выбранного маршрута.
+          </p>
+        ) : null}
 
         <label className="block">
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
@@ -237,28 +230,24 @@ function RouteStepFormPanel({
           />
         </label>
 
-        {shouldShowPostProcessWaitField ? (
-          <label className="block">
-            <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-              Дегазация после шага, часов
-            </div>
-            <input
-              type="number"
-              min="0"
-              step="0.25"
-              value={formValues.post_process_wait_hours}
-              onChange={(event) =>
-                handleFieldChange("post_process_wait_hours", event.target.value)
-              }
-              placeholder="Например 24"
-              className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
-            />
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              Укажите время технологической выдержки после первого шага. Используется позже при
-              планировании очередности.
-            </p>
-          </label>
-        ) : null}
+        <label className="block">
+          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+            Дегазация после операции, часов
+          </div>
+          <input
+            type="number"
+            min="0"
+            step="0.25"
+            value={formValues.post_process_wait_hours}
+            onChange={(event) => handleFieldChange("post_process_wait_hours", event.target.value)}
+            placeholder="Например 24"
+            className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
+          />
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            Укажите время технологической выдержки после операции. Используется при расчётах
+            очередности производства.
+          </p>
+        </label>
 
         <label className="block">
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Примечание</div>
@@ -266,7 +255,7 @@ function RouteStepFormPanel({
             rows={4}
             value={formValues.notes}
             onChange={(event) => handleFieldChange("notes", event.target.value)}
-            placeholder="Краткое описание шага"
+            placeholder="Краткое описание операции"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-base leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           />
         </label>
