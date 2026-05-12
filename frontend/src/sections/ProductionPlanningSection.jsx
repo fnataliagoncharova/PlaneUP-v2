@@ -55,6 +55,43 @@ function formatDateTime(value) {
   return date.toLocaleString("ru-RU");
 }
 
+function toFiniteNumber(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  const normalized = String(value).trim().replace(/\s+/g, "").replace(",", ".");
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatQuantity(value) {
+  const number = toFiniteNumber(value);
+  if (number === null) {
+    return "—";
+  }
+  return new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  }).format(number);
+}
+
+function formatPercent(value) {
+  const number = toFiniteNumber(value);
+  if (number === null) {
+    return "—";
+  }
+  return `${new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  }).format(number)}%`;
+}
+
 function getStatusLabel(status) {
   return status === "approved" ? "Утверждён" : "Черновик";
 }
@@ -114,6 +151,7 @@ function ProductionPlanningSection() {
   const [returnDraftCandidate, setReturnDraftCandidate] = useState(null);
   const [deletingPlan, setDeletingPlan] = useState(false);
   const [deletingLine, setDeletingLine] = useState(false);
+  const [isPlanningRulesExpanded, setIsPlanningRulesExpanded] = useState(false);
 
   const manufacturedNomenclature = useMemo(
     () => nomenclatureItems.filter((item) => item.item_type === "manufactured"),
@@ -445,6 +483,37 @@ function ProductionPlanningSection() {
     });
   }, [selectedPlanLines]);
   const priorityCount = selectedPlanLines.filter((line) => line.is_priority).length;
+  const monthlyTotalsByUom = useMemo(() => {
+    if (!selectedPlan) {
+      return [];
+    }
+
+    const groupsMap = new Map();
+    for (const line of selectedPlanLines) {
+      const unitOfMeasure = String(line.unit_of_measure || "").trim() || "—";
+      if (!groupsMap.has(unitOfMeasure)) {
+        groupsMap.set(unitOfMeasure, {
+          unitOfMeasure,
+          totalPlannedQty: 0,
+          totalActualQty: 0,
+          totalRemainingQty: 0,
+        });
+      }
+
+      const group = groupsMap.get(unitOfMeasure);
+      group.totalPlannedQty += toFiniteNumber(line.planned_qty) ?? 0;
+      group.totalActualQty += toFiniteNumber(line.actual_qty) ?? 0;
+      group.totalRemainingQty += toFiniteNumber(line.remaining_to_produce_qty) ?? 0;
+    }
+
+    return Array.from(groupsMap.values())
+      .map((group) => ({
+        ...group,
+        totalCompletionPercent:
+          group.totalPlannedQty > 0 ? (group.totalActualQty / group.totalPlannedQty) * 100 : 0,
+      }))
+      .sort((left, right) => left.unitOfMeasure.localeCompare(right.unitOfMeasure, "ru"));
+  }, [selectedPlan, selectedPlanLines]);
 
   const renderRightPanel = () => {
     if (panelMode === PANEL_MODE_CREATE_PLAN) {
@@ -705,75 +774,36 @@ function ProductionPlanningSection() {
       <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
         <div className="text-xs tracking-[0.08em] text-slate-500">Контекст</div>
         <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-50">План выпуска</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          Месячный план выпуска содержит только производимую номенклатуру.
-        </p>
 
         {selectedPlan ? (
-          <>
-            <div className="panel-divider mt-5" />
-            <div className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Период</span>
-                <span className="font-medium text-slate-100">{formatPlanMonth(selectedPlan.plan_month)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Статус</span>
-                <span className={["inline-flex items-center rounded-none border px-2 py-0.5 text-xs", getStatusBadgeClass(selectedPlan.status)].join(" ")}>
-                  {getStatusLabel(selectedPlan.status)}
-                </span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Позиций</span>
-                <span className="font-medium text-slate-100">{selectedPlanLines.length}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Приоритетных</span>
-                <span className="font-medium text-slate-100">{priorityCount}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Создан</span>
-                <span className="text-slate-200">{formatDateTime(selectedPlan.created_at)}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-500">Изменён</span>
-                <span className="text-slate-200">{formatDateTime(selectedPlan.updated_at)}</span>
-              </div>
+          <div className="mt-5 space-y-2 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Период</span>
+              <span className="font-medium text-slate-100">{formatPlanMonth(selectedPlan.plan_month)}</span>
             </div>
-
-            {isApproved ? (
-              <div className="mt-4 rounded-none border border-emerald-300/25 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-100">
-                План утверждён и защищён от изменений.
-              </div>
-            ) : null}
-
-            <div className="panel-divider mt-5" />
-            <div className="mt-4 rounded-none border border-white/[0.08] bg-white/[0.02] p-3">
-              <div className="text-sm font-medium text-slate-200">Проверка данных</div>
-              <div className="mt-2 flex items-start gap-2 text-sm text-slate-300">
-                {selectedPlanLines.length > 0 ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" />
-                ) : (
-                  <AlertCircle className="mt-0.5 h-4 w-4 text-slate-400" />
-                )}
-                <span>
-                  {isApproved
-                    ? "План утверждён и защищён от изменений."
-                    : selectedPlanLines.length > 0
-                      ? "План содержит позиции выпуска."
-                      : "План пока не содержит позиций."}
-                </span>
-              </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Статус</span>
+              <span className={["inline-flex items-center rounded-none border px-2 py-0.5 text-xs", getStatusBadgeClass(selectedPlan.status)].join(" ")}>
+                {getStatusLabel(selectedPlan.status)}
+              </span>
             </div>
-
-            <div className="mt-3 rounded-none border border-white/[0.08] bg-white/[0.02] p-3">
-              <div className="text-sm font-medium text-slate-200">Подсказка</div>
-              <div className="mt-2 text-sm leading-6 text-slate-400">
-                Закупаемая номенклатура не включается в план выпуска и остаётся во внешнем обеспечении.
-              </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Позиций</span>
+              <span className="font-medium text-slate-100">{selectedPlanLines.length}</span>
             </div>
-
-          </>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Приоритетных</span>
+              <span className="font-medium text-slate-100">{priorityCount}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Создан</span>
+              <span className="text-slate-200">{formatDateTime(selectedPlan.created_at)}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Изменён</span>
+              <span className="text-slate-200">{formatDateTime(selectedPlan.updated_at)}</span>
+            </div>
+          </div>
         ) : (
           <div className="mt-5 text-sm text-slate-400">Выберите или создайте план выпуска.</div>
         )}
@@ -942,60 +972,88 @@ function ProductionPlanningSection() {
                         <tr>
                           <th className="px-3 py-2 text-left font-medium">Код</th>
                           <th className="px-3 py-2 text-left font-medium">Номенклатура</th>
-                          <th className="px-3 py-2 text-right font-medium">План выпуска</th>
                           <th className="px-3 py-2 text-left font-medium">Ед.</th>
-                          <th className="px-3 py-2 text-left font-medium">Приоритет</th>
+                          <th className="px-3 py-2 text-right font-medium">План месяца</th>
+                          <th className="px-3 py-2 text-right font-medium">Факт</th>
+                          <th className="px-3 py-2 text-right font-medium">Осталось</th>
+                          <th className="px-3 py-2 text-right font-medium">%</th>
+                          <th className="px-3 py-2 text-left font-medium">Статус</th>
                           <th className="px-3 py-2 text-left font-medium">Комментарий</th>
                           <th className="px-3 py-2 text-right font-medium">Действия</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedPlanLines.map((line) => (
-                          <tr
-                            key={line.production_plan_line_id}
-                            className={[
-                              "border-t border-white/[0.05] hover:bg-cyan-300/[0.03]",
-                              line.is_priority ? "bg-amber-400/[0.03]" : "",
-                            ].join(" ")}
-                          >
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{line.nomenclature_code}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{line.nomenclature_name}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{line.planned_qty}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{line.unit_of_measure}</td>
-                            <td className="px-3 py-2.5">
-                              {line.is_priority ? (
-                                <span className="inline-flex items-center rounded-none border border-amber-300/30 bg-amber-400/[0.08] px-2 py-0.5 text-xs text-amber-100">
-                                  Приоритет
-                                </span>
-                              ) : (
-                                <span className="text-slate-500">—</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-slate-400">{line.line_comment || "—"}</td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditLineForm(line)}
-                                  disabled={isApproved}
-                                  title={isApproved ? "Утверждённый план нельзя изменять." : ""}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/10 text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-45"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setLineDeleteCandidate(line)}
-                                  disabled={isApproved}
-                                  title={isApproved ? "Утверждённый план нельзя изменять." : ""}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/10 text-slate-300 transition hover:border-rose-300/35 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-45"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {sortedPlanLines.map((line) => {
+                          const actualQty = toFiniteNumber(line.actual_qty);
+                          const remainingToProduceQty = toFiniteNumber(line.remaining_to_produce_qty);
+                          const overproductionQty = toFiniteNumber(line.overproduction_qty) ?? 0;
+                          const isCompletedLine = remainingToProduceQty !== null && remainingToProduceQty <= 0;
+                          const hasOverproduction = overproductionQty > 0;
+                          return (
+                            <tr
+                              key={line.production_plan_line_id}
+                              className={[
+                                "border-t border-white/[0.05] hover:bg-cyan-300/[0.03]",
+                                line.is_priority ? "bg-amber-400/[0.03]" : "",
+                                isCompletedLine && !line.is_priority ? "bg-emerald-500/[0.07]" : "",
+                              ].join(" ")}
+                            >
+                              <td className="px-3 py-2.5 font-medium text-slate-100">{line.nomenclature_code}</td>
+                              <td className="px-3 py-2.5 text-slate-300">
+                                <div className="inline-flex items-center gap-2">
+                                  <span>{line.nomenclature_name}</span>
+                                  {line.is_priority ? (
+                                    <span className="text-amber-200" title={line.priority_note || "Приоритетная позиция"}>
+                                      ★
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-slate-300">{line.unit_of_measure}</td>
+                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQuantity(line.planned_qty)}</td>
+                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">
+                                {actualQty !== null && actualQty > 0 ? formatQuantity(actualQty) : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQuantity(line.remaining_to_produce_qty)}</td>
+                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatPercent(line.completion_percent)}</td>
+                              <td className="px-3 py-2.5">
+                                {isCompletedLine ? (
+                                  <div className="flex flex-col items-start gap-0.5 leading-tight">
+                                    <span className="inline-flex items-center rounded-none border border-emerald-300/30 bg-emerald-400/[0.08] px-2 py-0.5 text-xs text-emerald-100">
+                                      ✓ Готово
+                                    </span>
+                                    {hasOverproduction ? <span className="text-[11px] text-amber-100">+{formatQuantity(overproductionQty)}</span> : null}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-500">—</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-slate-400">{line.line_comment || "—"}</td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditLineForm(line)}
+                                    disabled={isApproved}
+                                    title={isApproved ? "Утверждённый план нельзя изменять." : ""}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/10 text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-45"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLineDeleteCandidate(line)}
+                                    disabled={isApproved}
+                                    title={isApproved ? "Утверждённый план нельзя изменять." : ""}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/10 text-slate-300 transition hover:border-rose-300/35 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-45"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1015,9 +1073,101 @@ function ProductionPlanningSection() {
               </button>
             </section>
           )}
+
+          {selectedPlan ? (
+            <>
+              <section className="glass-panel p-4">
+                <div className="text-sm font-medium text-slate-200">Проверка данных</div>
+                <div className="mt-2 flex items-start gap-2 text-sm text-slate-300">
+                  {selectedPlanLines.length > 0 ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-300" />
+                  ) : (
+                    <AlertCircle className="mt-0.5 h-4 w-4 text-slate-400" />
+                  )}
+                  <span>
+                    {isApproved
+                      ? "План утверждён и защищён от изменений."
+                      : selectedPlanLines.length > 0
+                        ? "План содержит позиции выпуска."
+                        : "План пока не содержит позиций."}
+                  </span>
+                </div>
+              </section>
+
+              <section className="glass-panel p-4">
+                <button
+                  type="button"
+                  onClick={() => setIsPlanningRulesExpanded((current) => !current)}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-200 transition hover:text-cyan-100"
+                >
+                  <span>{isPlanningRulesExpanded ? "▼" : "▶"}</span>
+                  <span>Правила планирования</span>
+                </button>
+                {isPlanningRulesExpanded ? (
+                  <div className="mt-3 space-y-1 text-sm text-slate-300">
+                    <div>• В план выпуска включается только производимая номенклатура.</div>
+                    <div>• Закупаемая номенклатура остаётся во внешнем обеспечении.</div>
+                    <div>• Утверждённый план защищён от изменений.</div>
+                    <div>• Факт выпуска попадает в месячный план через недельные планы и рабочий стол мастера.</div>
+                  </div>
+                ) : null}
+              </section>
+            </>
+          ) : null}
         </div>
 
-        {renderRightPanel()}
+        <div className="space-y-5">
+          <section className="glass-panel h-fit p-5 sm:p-6">
+            <h2 className="text-xl font-semibold tracking-tight text-slate-50">Итоги месяца</h2>
+            {!selectedPlan ? (
+              <div className="mt-4 text-sm text-slate-400">Выберите план выпуска.</div>
+            ) : monthlyTotalsByUom.length === 0 ? (
+              <div className="mt-4 text-sm text-slate-400">Нет данных для расчёта итогов.</div>
+            ) : (
+              <div className="mt-4">
+                {monthlyTotalsByUom.map((group, index) => (
+                  <div
+                    key={group.unitOfMeasure}
+                    className={[
+                      "py-3",
+                      index > 0 ? "border-t border-white/[0.08]" : "",
+                    ].join(" ")}
+                  >
+                    <div className="text-sm font-semibold text-slate-50">{group.unitOfMeasure}</div>
+                    <div className="mt-2 space-y-1.5">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500">План</span>
+                        <span className="text-right font-semibold tabular-nums text-slate-50">
+                          {formatQuantity(group.totalPlannedQty)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500">Факт</span>
+                        <span className="text-right font-semibold tabular-nums text-slate-50">
+                          {formatQuantity(group.totalActualQty)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500">Осталось</span>
+                        <span className="text-right font-semibold tabular-nums text-slate-50">
+                          {formatQuantity(group.totalRemainingQty)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-500">Выполнение</span>
+                        <span className="text-right font-semibold tabular-nums text-slate-50">
+                          {formatPercent(group.totalCompletionPercent)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {renderRightPanel()}
+        </div>
       </div>
 
       <V2ConfirmDialog

@@ -12,6 +12,10 @@ class ProductionPlanLineRead(BaseModel):
     nomenclature_code: str
     nomenclature_name: str
     planned_qty: Decimal
+    actual_qty: Decimal
+    remaining_to_produce_qty: Decimal
+    completion_percent: Decimal
+    overproduction_qty: Decimal
     unit_of_measure: str
     is_priority: bool
     priority_note: str | None = None

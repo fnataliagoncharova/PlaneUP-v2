@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import psycopg2
@@ -47,8 +48,20 @@ LINE_COLUMNS = """
     ppl.priority_note,
     ppl.line_comment,
     ppl.created_at,
-    ppl.updated_at
+    ppl.updated_at,
+    COALESCE(actuals.actual_qty, 0) AS actual_qty
 """
+
+DECIMAL_ZERO = Decimal("0")
+QTY_SCALE = Decimal("0.001")
+
+
+def to_decimal(value: Any) -> Decimal:
+    if value is None:
+        return DECIMAL_ZERO
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
 
 
 def normalize_month_date(value: date) -> date:
@@ -98,12 +111,37 @@ def get_production_plan_by_id(connection, production_plan_id: int) -> dict[str, 
             SELECT {LINE_COLUMNS}
             FROM production_plan_lines AS ppl
             INNER JOIN nomenclature AS n ON n.nomenclature_id = ppl.nomenclature_id
+            LEFT JOIN (
+                SELECT
+                    pwl.production_plan_line_id,
+                    COALESCE(SUM(pa.actual_qty), 0) AS actual_qty
+                FROM production_week_lines AS pwl
+                INNER JOIN production_actuals AS pa ON pa.production_week_line_id = pwl.production_week_line_id
+                GROUP BY pwl.production_plan_line_id
+            ) AS actuals ON actuals.production_plan_line_id = ppl.production_plan_line_id
             WHERE ppl.production_plan_id = %s
             ORDER BY ppl.is_priority DESC, n.nomenclature_code ASC;
             """,
             (production_plan_id,),
         )
-        plan_row["lines"] = cursor.fetchall()
+        lines = cursor.fetchall()
+        prepared_lines: list[dict[str, Any]] = []
+        for row in lines:
+            planned_qty = to_decimal(row["planned_qty"])
+            actual_qty_raw = to_decimal(row["actual_qty"])
+            remaining_to_produce_qty_raw = planned_qty - actual_qty_raw if actual_qty_raw < planned_qty else DECIMAL_ZERO
+            overproduction_qty_raw = actual_qty_raw - planned_qty if actual_qty_raw > planned_qty else DECIMAL_ZERO
+            completion_percent_raw = DECIMAL_ZERO
+            if planned_qty > DECIMAL_ZERO:
+                completion_percent_raw = (actual_qty_raw / planned_qty) * Decimal("100")
+
+            row["actual_qty"] = actual_qty_raw.quantize(QTY_SCALE)
+            row["remaining_to_produce_qty"] = remaining_to_produce_qty_raw.quantize(QTY_SCALE)
+            row["completion_percent"] = completion_percent_raw.quantize(QTY_SCALE)
+            row["overproduction_qty"] = overproduction_qty_raw.quantize(QTY_SCALE)
+            prepared_lines.append(row)
+
+        plan_row["lines"] = prepared_lines
         return plan_row
 
 
