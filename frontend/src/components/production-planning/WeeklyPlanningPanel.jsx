@@ -1,4 +1,4 @@
-import { AlertTriangle, RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import V2ConfirmDialog from "../common/V2ConfirmDialog";
@@ -110,6 +110,11 @@ function WeeklyPlanningPanel() {
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
   const [weekDeleteCandidate, setWeekDeleteCandidate] = useState(null);
+  const [commentModalState, setCommentModalState] = useState({
+    isOpen: false,
+    rowKey: "",
+    value: "",
+  });
 
   const hasApprovedPlans = approvedPlans.length > 0;
 
@@ -331,6 +336,16 @@ function WeeklyPlanningPanel() {
         const monthQty = asNumber(planLine.planned_qty);
         const distributedQty = asNumber(distributedTotals[String(lineId)]);
         const currentWeekQty = weekLine ? asNumber(weekLine.planned_qty) : 0;
+        const weekActualQty = weekLine ? asNumber(weekLine.actual_qty) : 0;
+        const weekRemainingToProduceQty = weekLine ? asNumber(weekLine.remaining_to_produce_qty) : 0;
+        const weekOverproductionQty = weekLine ? asNumber(weekLine.overproduction_qty) : 0;
+        const monthlyActualQty = weekLine ? asNumber(weekLine.monthly_actual_qty) : asNumber(planLine.actual_qty);
+        const monthlyRemainingToProduceQty = weekLine
+          ? asNumber(weekLine.monthly_remaining_to_produce_qty)
+          : asNumber(planLine.remaining_to_produce_qty);
+        const monthlyOverproductionQty = weekLine
+          ? asNumber(weekLine.monthly_overproduction_qty)
+          : asNumber(planLine.overproduction_qty);
         const isPlannedInWeek = Boolean(weekLine) || currentWeekQty > 0;
         const rawSequence = Number(weekLine?.sequence_no);
         const weekSequenceNo = Number.isFinite(rawSequence) && rawSequence > 0 ? rawSequence : null;
@@ -341,6 +356,12 @@ function WeeklyPlanningPanel() {
           month_qty: monthQty,
           distributed_qty: distributedQty,
           remaining_qty: monthQty - (distributedQty - currentWeekQty),
+          week_actual_qty: weekActualQty,
+          week_remaining_to_produce_qty: weekRemainingToProduceQty,
+          week_overproduction_qty: weekOverproductionQty,
+          monthly_actual_qty: monthlyActualQty,
+          monthly_remaining_to_produce_qty: monthlyRemainingToProduceQty,
+          monthly_overproduction_qty: monthlyOverproductionQty,
           initial_sequence: weekLine?.sequence_no || index + 1,
           is_planned_in_week: isPlannedInWeek,
           week_sequence_no: weekSequenceNo,
@@ -425,6 +446,30 @@ function WeeklyPlanningPanel() {
         [field]: value,
       },
     }));
+  };
+
+  const openCommentModal = (rowKey) => {
+    const currentComment = rowEdits[rowKey]?.comment || "";
+    setCommentModalState({
+      isOpen: true,
+      rowKey: String(rowKey),
+      value: currentComment,
+    });
+  };
+
+  const closeCommentModal = () => {
+    setCommentModalState({
+      isOpen: false,
+      rowKey: "",
+      value: "",
+    });
+  };
+
+  const applyCommentModal = () => {
+    if (commentModalState.rowKey) {
+      handleEditRow(commentModalState.rowKey, "comment", commentModalState.value);
+    }
+    closeCommentModal();
   };
 
   const handleWeekQtyBlur = (rowKey) => {
@@ -679,82 +724,113 @@ function WeeklyPlanningPanel() {
                 <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10">
                   <div className="max-h-[620px] overflow-auto">
                     <table className="min-w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-medium">Код</th>
-                          <th className="px-3 py-2 text-left font-medium">Номенклатура</th>
-                          <th className="px-3 py-2 text-right font-medium">План месяца</th>
-                          <th className="px-3 py-2 text-right font-medium">Распределено</th>
-                          <th className="px-3 py-2 text-right font-medium">Осталось</th>
-                          <th className="px-3 py-2 text-right font-medium">План нед.</th>
-                          <th className="px-3 py-2 text-left font-medium">Оборудование</th>
-                          <th className="px-3 py-2 text-right font-medium">Мин. партия</th>
-                          <th className="px-3 py-2 text-right font-medium">Очер.</th>
-                          <th className="px-3 py-2 text-left font-medium">Комментарий</th>
-                          <th className="px-3 py-2 text-center font-medium">Предупреждения</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tableRows.map((row) => {
-                          const edit = rowEdits[row.row_key] || {};
-                          const warnings = getRowWarnings(row, edit);
-                          const selectedEquipment = getSelectedEquipment(row.row_key, edit.route_step_equipment_id);
-                          return (
-                            <tr key={row.production_plan_line_id} className={["border-t border-white/[0.05] hover:bg-cyan-300/[0.03]", row.is_priority ? "bg-amber-400/[0.03]" : ""].join(" ")}>
-                              <td className="px-3 py-2.5 font-medium text-slate-100">{row.nomenclature_code}</td>
-                              <td className="px-3 py-2.5 text-slate-300">
-                                <span className="inline-flex items-center gap-1.5">
-                                  {row.nomenclature_name}
-                                  <span className="text-slate-500">({row.unit_of_measure || "—"})</span>
-                                  {row.is_priority ? <span className="text-amber-200" title={row.priority_note || "Приоритетная позиция"}>★</span> : null}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(row.month_qty)}</td>
-                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(row.distributed_qty)}</td>
-                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(row.remaining_qty)}</td>
-                              <td className="px-3 py-2.5">
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  value={edit.planned_qty || ""}
-                                  onChange={(event) => handleEditRow(row.row_key, "planned_qty", normalizeIntegerInput(event.target.value))}
-                                  onBlur={() => handleWeekQtyBlur(row.row_key)}
-                                  className="h-9 w-[92px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40"
-                                />
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <select value={edit.route_step_equipment_id || ""} onChange={(event) => handleEditRow(row.row_key, "route_step_equipment_id", event.target.value)} className="h-9 w-[130px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40">
-                                  <option value="">Не выбрано</option>
-                                  {(equipmentByPlanLine[row.row_key] || []).map((option) => (
-                                    <option key={option.step_equipment_id} value={option.step_equipment_id}>
-                                      {option.machine_name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
-                                {selectedEquipment?.min_batch_qty != null ? formatNumber(selectedEquipment.min_batch_qty) : "—"}
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <input type="number" min="1" step="1" value={edit.sequence_no || ""} onChange={(event) => handleEditRow(row.row_key, "sequence_no", event.target.value)} className="h-9 w-[68px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40" />
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <input type="text" value={edit.comment || ""} onChange={(event) => handleEditRow(row.row_key, "comment", event.target.value)} className="h-9 w-[120px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40" />
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {warnings.length ? (
-                                  <span className="inline-flex items-center text-amber-100/90" title={warnings.join("\n")}>
-                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-500">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+  <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-[11px] uppercase tracking-[0.08em] text-slate-500">
+    <tr>
+      <th colSpan={2} className="px-3 py-1.5 text-left font-medium text-slate-400">Позиция</th>
+      <th colSpan={3} className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-1.5 text-left font-medium text-slate-400">Месяц</th>
+      <th colSpan={3} className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-1.5 text-left font-medium text-slate-400">Неделя</th>
+      <th colSpan={4} className="border-l border-cyan-300/10 px-3 py-1.5 text-left font-medium text-slate-400">Параметры запуска</th>
+    </tr>
+    <tr>
+      <th className="px-3 py-2 text-left font-medium">Код</th>
+      <th className="px-3 py-2 text-left font-medium">Номенклатура</th>
+      <th className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-2 text-right font-medium">План месяца</th>
+      <th className="bg-cyan-400/[0.03] px-3 py-2 text-right font-medium">Факт месяца</th>
+      <th className="bg-cyan-400/[0.03] px-3 py-2 text-right font-medium">Осталось к выпуску</th>
+      <th className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-2 text-right font-medium">Распределено</th>
+      <th className="bg-white/[0.02] px-3 py-2 text-right font-medium">План недели</th>
+      <th className="bg-white/[0.02] px-3 py-2 text-right font-medium">Факт недели</th>
+      <th className="border-l border-cyan-300/10 px-3 py-2 text-right font-medium">Очер.</th>
+      <th className="px-3 py-2 text-left font-medium">Оборудование</th>
+      <th className="px-3 py-2 text-left font-medium">Комм.</th>
+      <th className="border-l border-cyan-300/10 px-3 py-2 text-center font-medium">Риски</th>
+    </tr>
+  </thead>
+  <tbody>
+    {tableRows.map((row) => {
+      const edit = rowEdits[row.row_key] || {};
+      const warnings = getRowWarnings(row, edit);
+      const hasWeekActual = row.week_actual_qty > 0;
+      const hasMonthlyActual = row.monthly_actual_qty > 0;
+      const hasWeekOverproduction = row.week_overproduction_qty > 0;
+      const hasMonthlyOverproduction = row.monthly_overproduction_qty > 0;
+      const isMonthlyRemainingZero = row.monthly_remaining_to_produce_qty <= 0;
+      return (
+        <tr key={row.production_plan_line_id} className={["border-t border-white/[0.05] hover:bg-cyan-300/[0.03]", row.is_priority ? "bg-amber-400/[0.03]" : ""].join(" ")}>
+          <td className="px-3 py-2.5 font-medium text-slate-100">{row.nomenclature_code}</td>
+          <td className="px-3 py-2.5 text-slate-300">
+            <span className="inline-flex items-center gap-1.5">
+              {row.nomenclature_name}
+              <span className="text-slate-500">({row.unit_of_measure || "—"})</span>
+              {row.is_priority ? <span className="text-amber-200" title={row.priority_note || "Приоритетная позиция"}>★</span> : null}
+            </span>
+          </td>
+          <td className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(row.month_qty)}</td>
+          <td className="bg-cyan-400/[0.03] px-3 py-2.5 text-right tabular-nums text-slate-100">
+            {hasMonthlyActual ? formatNumber(row.monthly_actual_qty) : <span className="text-slate-500">—</span>}
+          </td>
+          <td className={["bg-cyan-400/[0.03] px-3 py-2.5 text-right tabular-nums font-semibold", isMonthlyRemainingZero ? "text-cyan-100" : "text-slate-100"].join(" ")}>
+            <div className="flex flex-col items-end gap-0.5 leading-tight">
+              <span>{formatNumber(row.monthly_remaining_to_produce_qty)}</span>
+              {hasMonthlyOverproduction ? <span className="text-[11px] text-amber-100">+{formatNumber(row.monthly_overproduction_qty)}</span> : null}
+            </div>
+          </td>
+          <td className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(row.distributed_qty)}</td>
+          <td className="bg-white/[0.02] px-3 py-2.5">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={edit.planned_qty || ""}
+              onChange={(event) => handleEditRow(row.row_key, "planned_qty", normalizeIntegerInput(event.target.value))}
+              onBlur={() => handleWeekQtyBlur(row.row_key)}
+              className="h-9 w-[92px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+            />
+          </td>
+          <td className="bg-white/[0.02] px-3 py-2.5 text-right tabular-nums text-slate-100">
+            {hasWeekActual ? (
+              <div className="flex flex-col items-end gap-0.5 leading-tight">
+                <span>{formatNumber(row.week_actual_qty)}</span>
+                {hasWeekOverproduction ? <span className="text-[11px] text-amber-100">+{formatNumber(row.week_overproduction_qty)}</span> : null}
+              </div>
+            ) : (
+              <span className="text-slate-500">—</span>
+            )}
+          </td>
+          <td className="border-l border-cyan-300/10 px-3 py-2.5">
+            <input type="number" min="1" step="1" value={edit.sequence_no || ""} onChange={(event) => handleEditRow(row.row_key, "sequence_no", event.target.value)} className="h-9 w-[68px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40" />
+          </td>
+          <td className="px-3 py-2.5">
+            <select value={edit.route_step_equipment_id || ""} onChange={(event) => handleEditRow(row.row_key, "route_step_equipment_id", event.target.value)} className="h-9 w-[130px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40">
+              <option value="">Не выбрано</option>
+              {(equipmentByPlanLine[row.row_key] || []).map((option) => (
+                <option key={option.step_equipment_id} value={option.step_equipment_id}>
+                  {option.machine_name}
+                </option>
+              ))}
+            </select>
+          </td>
+          <td className="px-3 py-2.5">
+            <button
+              type="button"
+              onClick={() => openCommentModal(row.row_key)}
+              aria-label="Комментарий"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.72)] text-sm text-slate-100 transition hover:border-cyan-300/40 hover:text-cyan-100"
+            >
+              {String(edit.comment || "").trim() ? "💬" : "+"}
+            </button>
+          </td>
+          <td className="border-l border-cyan-300/10 px-3 py-2.5 text-center">
+            {warnings.length ? (
+              <span className="inline-flex items-center text-amber-100/90">⚠</span>
+            ) : (
+              <span className="text-slate-500">—</span>
+            )}
+          </td>
+        </tr>
+      );
+    })}
+  </tbody>
+</table>
                   </div>
                 </div>
               </section>
@@ -806,6 +882,41 @@ function WeeklyPlanningPanel() {
         isConfirmDisabled={isDeleting}
         isCancelDisabled={isDeleting}
       />
+
+      {commentModalState.isOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-none border border-cyan-300/20 bg-[rgba(10,24,36,0.98)] p-5 shadow-[0_22px_80px_rgba(6,10,14,0.65)]">
+            <div className="text-lg font-semibold text-slate-50">Комментарий</div>
+            <textarea
+              value={commentModalState.value}
+              onChange={(event) =>
+                setCommentModalState((prev) => ({
+                  ...prev,
+                  value: event.target.value,
+                }))
+              }
+              rows={6}
+              className="mt-4 w-full rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.82)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCommentModal}
+                className="h-9 rounded-none border border-white/15 px-4 text-sm text-slate-200 transition hover:border-cyan-300/30"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={applyCommentModal}
+                className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24]"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

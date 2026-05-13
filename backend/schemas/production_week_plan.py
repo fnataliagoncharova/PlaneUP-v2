@@ -21,6 +21,9 @@ class ProductionWeekLineRead(BaseModel):
     remaining_qty: Decimal
     planned_qty: Decimal
     actual_qty: Decimal
+    monthly_actual_qty: Decimal
+    monthly_remaining_to_produce_qty: Decimal
+    monthly_overproduction_qty: Decimal
     remaining_to_produce_qty: Decimal
     completion_percent: Decimal
     overproduction_qty: Decimal

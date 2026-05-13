@@ -569,7 +569,8 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 pwl.created_at,
                 pwl.updated_at,
                 ppl.is_priority,
-                COALESCE(pa.actual_qty, 0) AS actual_qty
+                COALESCE(pa.actual_qty, 0) AS actual_qty,
+                COALESCE(monthly_actuals.monthly_actual_qty, 0) AS monthly_actual_qty
             FROM production_week_lines AS pwl
             INNER JOIN production_plan_lines AS ppl ON ppl.production_plan_line_id = pwl.production_plan_line_id
             INNER JOIN nomenclature AS n ON n.nomenclature_id = ppl.nomenclature_id
@@ -582,6 +583,14 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 FROM production_actuals
                 GROUP BY production_week_line_id
             ) AS pa ON pa.production_week_line_id = pwl.production_week_line_id
+            LEFT JOIN (
+                SELECT
+                    pwl.production_plan_line_id,
+                    COALESCE(SUM(pa.actual_qty), 0) AS monthly_actual_qty
+                FROM production_week_lines AS pwl
+                INNER JOIN production_actuals AS pa ON pa.production_week_line_id = pwl.production_week_line_id
+                GROUP BY pwl.production_plan_line_id
+            ) AS monthly_actuals ON monthly_actuals.production_plan_line_id = ppl.production_plan_line_id
             WHERE pwl.production_plan_week_id = %s
             ORDER BY pwl.sequence_no ASC, ppl.is_priority DESC, n.nomenclature_code ASC;
             """,
@@ -592,16 +601,27 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
         prepared_lines: list[dict[str, Any]] = []
         for row in lines:
             line_total = totals_map.get(int(row["production_plan_line_id"]), DECIMAL_ZERO)
-            remaining_qty = Decimal(row["monthly_planned_qty"]) - line_total
+            monthly_planned_qty = to_decimal(row["monthly_planned_qty"])
+            remaining_qty = monthly_planned_qty - line_total
             planned_qty = to_decimal(row["planned_qty"])
             actual_qty_raw = to_decimal(row["actual_qty"])
+            monthly_actual_qty_raw = to_decimal(row["monthly_actual_qty"])
             remaining_to_produce_qty_raw = planned_qty - actual_qty_raw if actual_qty_raw < planned_qty else DECIMAL_ZERO
             overproduction_qty_raw = actual_qty_raw - planned_qty if actual_qty_raw > planned_qty else DECIMAL_ZERO
+            monthly_remaining_to_produce_qty_raw = (
+                monthly_planned_qty - monthly_actual_qty_raw if monthly_actual_qty_raw < monthly_planned_qty else DECIMAL_ZERO
+            )
+            monthly_overproduction_qty_raw = (
+                monthly_actual_qty_raw - monthly_planned_qty if monthly_actual_qty_raw > monthly_planned_qty else DECIMAL_ZERO
+            )
             completion_percent = DECIMAL_ZERO
             if planned_qty > DECIMAL_ZERO:
                 completion_percent = (actual_qty_raw / planned_qty) * Decimal("100")
 
             actual_qty = actual_qty_raw.quantize(QTY_SCALE)
+            monthly_actual_qty = monthly_actual_qty_raw.quantize(QTY_SCALE)
+            monthly_remaining_to_produce_qty = monthly_remaining_to_produce_qty_raw.quantize(QTY_SCALE)
+            monthly_overproduction_qty = monthly_overproduction_qty_raw.quantize(QTY_SCALE)
             remaining_to_produce_qty = remaining_to_produce_qty_raw.quantize(QTY_SCALE)
             overproduction_qty = overproduction_qty_raw.quantize(QTY_SCALE)
             completion_percent = completion_percent.quantize(QTY_SCALE)
@@ -622,6 +642,9 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
                 "remaining_qty": remaining_qty,
                 "planned_qty": row["planned_qty"],
                 "actual_qty": actual_qty,
+                "monthly_actual_qty": monthly_actual_qty,
+                "monthly_remaining_to_produce_qty": monthly_remaining_to_produce_qty,
+                "monthly_overproduction_qty": monthly_overproduction_qty,
                 "remaining_to_produce_qty": remaining_to_produce_qty,
                 "completion_percent": completion_percent,
                 "overproduction_qty": overproduction_qty,

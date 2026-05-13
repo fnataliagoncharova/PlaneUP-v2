@@ -198,6 +198,16 @@ function ShiftFactPanel() {
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
   const [journalErrorText, setJournalErrorText] = useState("");
+  const [factCommentModalState, setFactCommentModalState] = useState({
+    isOpen: false,
+    mode: "edit",
+    lineKey: "",
+    value: "",
+  });
+  const [taskInstructionModalState, setTaskInstructionModalState] = useState({
+    isOpen: false,
+    value: "",
+  });
 
   const sortedWeekLines = useMemo(() => {
     const lines = Array.isArray(selectedWeek?.lines) ? [...selectedWeek.lines] : [];
@@ -603,6 +613,57 @@ function ShiftFactPanel() {
     });
   };
 
+  const openFactCommentEditorModal = (lineId) => {
+    const lineKey = String(lineId);
+    const currentInput =
+      rowInputs[lineKey] || buildDefaultRowInput(selectedWeek?.week_start_date);
+    setFactCommentModalState({
+      isOpen: true,
+      mode: "edit",
+      lineKey,
+      value: currentInput.comment || "",
+    });
+  };
+
+  const openFactCommentViewModal = (comment) => {
+    setFactCommentModalState({
+      isOpen: true,
+      mode: "view",
+      lineKey: "",
+      value: comment || "",
+    });
+  };
+
+  const closeFactCommentModal = () => {
+    setFactCommentModalState({
+      isOpen: false,
+      mode: "edit",
+      lineKey: "",
+      value: "",
+    });
+  };
+
+  const applyFactCommentModal = () => {
+    if (factCommentModalState.mode === "edit" && factCommentModalState.lineKey) {
+      handleRowInputChange(factCommentModalState.lineKey, "comment", factCommentModalState.value);
+    }
+    closeFactCommentModal();
+  };
+
+  const openTaskInstructionModal = (instructionText) => {
+    setTaskInstructionModalState({
+      isOpen: true,
+      value: instructionText || "",
+    });
+  };
+
+  const closeTaskInstructionModal = () => {
+    setTaskInstructionModalState({
+      isOpen: false,
+      value: "",
+    });
+  };
+
   const handleExpandClosedRow = (lineId) => {
     const lineKey = String(lineId);
     setExpandedClosedRows((currentValue) => ({
@@ -854,7 +915,7 @@ function ShiftFactPanel() {
                     <th className="px-3 py-2 text-left font-medium">Тип смены</th>
                     <th className="px-3 py-2 text-left font-medium">Бригада</th>
                     <th className="px-3 py-2 text-right font-medium">Факт</th>
-                    <th className="px-3 py-2 text-left font-medium">Комментарий</th>
+                    <th className="px-3 py-2 text-left font-medium">Комм.</th>
                     <th className="px-3 py-2 text-right font-medium">Действия</th>
                   </tr>
                 </thead>
@@ -889,7 +950,21 @@ function ShiftFactPanel() {
                         <td className="px-3 py-2.5 font-medium text-slate-100">
                           {line.nomenclature_code}
                         </td>
-                        <td className="px-3 py-2.5 text-slate-300">{line.nomenclature_name}</td>
+                        <td className="px-3 py-2.5 text-slate-300">
+                          <div className="flex flex-col items-start gap-1">
+                            <span>{line.nomenclature_name}</span>
+                            {String(line.comment || "").trim() ? (
+                              <button
+                                type="button"
+                                onClick={() => openTaskInstructionModal(String(line.comment))}
+                                className="inline-flex items-center gap-1 rounded-none border border-cyan-300/25 bg-cyan-400/[0.08] px-1.5 py-0.5 text-[11px] font-medium text-cyan-100 transition hover:bg-cyan-400/[0.16]"
+                              >
+                                <span>💬</span>
+                                <span>Доп. указания</span>
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
                         <td className="px-3 py-2.5 text-slate-300">
                           {line.route_step_equipment_id === null ||
                           line.route_step_equipment_id === undefined ? (
@@ -1019,18 +1094,14 @@ function ShiftFactPanel() {
                               />
                             </td>
                             <td className="px-3 py-2.5">
-                              <input
-                                type="text"
-                                value={input.comment}
-                                onChange={(event) =>
-                                  handleRowInputChange(
-                                    line.production_week_line_id,
-                                    "comment",
-                                    event.target.value,
-                                  )
-                                }
-                                className="h-9 w-[150px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm font-medium text-slate-100 outline-none focus:border-cyan-300/40"
-                              />
+                              <button
+                                type="button"
+                                onClick={() => openFactCommentEditorModal(line.production_week_line_id)}
+                                aria-label="Комментарий к факту"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.72)] text-sm text-slate-100 transition hover:border-cyan-300/40 hover:text-cyan-100"
+                              >
+                                {String(input.comment || "").trim() ? "💬" : "+"}
+                              </button>
                             </td>
                             <td className="px-3 py-2.5 text-right">
                               <button
@@ -1097,7 +1168,7 @@ function ShiftFactPanel() {
                     <th className="px-3 py-2 text-left font-medium">Номенклатура</th>
                     <th className="px-3 py-2 text-left font-medium">Станок</th>
                     <th className="px-3 py-2 text-right font-medium">Факт</th>
-                    <th className="px-3 py-2 text-left font-medium">Комментарий</th>
+                    <th className="px-3 py-2 text-left font-medium">Комм.</th>
                     <th className="px-3 py-2 text-right font-medium">Действия</th>
                   </tr>
                 </thead>
@@ -1132,7 +1203,18 @@ function ShiftFactPanel() {
                           {formatQty(actualRow.actual_qty)}
                         </td>
                         <td className="px-3 py-2.5 text-slate-300">
-                          {actualRow.comment || "—"}
+                          {String(actualRow.comment || "").trim() ? (
+                            <button
+                              type="button"
+                              onClick={() => openFactCommentViewModal(String(actualRow.comment))}
+                              aria-label="Показать комментарий к факту"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.72)] text-sm text-slate-100 transition hover:border-cyan-300/40 hover:text-cyan-100"
+                            >
+                              💬
+                            </button>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <button
@@ -1154,6 +1236,69 @@ function ShiftFactPanel() {
           </div>
         )}
       </section>
+
+      {factCommentModalState.isOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-none border border-cyan-300/20 bg-[rgba(10,24,36,0.98)] p-5 shadow-[0_22px_80px_rgba(6,10,14,0.65)]">
+            <div className="text-lg font-semibold text-slate-50">Комментарий к факту</div>
+            <textarea
+              value={factCommentModalState.value}
+              onChange={(event) =>
+                setFactCommentModalState((currentValue) => ({
+                  ...currentValue,
+                  value: event.target.value,
+                }))
+              }
+              rows={6}
+              readOnly={factCommentModalState.mode === "view"}
+              className={[
+                "mt-4 w-full rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.82)] px-3 py-2 text-sm text-slate-100 outline-none",
+                factCommentModalState.mode === "view"
+                  ? "cursor-default"
+                  : "focus:border-cyan-300/40",
+              ].join(" ")}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeFactCommentModal}
+                className="h-9 rounded-none border border-white/15 px-4 text-sm text-slate-200 transition hover:border-cyan-300/30"
+              >
+                {factCommentModalState.mode === "view" ? "Закрыть" : "Отмена"}
+              </button>
+              {factCommentModalState.mode === "edit" ? (
+                <button
+                  type="button"
+                  onClick={applyFactCommentModal}
+                  className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24]"
+                >
+                  Применить
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {taskInstructionModalState.isOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-none border border-cyan-300/20 bg-[rgba(10,24,36,0.98)] p-5 shadow-[0_22px_80px_rgba(6,10,14,0.65)]">
+            <div className="text-lg font-semibold text-slate-50">Доп. указания к заданию</div>
+            <div className="mt-4 max-h-[300px] overflow-auto whitespace-pre-wrap rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.82)] px-3 py-2 text-sm text-slate-100">
+              {taskInstructionModalState.value}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={closeTaskInstructionModal}
+                className="h-9 rounded-none border border-white/15 px-4 text-sm text-slate-200 transition hover:border-cyan-300/30"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
     </div>
   );
