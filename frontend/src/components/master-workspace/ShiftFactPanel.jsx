@@ -1,10 +1,11 @@
-import { RefreshCw, Trash2 } from "lucide-react";
+import { Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   createProductionActual,
   deleteProductionActual,
   getProductionActuals,
+  updateProductionActual,
 } from "../../services/productionActualsApi";
 import { getMachineItem } from "../../services/machinesApi";
 import {
@@ -194,6 +195,7 @@ function ShiftFactPanel() {
   const [isJournalLoading, setIsJournalLoading] = useState(false);
   const [savingLineId, setSavingLineId] = useState(null);
   const [deletingActualId, setDeletingActualId] = useState(null);
+  const [editingActualId, setEditingActualId] = useState(null);
 
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
@@ -207,6 +209,17 @@ function ShiftFactPanel() {
   const [taskInstructionModalState, setTaskInstructionModalState] = useState({
     isOpen: false,
     value: "",
+  });
+  const [factEditModalState, setFactEditModalState] = useState({
+    isOpen: false,
+    production_actual_id: null,
+    production_week_line_id: null,
+    actual_date: "",
+    shift_type: "",
+    shift_team_no: "",
+    actual_qty: "",
+    route_step_equipment_id: "",
+    comment: "",
   });
 
   const sortedWeekLines = useMemo(() => {
@@ -800,6 +813,141 @@ function ShiftFactPanel() {
     }
   };
 
+  const openFactEditModal = (actualRow) => {
+    const lineKey = String(actualRow.production_week_line_id || "");
+    const equipmentOptions = equipmentOptionsByLine[lineKey] || [];
+    const machineId = Number(actualRow.machine_id);
+    const matchedOption = Number.isFinite(machineId)
+      ? equipmentOptions.find((option) => Number(option.machine_id) === machineId)
+      : null;
+
+    setFactEditModalState({
+      isOpen: true,
+      production_actual_id: Number(actualRow.production_actual_id),
+      production_week_line_id: Number(actualRow.production_week_line_id),
+      actual_date: String(actualRow.actual_date || ""),
+      shift_type:
+        actualRow.shift_type === "day" || actualRow.shift_type === "night"
+          ? actualRow.shift_type
+          : "",
+      shift_team_no: TEAM_OPTIONS.includes(String(actualRow.shift_team_no))
+        ? String(actualRow.shift_team_no)
+        : "",
+      actual_qty: normalizeInitialActualQty(actualRow.actual_qty),
+      route_step_equipment_id: matchedOption ? String(matchedOption.step_equipment_id) : "",
+      comment: actualRow.comment || "",
+    });
+  };
+
+  const closeFactEditModal = () => {
+    setFactEditModalState({
+      isOpen: false,
+      production_actual_id: null,
+      production_week_line_id: null,
+      actual_date: "",
+      shift_type: "",
+      shift_team_no: "",
+      actual_qty: "",
+      route_step_equipment_id: "",
+      comment: "",
+    });
+  };
+
+  const handleFactEditFieldChange = (field, value) => {
+    setFactEditModalState((currentValue) => ({
+      ...currentValue,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveEditedActual = async () => {
+    if (!selectedWeek) {
+      setErrorText("Выберите недельный план.");
+      return;
+    }
+
+    const actualId = Number(factEditModalState.production_actual_id);
+    const weekLineId = Number(factEditModalState.production_week_line_id);
+    if (!Number.isFinite(actualId) || actualId <= 0 || !Number.isFinite(weekLineId) || weekLineId <= 0) {
+      setErrorText("Не удалось определить запись факта для редактирования.");
+      return;
+    }
+
+    const selectedDate = String(factEditModalState.actual_date || "").trim();
+    if (!selectedDate) {
+      setErrorText("Выберите дату факта.");
+      return;
+    }
+
+    const weekStartDate = String(selectedWeek.week_start_date || "");
+    const weekEndDate = String(selectedWeek.week_end_date || "");
+    if (selectedDate < weekStartDate || selectedDate > weekEndDate) {
+      setErrorText("Дата факта должна быть в пределах выбранной недели.");
+      return;
+    }
+
+    if (!factEditModalState.shift_type) {
+      setErrorText("Выберите тип смены.");
+      return;
+    }
+
+    if (!factEditModalState.shift_team_no) {
+      setErrorText("Выберите смену / бригаду.");
+      return;
+    }
+
+    const parsedActualQty = parsePositiveQty(factEditModalState.actual_qty);
+    if (parsedActualQty === null) {
+      setErrorText("Введите факт выпуска больше нуля.");
+      return;
+    }
+
+    const lineKey = String(weekLineId);
+    const equipmentOptions = equipmentOptionsByLine[lineKey] || [];
+    let selectedMachineId = null;
+
+    if (factEditModalState.route_step_equipment_id) {
+      const selectedOption = equipmentOptions.find(
+        (option) =>
+          String(option.step_equipment_id) === String(factEditModalState.route_step_equipment_id),
+      );
+      if (!selectedOption) {
+        setErrorText("Выберите оборудование операции.");
+        return;
+      }
+      selectedMachineId = Number(selectedOption.machine_id);
+    }
+
+    setEditingActualId(actualId);
+    setErrorText("");
+    setSuccessText("");
+
+    try {
+      await updateProductionActual(actualId, {
+        production_week_line_id: weekLineId,
+        actual_date: selectedDate,
+        shift_type: factEditModalState.shift_type,
+        shift_team_no: Number(factEditModalState.shift_team_no),
+        actual_qty: parsedActualQty,
+        machine_id: selectedMachineId,
+        comment: factEditModalState.comment ? String(factEditModalState.comment).trim() || null : null,
+      });
+
+      setSuccessText("Факт выпуска обновлён.");
+      closeFactEditModal();
+
+      const weekPayload = await loadWeekDetails(selectedWeekId, { preserveInputs: true });
+      await Promise.all([
+        loadJournal(weekPayload),
+        loadEquipmentOptionsForWeek(weekPayload),
+      ]);
+    } catch (error) {
+      setErrorText(toErrorMessage(error, "Не удалось обновить факт выпуска."));
+    } finally {
+      setEditingActualId(null);
+    }
+  };
+
   const noApprovedPlans = !isPlansLoading && approvedPlans.length === 0;
   const noSavedWeeks = !isWeeksLoading && selectedPlanId && weekOptions.length === 0;
   const noWeekLines =
@@ -1176,6 +1324,8 @@ function ShiftFactPanel() {
                   {journalRows.map((actualRow) => {
                     const isDeleting =
                       Number(deletingActualId) === Number(actualRow.production_actual_id);
+                    const isEditing =
+                      Number(editingActualId) === Number(actualRow.production_actual_id);
                     return (
                       <tr
                         key={actualRow.production_actual_id}
@@ -1217,15 +1367,28 @@ function ShiftFactPanel() {
                           )}
                         </td>
                         <td className="px-3 py-2.5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteActual(actualRow)}
-                            disabled={isDeleting}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-none border border-rose-300/30 bg-rose-500/[0.1] px-2.5 text-xs uppercase tracking-[0.08em] text-rose-100 transition hover:bg-rose-500/[0.16] disabled:opacity-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            {isDeleting ? "Удаляем..." : "Удалить"}
-                          </button>
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openFactEditModal(actualRow)}
+                              disabled={isDeleting || isEditing}
+                              title="Изменить"
+                              aria-label="Изменить"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Pencil className={["h-4 w-4", isEditing ? "animate-pulse" : ""].join(" ")} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteActual(actualRow)}
+                              disabled={isDeleting || isEditing}
+                              title="Удалить"
+                              aria-label="Удалить"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/30 bg-rose-500/[0.1] text-rose-100 transition hover:border-rose-300/45 hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Trash2 className={["h-4 w-4", isDeleting ? "animate-pulse" : ""].join(" ")} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1236,6 +1399,125 @@ function ShiftFactPanel() {
           </div>
         )}
       </section>
+
+      {factEditModalState.isOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-2xl rounded-none border border-cyan-300/20 bg-[rgba(10,24,36,0.98)] p-5 shadow-[0_22px_80px_rgba(6,10,14,0.65)]">
+            <div className="text-lg font-semibold text-slate-50">Редактирование факта выпуска</div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <div className="mb-1.5 text-xs tracking-[0.08em] text-slate-500">Дата факта</div>
+                <input
+                  type="date"
+                  value={factEditModalState.actual_date}
+                  min={selectedWeek?.week_start_date || undefined}
+                  max={selectedWeek?.week_end_date || undefined}
+                  onChange={(event) => handleFactEditFieldChange("actual_date", event.target.value)}
+                  className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+                />
+              </div>
+              <div>
+                <div className="mb-1.5 text-xs tracking-[0.08em] text-slate-500">Тип смены</div>
+                <select
+                  value={factEditModalState.shift_type}
+                  onChange={(event) => handleFactEditFieldChange("shift_type", event.target.value)}
+                  className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+                >
+                  <option value="">{"—"}</option>
+                  {SHIFT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="mb-1.5 text-xs tracking-[0.08em] text-slate-500">Бригада</div>
+                <select
+                  value={factEditModalState.shift_team_no}
+                  onChange={(event) => handleFactEditFieldChange("shift_team_no", event.target.value)}
+                  className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+                >
+                  <option value="">{"—"}</option>
+                  {TEAM_OPTIONS.map((teamNo) => (
+                    <option key={teamNo} value={teamNo}>
+                      {teamNo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="mb-1.5 text-xs tracking-[0.08em] text-slate-500">Оборудование</div>
+                {(() => {
+                  const lineKey = String(factEditModalState.production_week_line_id || "");
+                  const equipmentOptions = equipmentOptionsByLine[lineKey] || [];
+                  if (!equipmentOptions.length) {
+                    return (
+                      <div className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.6)] px-2 text-sm text-slate-400 flex items-center">
+                        Не выбрано
+                      </div>
+                    );
+                  }
+                  return (
+                    <select
+                      value={factEditModalState.route_step_equipment_id}
+                      onChange={(event) => handleFactEditFieldChange("route_step_equipment_id", event.target.value)}
+                      className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+                    >
+                      <option value="">Не выбрано</option>
+                      {equipmentOptions.map((option) => (
+                        <option key={option.step_equipment_id} value={option.step_equipment_id}>
+                          {option.machine_display}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
+              </div>
+              <div className="sm:col-span-2">
+                <div className="mb-1.5 text-xs tracking-[0.08em] text-slate-500">Факт</div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={factEditModalState.actual_qty ?? ""}
+                  onChange={(event) => handleFactEditFieldChange("actual_qty", event.target.value)}
+                  placeholder="0"
+                  className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-right tabular-nums text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/40"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <div className="mb-1.5 text-xs tracking-[0.08em] text-slate-500">Комментарий</div>
+                <textarea
+                  value={factEditModalState.comment}
+                  onChange={(event) => handleFactEditFieldChange("comment", event.target.value)}
+                  rows={4}
+                  className="w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeFactEditModal}
+                disabled={Number(editingActualId) === Number(factEditModalState.production_actual_id)}
+                className="h-9 rounded-none border border-white/15 px-4 text-sm text-slate-200 transition hover:border-cyan-300/30 disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditedActual}
+                disabled={Number(editingActualId) === Number(factEditModalState.production_actual_id)}
+                className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24] disabled:opacity-50"
+              >
+                {Number(editingActualId) === Number(factEditModalState.production_actual_id)
+                  ? "Сохраняем..."
+                  : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {factCommentModalState.isOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">

@@ -1035,8 +1035,9 @@ function ProductionPlanningSection() {
                                     type="button"
                                     onClick={() => openEditLineForm(line)}
                                     disabled={isApproved}
-                                    title={isApproved ? "Утверждённый план нельзя изменять." : ""}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/10 text-slate-300 transition hover:border-cyan-300/35 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-45"
+                                    title="Изменить"
+                                    aria-label="Изменить"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16] disabled:cursor-not-allowed disabled:opacity-45"
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </button>
@@ -1044,8 +1045,9 @@ function ProductionPlanningSection() {
                                     type="button"
                                     onClick={() => setLineDeleteCandidate(line)}
                                     disabled={isApproved}
-                                    title={isApproved ? "Утверждённый план нельзя изменять." : ""}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/10 text-slate-300 transition hover:border-rose-300/35 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-45"
+                                    title="Удалить"
+                                    aria-label="Удалить"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/30 bg-rose-500/[0.1] text-rose-100 transition hover:border-rose-300/45 hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-45"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>

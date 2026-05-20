@@ -43,8 +43,8 @@ function getEquipmentRoleLabel(role) {
 function IconActionButton({ label, onClick, disabled = false, tone = "edit", children }) {
   const toneClassName =
     tone === "danger"
-      ? "border-rose-300/30 bg-rose-500/[0.1] text-rose-100 hover:border-rose-300/42 hover:bg-rose-500/[0.18]"
-      : "border-cyan-300/24 bg-cyan-400/[0.07] text-cyan-100/90 hover:border-cyan-300/38 hover:bg-cyan-400/[0.14]";
+      ? "border-rose-300/30 bg-rose-500/[0.1] text-rose-100 hover:border-rose-300/45 hover:bg-rose-500/[0.18]"
+      : "border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]";
 
   return (
     <div className="group relative">
@@ -188,11 +188,11 @@ function StepDetailsPanel({
           <div className="panel-title">Операция получения</div>
           {step ? (
             <div className="flex items-center gap-2">
-              <IconActionButton label="Редактировать операцию" onClick={onEditStep}>
+              <IconActionButton label="Изменить" onClick={onEditStep}>
                 <PencilLine className="h-3.5 w-3.5" />
               </IconActionButton>
               <IconActionButton
-                label="Удалить операцию"
+                label="Удалить"
                 onClick={onDeleteStep}
                 disabled={isDeletingStep}
                 tone="danger"
@@ -325,7 +325,7 @@ function StepDetailsPanel({
                       {typeLabel}
                     </span>
                     <div className="flex items-center gap-2">
-                      <IconActionButton label="Редактировать" onClick={() => onEditInput(input)}>
+                      <IconActionButton label="Изменить" onClick={() => onEditInput(input)}>
                         <PencilLine className="h-3.5 w-3.5" />
                       </IconActionButton>
                       <IconActionButton
@@ -417,10 +417,7 @@ function StepDetailsPanel({
                       {getEquipmentRoleLabel(equipmentItem.equipment_role)}
                     </div>
                     <div className="flex items-center gap-2">
-                      <IconActionButton
-                        label="Редактировать"
-                        onClick={() => onEditEquipment(equipmentItem)}
-                      >
+                      <IconActionButton label="Изменить" onClick={() => onEditEquipment(equipmentItem)}>
                         <PencilLine className="h-3.5 w-3.5" />
                       </IconActionButton>
                       <IconActionButton
