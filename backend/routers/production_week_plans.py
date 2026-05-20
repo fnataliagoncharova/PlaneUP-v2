@@ -857,6 +857,26 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
             require_week(cursor, production_plan_week_id, lock=True)
             cursor.execute(
                 """
+                SELECT
+                    COUNT(*) AS actual_count
+                FROM production_actuals AS pa
+                JOIN production_week_lines AS pwl
+                    ON pwl.production_week_line_id = pa.production_week_line_id
+                WHERE pwl.production_plan_week_id = %s;
+                """,
+                (production_plan_week_id,),
+            )
+            actuals_row = cursor.fetchone()
+            if int(actuals_row["actual_count"] or 0) > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Нельзя удалить недельный план: по его строкам уже внесён факт производства. "
+                        "Сначала удалите записи факта в Журнале выполнения."
+                    ),
+                )
+            cursor.execute(
+                """
                 DELETE FROM production_plan_weeks
                 WHERE production_plan_week_id = %s
                 RETURNING production_plan_week_id;
@@ -1026,6 +1046,25 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             line_row = require_week_line(cursor, production_week_line_id, lock=True)
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS actual_count,
+                    COALESCE(SUM(actual_qty), 0) AS actual_qty
+                FROM production_actuals
+                WHERE production_week_line_id = %s;
+                """,
+                (production_week_line_id,),
+            )
+            actuals_row = cursor.fetchone()
+            if int(actuals_row["actual_count"] or 0) > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Нельзя удалить строку недельного плана: по ней уже внесён факт производства. "
+                        "Сначала удалите записи факта в Журнале выполнения."
+                    ),
+                )
             cursor.execute(
                 """
                 DELETE FROM production_week_lines

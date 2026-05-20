@@ -355,7 +355,8 @@ function WeeklyPlanningPanel() {
           week_line: weekLine || null,
           month_qty: monthQty,
           distributed_qty: distributedQty,
-          remaining_qty: monthQty - (distributedQty - currentWeekQty),
+          remaining_qty: monthQty - distributedQty,
+          current_week_qty: currentWeekQty,
           week_actual_qty: weekActualQty,
           week_remaining_to_produce_qty: weekRemainingToProduceQty,
           week_overproduction_qty: weekOverproductionQty,
@@ -488,21 +489,40 @@ function WeeklyPlanningPanel() {
   const getSelectedEquipment = (rowKey, selectedId) =>
     (equipmentByPlanLine[rowKey] || []).find((option) => String(option.step_equipment_id) === String(selectedId || ""));
 
+  const getDraftDistributionPreview = (row, edit) => {
+    const monthlyPlannedQty = asNumber(row.month_qty);
+    const alreadyPlannedQty = asNumber(row.distributed_qty);
+    const currentWeekQty = asNumber(row.current_week_qty);
+    const draftWeekQty = asNumber(edit?.planned_qty);
+    const otherWeeksDistributedQty = alreadyPlannedQty - currentWeekQty;
+    const draftDistributedQty = otherWeeksDistributedQty + draftWeekQty;
+    const draftRemainingToDistributeQtyRaw = monthlyPlannedQty - draftDistributedQty;
+    const draftRemainingToDistributeQty = Math.max(draftRemainingToDistributeQtyRaw, 0);
+    const draftOverdistributedQty = Math.max(draftDistributedQty - monthlyPlannedQty, 0);
+    return {
+      draftWeekQty,
+      draftDistributedQty,
+      draftRemainingToDistributeQty,
+      draftOverdistributedQty,
+    };
+  };
+
   const getRowWarnings = (row, edit) => {
     const warnings = [...(row.week_line?.warnings || [])];
-    const qty = asNumber(edit?.planned_qty);
+    const { draftWeekQty, draftOverdistributedQty } = getDraftDistributionPreview(row, edit);
+    const qty = draftWeekQty;
     const selectedEquipment = getSelectedEquipment(row.row_key, edit?.route_step_equipment_id);
     const minBatch = asNumber(selectedEquipment?.min_batch_qty);
     const monthlyQty = asNumber(row.month_qty);
-    const allowedQty = asNumber(row.remaining_qty);
+    const allowedQty = asNumber(row.remaining_qty) + asNumber(row.current_week_qty);
     if (qty > 0 && !edit?.route_step_equipment_id) {
       warnings.push("Оборудование не выбрано.");
     }
     if (qty > monthlyQty) {
       warnings.push("План недели больше объёма месячного плана по позиции.");
     }
-    if (qty > allowedQty) {
-      warnings.push("План недели превышает доступный остаток по месячному плану.");
+    if (qty > allowedQty || draftOverdistributedQty > 0) {
+      warnings.push("Нельзя распределить больше утверждённого месячного плана. Увеличьте месячный план и утвердите его заново.");
     }
     if (qty > 0 && minBatch > 0 && qty < minBatch) {
       warnings.push("План недели меньше минимальной партии для выбранного оборудования.");
@@ -542,6 +562,16 @@ function WeeklyPlanningPanel() {
 
     return Array.from(uniqueWarnings.values());
   }, [equipmentByPlanLine, rowEdits, tableRows]);
+
+  const hasDraftOverdistribution = useMemo(
+    () =>
+      tableRows.some((row) => {
+        const edit = rowEdits[row.row_key] || {};
+        const draftDistribution = getDraftDistributionPreview(row, edit);
+        return draftDistribution.draftOverdistributedQty > 0;
+      }),
+    [rowEdits, tableRows],
+  );
 
   const ensureSelectedWeekExists = async () => {
     if (!selectedPlanId || !selectedMergedWeek) {
@@ -619,10 +649,19 @@ function WeeklyPlanningPanel() {
       const planId = Number(selectedPlanId);
       await loadPlanDetails(planId);
       await loadWeeks(planId);
-      await syncSelectedWeekDetails();
+      await loadWeekDetails(weekId);
       setSuccessText("План недели сохранён.");
     } catch (error) {
       setErrorText(toErrorMessage(error, "Не удалось сохранить план недели."));
+      try {
+        if (selectedPlanId) {
+          const planId = Number(selectedPlanId);
+          await loadWeeks(planId);
+          await syncSelectedWeekDetails();
+        }
+      } catch {
+        // keep original error visible; refresh failure should not mask it
+      }
     } finally {
       setIsSaving(false);
     }
@@ -641,12 +680,20 @@ function WeeklyPlanningPanel() {
       setSuccessText("Недельный план удалён.");
     } catch (error) {
       setErrorText(toErrorMessage(error, "Не удалось удалить неделю."));
+      try {
+        if (selectedPlanId) {
+          await loadWeeks(Number(selectedPlanId));
+          await syncSelectedWeekDetails();
+        }
+      } catch {
+        // keep original error visible; refresh failure should not mask it
+      }
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const isSaveDisabled = !selectedMergedWeek || !selectedPlan || isSaving || isLoading;
+  const isSaveDisabled = !selectedMergedWeek || !selectedPlan || isSaving || isLoading || hasDraftOverdistribution;
 
   return (
     <div className="space-y-5">
@@ -712,6 +759,11 @@ function WeeklyPlanningPanel() {
 
       {successText ? <div className="glass-panel border-emerald-300/30 bg-emerald-500/[0.1] px-4 py-3 text-sm text-emerald-100">{successText}</div> : null}
       {errorText ? <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">{errorText}</div> : null}
+      {hasDraftOverdistribution ? (
+        <div className="glass-panel border-amber-300/35 bg-amber-500/[0.12] px-4 py-3 text-sm text-amber-100">
+          Нельзя распределить больше утверждённого месячного плана. Увеличьте месячный план и утвердите его заново.
+        </div>
+      ) : null}
 
       {hasApprovedPlans ? (
         <div className="space-y-5">
@@ -727,17 +779,18 @@ function WeeklyPlanningPanel() {
   <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-[11px] uppercase tracking-[0.08em] text-slate-500">
     <tr>
       <th colSpan={2} className="px-3 py-1.5 text-left font-medium text-slate-400">Позиция</th>
-      <th colSpan={3} className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-1.5 text-left font-medium text-slate-400">Месяц</th>
-      <th colSpan={3} className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-1.5 text-left font-medium text-slate-400">Неделя</th>
-      <th colSpan={4} className="border-l border-cyan-300/10 px-3 py-1.5 text-left font-medium text-slate-400">Параметры запуска</th>
+      <th colSpan={2} className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-1.5 text-left font-medium text-slate-400">Месяц</th>
+      <th colSpan={4} className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-1.5 text-left font-medium text-slate-400">Распределение</th>
+      <th colSpan={3} className="border-l border-cyan-300/10 px-3 py-1.5 text-left font-medium text-slate-400">Параметры запуска</th>
+      <th colSpan={1} className="border-l border-cyan-300/10 px-3 py-1.5 text-left font-medium text-slate-400">Риски</th>
     </tr>
     <tr>
       <th className="px-3 py-2 text-left font-medium">Код</th>
       <th className="px-3 py-2 text-left font-medium">Номенклатура</th>
       <th className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-2 text-right font-medium">План месяца</th>
       <th className="bg-cyan-400/[0.03] px-3 py-2 text-right font-medium">Факт месяца</th>
-      <th className="bg-cyan-400/[0.03] px-3 py-2 text-right font-medium">Осталось к выпуску</th>
       <th className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-2 text-right font-medium">Распределено</th>
+      <th className="bg-white/[0.02] px-3 py-2 text-right font-medium">Осталось распределить</th>
       <th className="bg-white/[0.02] px-3 py-2 text-right font-medium">План недели</th>
       <th className="bg-white/[0.02] px-3 py-2 text-right font-medium">Факт недели</th>
       <th className="border-l border-cyan-300/10 px-3 py-2 text-right font-medium">Очер.</th>
@@ -749,12 +802,12 @@ function WeeklyPlanningPanel() {
   <tbody>
     {tableRows.map((row) => {
       const edit = rowEdits[row.row_key] || {};
+      const draftDistribution = getDraftDistributionPreview(row, edit);
       const warnings = getRowWarnings(row, edit);
       const hasWeekActual = row.week_actual_qty > 0;
       const hasMonthlyActual = row.monthly_actual_qty > 0;
       const hasWeekOverproduction = row.week_overproduction_qty > 0;
-      const hasMonthlyOverproduction = row.monthly_overproduction_qty > 0;
-      const isMonthlyRemainingZero = row.monthly_remaining_to_produce_qty <= 0;
+      const hasDraftOverdistributed = draftDistribution.draftOverdistributedQty > 0;
       return (
         <tr key={row.production_plan_line_id} className={["border-t border-white/[0.05] hover:bg-cyan-300/[0.03]", row.is_priority ? "bg-amber-400/[0.03]" : ""].join(" ")}>
           <td className="px-3 py-2.5 font-medium text-slate-100">{row.nomenclature_code}</td>
@@ -769,13 +822,13 @@ function WeeklyPlanningPanel() {
           <td className="bg-cyan-400/[0.03] px-3 py-2.5 text-right tabular-nums text-slate-100">
             {hasMonthlyActual ? formatNumber(row.monthly_actual_qty) : <span className="text-slate-500">—</span>}
           </td>
-          <td className={["bg-cyan-400/[0.03] px-3 py-2.5 text-right tabular-nums font-semibold", isMonthlyRemainingZero ? "text-cyan-100" : "text-slate-100"].join(" ")}>
+          <td className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(draftDistribution.draftDistributedQty)}</td>
+          <td className="bg-white/[0.02] px-3 py-2.5 text-right tabular-nums font-semibold text-slate-100">
             <div className="flex flex-col items-end gap-0.5 leading-tight">
-              <span>{formatNumber(row.monthly_remaining_to_produce_qty)}</span>
-              {hasMonthlyOverproduction ? <span className="text-[11px] text-amber-100">+{formatNumber(row.monthly_overproduction_qty)}</span> : null}
+              <span>{formatNumber(draftDistribution.draftRemainingToDistributeQty)}</span>
+              {hasDraftOverdistributed ? <span className="text-[11px] text-amber-100">Превышение: {formatNumber(draftDistribution.draftOverdistributedQty)}</span> : null}
             </div>
           </td>
-          <td className="border-l border-cyan-300/10 bg-white/[0.02] px-3 py-2.5 text-right tabular-nums text-slate-200">{formatNumber(row.distributed_qty)}</td>
           <td className="bg-white/[0.02] px-3 py-2.5">
             <input
               type="text"
