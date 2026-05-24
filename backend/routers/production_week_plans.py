@@ -1,4 +1,4 @@
-﻿from datetime import date, datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -118,20 +118,20 @@ def ensure_week_matches_plan_month(
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РџР»Р°РЅ РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅ.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План выпуска не найден.")
 
     expected = get_system_week_bounds(row["plan_month"], week_no)
     if expected is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РќРµРґРµР»СЏ РґРѕР»Р¶РЅР° СЃРѕРѕС‚РІРµС‚СЃС‚РІРѕРІР°С‚СЊ РїРµСЂРёРѕРґСѓ РјРµСЃСЏС†Р° РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ.",
+            detail="Неделя должна соответствовать периоду месяца планирования.",
         )
 
     expected_start, expected_end = expected
     if week_start_date != expected_start or week_end_date != expected_end:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РќРµРґРµР»СЏ РґРѕР»Р¶РЅР° СЃРѕРѕС‚РІРµС‚СЃС‚РІРѕРІР°С‚СЊ РїРµСЂРёРѕРґСѓ РјРµСЃСЏС†Р° РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ.",
+            detail="Неделя должна соответствовать периоду месяца планирования.",
         )
 
 
@@ -148,7 +148,7 @@ def require_monthly_plan(cursor: RealDictCursor, production_plan_id: int, lock: 
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РџР»Р°РЅ РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅ.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План выпуска не найден.")
     return row
 
 
@@ -165,7 +165,7 @@ def require_week(cursor: RealDictCursor, production_plan_week_id: int, lock: boo
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ РЅРµ РЅР°Р№РґРµРЅ.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Недельный план не найден.")
     return row
 
 
@@ -187,7 +187,7 @@ def require_week_line(cursor: RealDictCursor, production_week_line_id: int, lock
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РЎС‚СЂРѕРєР° РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР° РЅРµ РЅР°Р№РґРµРЅР°.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Строка недельного плана не найдена.")
     return row
 
 
@@ -196,7 +196,7 @@ def ensure_approved_monthly_plan(cursor: RealDictCursor, production_plan_id: int
     if row["status"] != "approved":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ РјРѕР¶РЅРѕ СЃРѕР·РґР°С‚СЊ С‚РѕР»СЊРєРѕ РЅР° РѕСЃРЅРѕРІРµ СѓС‚РІРµСЂР¶РґС‘РЅРЅРѕРіРѕ РјРµСЃСЏС‡РЅРѕРіРѕ РїР»Р°РЅР°.",
+            detail="Недельный план можно создать только на основе утверждённого месячного плана.",
         )
     return row
 
@@ -211,7 +211,7 @@ def ensure_route_step_equipment_exists(cursor: RealDictCursor, route_step_equipm
         (route_step_equipment_id,),
     )
     if cursor.fetchone() is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РћР±РѕСЂСѓРґРѕРІР°РЅРёРµ С€Р°РіР° РЅРµ РЅР°Р№РґРµРЅРѕ.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Оборудование шага не найдено.")
 
 
 def ensure_plan_line_belongs_to_monthly_plan(
@@ -235,9 +235,9 @@ def ensure_plan_line_belongs_to_monthly_plan(
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅР°.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Строка плана выпуска не найдена.")
     if int(row["production_plan_id"]) != int(production_plan_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџРѕР·РёС†РёСЏ РЅРµ РѕС‚РЅРѕСЃРёС‚СЃСЏ Рє РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјРµСЃСЏС‡РЅРѕРјСѓ РїР»Р°РЅСѓ.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Позиция не относится к выбранному месячному плану.")
     return row
 
 
@@ -257,7 +257,7 @@ def validate_weekly_qty_limit(
     )
     line_row = cursor.fetchone()
     if line_row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅР°.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Строка плана выпуска не найдена.")
 
     if exclude_week_line_id is None:
         cursor.execute(
@@ -283,18 +283,18 @@ def validate_weekly_qty_limit(
     if Decimal(current_sum) + Decimal(new_qty) > Decimal(line_row["planned_qty"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РЎСѓРјРјР° РЅРµРґРµР»СЊРЅС‹С… РїР»Р°РЅРѕРІ РїСЂРµРІС‹С€Р°РµС‚ РјРµСЃСЏС‡РЅС‹Р№ РїР»Р°РЅ РІС‹РїСѓСЃРєР°.",
+            detail="Сумма недельных планов превышает месячный план выпуска.",
         )
 
 
 def build_line_warnings(line_row: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
     if line_row.get("route_step_equipment_id") is None:
-        warnings.append("РћР±РѕСЂСѓРґРѕРІР°РЅРёРµ РЅРµ РІС‹Р±СЂР°РЅРѕ.")
+        warnings.append("Оборудование не выбрано.")
     min_batch_qty = line_row.get("min_batch_qty")
     batch_qty = line_row.get("batch_qty")
     if min_batch_qty is not None and batch_qty is not None and Decimal(batch_qty) < Decimal(min_batch_qty):
-        warnings.append("Р Р°Р·РјРµСЂ РїР°СЂС‚РёРё РјРµРЅСЊС€Рµ РјРёРЅРёРјР°Р»СЊРЅРѕР№ РїР°СЂС‚РёРё РґР»СЏ РІС‹Р±СЂР°РЅРЅРѕРіРѕ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ.")
+        warnings.append("Размер партии меньше минимальной партии для выбранного оборудования.")
     return warnings
 
 
@@ -820,7 +820,7 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
 def require_week_exists(connection, production_plan_week_id: int) -> dict[str, Any]:
     week = get_production_week_by_id(connection, production_plan_week_id)
     if week is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ РЅРµ РЅР°Р№РґРµРЅ.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Недельный план не найден.")
     return week
 
 
@@ -857,7 +857,7 @@ def list_production_plan_weeks(production_plan_id: int = Path(..., gt=0)):
     except HTTPException:
         raise
     except psycopg2.Error as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Рµ РїР»Р°РЅС‹.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось получить недельные планы.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -871,7 +871,7 @@ def create_production_plan_week(
     connection = None
     try:
         if payload.week_end_date < payload.week_start_date:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Р”Р°С‚Р° РѕРєРѕРЅС‡Р°РЅРёСЏ РЅРµРґРµР»Рё РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ СЂР°РЅСЊС€Рµ РґР°С‚С‹ РЅР°С‡Р°Р»Р° РЅРµРґРµР»Рё.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Дата окончания недели не может быть раньше даты начала недели.")
 
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -915,15 +915,15 @@ def create_production_plan_week(
     except UniqueViolation as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ СЃ С‚Р°РєРёРј РЅРѕРјРµСЂРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚.") from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Недельный план с таким номером уже существует.") from exc
     except CheckViolation as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РЅРѕРјРµСЂ РЅРµРґРµР»Рё Рё РґРёР°РїР°Р·РѕРЅ РґР°С‚ РЅРµРґРµР»Рё.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте номер недели и диапазон дат недели.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось создать недельный план.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -938,7 +938,7 @@ def get_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     except HTTPException:
         raise
     except psycopg2.Error as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось получить недельный план.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -957,7 +957,7 @@ def update_production_plan_week(
             next_start = payload.week_start_date or week_row["week_start_date"]
             next_end = payload.week_end_date or week_row["week_end_date"]
             if next_end < next_start:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Р”Р°С‚Р° РѕРєРѕРЅС‡Р°РЅРёСЏ РЅРµРґРµР»Рё РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ СЂР°РЅСЊС€Рµ РґР°С‚С‹ РЅР°С‡Р°Р»Р° РЅРµРґРµР»Рё.")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Дата окончания недели не может быть раньше даты начала недели.")
 
             next_comment = payload.comment if payload.comment is not None else week_row["comment"]
             cursor.execute(
@@ -982,11 +982,11 @@ def update_production_plan_week(
     except CheckViolation as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РґРёР°РїР°Р·РѕРЅ РґР°С‚ РЅРµРґРµР»Рё.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте диапазон дат недели.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить недельный план.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1015,8 +1015,8 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "РќРµР»СЊР·СЏ СѓРґР°Р»РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ: РїРѕ РµРіРѕ СЃС‚СЂРѕРєР°Рј СѓР¶Рµ РІРЅРµСЃС‘РЅ С„Р°РєС‚ РїСЂРѕРёР·РІРѕРґСЃС‚РІР°. "
-                        "РЎРЅР°С‡Р°Р»Р° СѓРґР°Р»РёС‚Рµ Р·Р°РїРёСЃРё С„Р°РєС‚Р° РІ Р–СѓСЂРЅР°Р»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ."
+                        "Нельзя удалить недельный план: по его строкам уже внесён факт производства. "
+                        "Сначала удалите записи факта в Журнале выполнения."
                     ),
                 )
             cursor.execute(
@@ -1032,7 +1032,7 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
         connection.commit()
         return {
             "production_plan_week_id": int(deleted["production_plan_week_id"]),
-            "message": "РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ СѓРґР°Р»С‘РЅ.",
+            "message": "Недельный план удалён.",
         }
     except HTTPException:
         if connection is not None:
@@ -1041,7 +1041,7 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось удалить недельный план.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1104,18 +1104,18 @@ def create_production_week_line(
             connection.rollback()
         constraint_name = getattr(getattr(exc, "diag", None), "constraint_name", None)
         if constraint_name == "production_week_lines_unique_plan_line_per_week":
-            detail = "РџРѕР·РёС†РёСЏ СѓР¶Рµ РµСЃС‚СЊ РІ РЅРµРґРµР»СЊРЅРѕРј РїР»Р°РЅРµ."
+            detail = "Позиция уже есть в недельном плане."
         else:
-            detail = "РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°."
+            detail = "Не удалось добавить строку недельного плана."
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
     except (ForeignKeyViolation, CheckViolation) as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ СЃС‚СЂРѕРєРё РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте данные строки недельного плана.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось добавить строку недельного плана.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1173,11 +1173,11 @@ def update_production_week_line(
     except (ForeignKeyViolation, CheckViolation) as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ СЃС‚СЂРѕРєРё РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте данные строки недельного плана.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить строку недельного плана.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1205,8 +1205,8 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "РќРµР»СЊР·СЏ СѓРґР°Р»РёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°: РїРѕ РЅРµР№ СѓР¶Рµ РІРЅРµСЃС‘РЅ С„Р°РєС‚ РїСЂРѕРёР·РІРѕРґСЃС‚РІР°. "
-                        "РЎРЅР°С‡Р°Р»Р° СѓРґР°Р»РёС‚Рµ Р·Р°РїРёСЃРё С„Р°РєС‚Р° РІ Р–СѓСЂРЅР°Р»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ."
+                        "Нельзя удалить строку недельного плана: по ней уже внесён факт производства. "
+                        "Сначала удалите записи факта в Журнале выполнения."
                     ),
                 )
             cursor.execute(
@@ -1222,7 +1222,7 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
         connection.commit()
         return {
             "production_week_line_id": int(deleted["production_week_line_id"]),
-            "message": "РЎС‚СЂРѕРєР° РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР° СѓРґР°Р»РµРЅР°.",
+            "message": "Строка недельного плана удалена.",
         }
     except HTTPException:
         if connection is not None:
@@ -1231,7 +1231,7 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось удалить строку недельного плана.") from exc
     finally:
         if connection is not None:
             connection.close()

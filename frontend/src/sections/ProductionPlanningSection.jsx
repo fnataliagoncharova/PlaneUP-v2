@@ -405,15 +405,22 @@ function ProductionPlanningSection() {
     if (!planDeleteCandidate) {
       return;
     }
+    const deleteCandidate = planDeleteCandidate;
     setDeletingPlan(true);
     try {
-      await deleteProductionPlan(planDeleteCandidate.production_plan_id);
-      setPlanDeleteCandidate(null);
+      await deleteProductionPlan(deleteCandidate.production_plan_id);
       await loadPlans();
     } catch (error) {
+      setPlanDeleteCandidate(null);
       setFormError(toErrorMessage(error, "Не удалось удалить план выпуска."));
+      try {
+        await loadPlans(deleteCandidate.production_plan_id);
+      } catch {
+        // keep original delete error in UI
+      }
     } finally {
       setDeletingPlan(false);
+      setPlanDeleteCandidate(null);
     }
   };
 
@@ -421,15 +428,23 @@ function ProductionPlanningSection() {
     if (!lineDeleteCandidate || !selectedPlan) {
       return;
     }
+    const deleteCandidate = lineDeleteCandidate;
+    const currentPlanId = selectedPlan.production_plan_id;
     setDeletingLine(true);
     try {
-      await deleteProductionPlanLine(lineDeleteCandidate.production_plan_line_id);
-      setLineDeleteCandidate(null);
-      await loadPlanDetails(selectedPlan.production_plan_id);
+      await deleteProductionPlanLine(deleteCandidate.production_plan_line_id);
+      await loadPlanDetails(currentPlanId);
     } catch (error) {
+      setLineDeleteCandidate(null);
       setFormError(toErrorMessage(error, "Не удалось удалить строку плана."));
+      try {
+        await loadPlanDetails(currentPlanId);
+      } catch {
+        // keep original delete error in UI
+      }
     } finally {
       setDeletingLine(false);
+      setLineDeleteCandidate(null);
     }
   };
 

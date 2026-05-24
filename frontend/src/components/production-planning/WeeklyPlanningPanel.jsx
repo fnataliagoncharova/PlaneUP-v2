@@ -718,25 +718,26 @@ function WeeklyPlanningPanel() {
     if (!weekDeleteCandidate || !selectedPlanId) {
       return;
     }
+    const deleteCandidate = weekDeleteCandidate;
+    const currentPlanId = Number(selectedPlanId);
     setIsDeleting(true);
+    setWeekDeleteCandidate(null);
     try {
-      await deleteProductionWeekPlan(weekDeleteCandidate.production_plan_week_id);
-      setWeekDeleteCandidate(null);
-      await loadWeeks(Number(selectedPlanId));
+      await deleteProductionWeekPlan(deleteCandidate.production_plan_week_id);
+      await loadWeeks(currentPlanId);
       await syncSelectedWeekDetails();
       setSuccessText("Недельный план удалён.");
     } catch (error) {
       setErrorText(toErrorMessage(error, "Не удалось удалить неделю."));
       try {
-        if (selectedPlanId) {
-          await loadWeeks(Number(selectedPlanId));
-          await syncSelectedWeekDetails();
-        }
+        await loadWeeks(currentPlanId);
+        await syncSelectedWeekDetails();
       } catch {
         // keep original error visible; refresh failure should not mask it
       }
     } finally {
       setIsDeleting(false);
+      setWeekDeleteCandidate(null);
     }
   };
 
@@ -1032,3 +1033,4 @@ function WeeklyPlanningPanel() {
 }
 
 export default WeeklyPlanningPanel;
+

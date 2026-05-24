@@ -196,6 +196,46 @@ def get_plan_id_by_line_id(cursor: RealDictCursor, production_plan_line_id: int,
     return int(row["production_plan_id"])
 
 
+def ensure_no_actuals_for_production_plan(cursor: RealDictCursor, production_plan_id: int) -> None:
+    cursor.execute(
+        """
+        SELECT COUNT(*)::int AS actual_count
+        FROM production_actuals AS pa
+        INNER JOIN production_week_lines AS pwl
+            ON pwl.production_week_line_id = pa.production_week_line_id
+        INNER JOIN production_plan_weeks AS ppw
+            ON ppw.production_plan_week_id = pwl.production_plan_week_id
+        WHERE ppw.production_plan_id = %s;
+        """,
+        (production_plan_id,),
+    )
+    row = cursor.fetchone() or {}
+    if int(row.get("actual_count", 0)) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя удалить месячный план: по его недельным планам уже внесён факт производства. Сначала удалите записи факта в Журнале выполнения.",
+        )
+
+
+def ensure_no_actuals_for_production_plan_line(cursor: RealDictCursor, production_plan_line_id: int) -> None:
+    cursor.execute(
+        """
+        SELECT COUNT(*)::int AS actual_count
+        FROM production_actuals AS pa
+        INNER JOIN production_week_lines AS pwl
+            ON pwl.production_week_line_id = pa.production_week_line_id
+        WHERE pwl.production_plan_line_id = %s;
+        """,
+        (production_plan_line_id,),
+    )
+    row = cursor.fetchone() or {}
+    if int(row.get("actual_count", 0)) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя удалить строку месячного плана: по ней уже внесён факт производства через недельный план. Сначала удалите записи факта в Журнале выполнения.",
+        )
+
+
 @router.get("", response_model=list[ProductionPlanSummary])
 def list_production_plans():
     connection = None
@@ -597,6 +637,7 @@ def delete_production_plan(production_plan_id: int = Path(..., gt=0)):
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             ensure_plan_is_draft(cursor, production_plan_id)
+            ensure_no_actuals_for_production_plan(cursor, production_plan_id)
             cursor.execute(
                 """
                 DELETE FROM production_plans
@@ -717,6 +758,7 @@ def delete_production_plan_line(production_plan_line_id: int = Path(..., gt=0)):
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             production_plan_id = get_plan_id_by_line_id(cursor, production_plan_line_id, lock=True)
             ensure_plan_is_draft(cursor, production_plan_id)
+            ensure_no_actuals_for_production_plan_line(cursor, production_plan_line_id)
             cursor.execute(
                 """
                 DELETE FROM production_plan_lines
