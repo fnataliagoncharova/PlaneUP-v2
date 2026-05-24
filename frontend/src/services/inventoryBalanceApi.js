@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest } from "./apiClient";
+import { API_BASE_URL, apiRequest, apiRequestBlob } from "./apiClient";
 
 export function getInventoryBalanceList(asOfDate) {
   const query = asOfDate ? `?as_of_date=${encodeURIComponent(asOfDate)}` : "";
@@ -49,6 +49,10 @@ export function commitInventoryBalanceImport(file) {
     method: "POST",
     body: formData,
   });
+}
+
+export function downloadInventoryBalanceImportTemplate() {
+  return apiRequestBlob("/inventory-balance/import/template");
 }
 
 export function getInventoryBalanceImportTemplateUrl() {

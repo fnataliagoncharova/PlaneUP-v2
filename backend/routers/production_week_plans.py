@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -72,6 +72,16 @@ def format_warning_qty(value: Decimal) -> str:
     return f"{sign}{grouped_integer}"
 
 
+def format_warning_qty_with_uom(value: Decimal, unit_of_measure: str) -> str:
+    qty_text = format_warning_qty(value)
+    unit_label = str(unit_of_measure or "").strip()
+    return f"{qty_text} {unit_label}".strip()
+
+
+def format_warning_datetime(value: datetime) -> str:
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
 def get_system_week_bounds(plan_month: date, week_no: int) -> tuple[date, date] | None:
     year = plan_month.year
     month = plan_month.month
@@ -108,20 +118,20 @@ def ensure_week_matches_plan_month(
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План выпуска не найден.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РџР»Р°РЅ РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅ.")
 
     expected = get_system_week_bounds(row["plan_month"], week_no)
     if expected is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Неделя должна соответствовать периоду месяца планирования.",
+            detail="РќРµРґРµР»СЏ РґРѕР»Р¶РЅР° СЃРѕРѕС‚РІРµС‚СЃС‚РІРѕРІР°С‚СЊ РїРµСЂРёРѕРґСѓ РјРµСЃСЏС†Р° РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ.",
         )
 
     expected_start, expected_end = expected
     if week_start_date != expected_start or week_end_date != expected_end:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Неделя должна соответствовать периоду месяца планирования.",
+            detail="РќРµРґРµР»СЏ РґРѕР»Р¶РЅР° СЃРѕРѕС‚РІРµС‚СЃС‚РІРѕРІР°С‚СЊ РїРµСЂРёРѕРґСѓ РјРµСЃСЏС†Р° РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ.",
         )
 
 
@@ -138,7 +148,7 @@ def require_monthly_plan(cursor: RealDictCursor, production_plan_id: int, lock: 
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="План выпуска не найден.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РџР»Р°РЅ РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅ.")
     return row
 
 
@@ -155,7 +165,7 @@ def require_week(cursor: RealDictCursor, production_plan_week_id: int, lock: boo
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Недельный план не найден.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ РЅРµ РЅР°Р№РґРµРЅ.")
     return row
 
 
@@ -177,7 +187,7 @@ def require_week_line(cursor: RealDictCursor, production_week_line_id: int, lock
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Строка недельного плана не найдена.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РЎС‚СЂРѕРєР° РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР° РЅРµ РЅР°Р№РґРµРЅР°.")
     return row
 
 
@@ -186,7 +196,7 @@ def ensure_approved_monthly_plan(cursor: RealDictCursor, production_plan_id: int
     if row["status"] != "approved":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Недельный план можно создать только на основе утверждённого месячного плана.",
+            detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ РјРѕР¶РЅРѕ СЃРѕР·РґР°С‚СЊ С‚РѕР»СЊРєРѕ РЅР° РѕСЃРЅРѕРІРµ СѓС‚РІРµСЂР¶РґС‘РЅРЅРѕРіРѕ РјРµСЃСЏС‡РЅРѕРіРѕ РїР»Р°РЅР°.",
         )
     return row
 
@@ -201,7 +211,7 @@ def ensure_route_step_equipment_exists(cursor: RealDictCursor, route_step_equipm
         (route_step_equipment_id,),
     )
     if cursor.fetchone() is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Оборудование шага не найдено.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РћР±РѕСЂСѓРґРѕРІР°РЅРёРµ С€Р°РіР° РЅРµ РЅР°Р№РґРµРЅРѕ.")
 
 
 def ensure_plan_line_belongs_to_monthly_plan(
@@ -225,9 +235,9 @@ def ensure_plan_line_belongs_to_monthly_plan(
     )
     row = cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Строка плана выпуска не найдена.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅР°.")
     if int(row["production_plan_id"]) != int(production_plan_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Позиция не относится к выбранному месячному плану.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџРѕР·РёС†РёСЏ РЅРµ РѕС‚РЅРѕСЃРёС‚СЃСЏ Рє РІС‹Р±СЂР°РЅРЅРѕРјСѓ РјРµСЃСЏС‡РЅРѕРјСѓ РїР»Р°РЅСѓ.")
     return row
 
 
@@ -247,7 +257,7 @@ def validate_weekly_qty_limit(
     )
     line_row = cursor.fetchone()
     if line_row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Строка плана выпуска не найдена.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РІС‹РїСѓСЃРєР° РЅРµ РЅР°Р№РґРµРЅР°.")
 
     if exclude_week_line_id is None:
         cursor.execute(
@@ -273,18 +283,18 @@ def validate_weekly_qty_limit(
     if Decimal(current_sum) + Decimal(new_qty) > Decimal(line_row["planned_qty"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Сумма недельных планов превышает месячный план выпуска.",
+            detail="РЎСѓРјРјР° РЅРµРґРµР»СЊРЅС‹С… РїР»Р°РЅРѕРІ РїСЂРµРІС‹С€Р°РµС‚ РјРµСЃСЏС‡РЅС‹Р№ РїР»Р°РЅ РІС‹РїСѓСЃРєР°.",
         )
 
 
 def build_line_warnings(line_row: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
     if line_row.get("route_step_equipment_id") is None:
-        warnings.append("Оборудование не выбрано.")
+        warnings.append("РћР±РѕСЂСѓРґРѕРІР°РЅРёРµ РЅРµ РІС‹Р±СЂР°РЅРѕ.")
     min_batch_qty = line_row.get("min_batch_qty")
     batch_qty = line_row.get("batch_qty")
     if min_batch_qty is not None and batch_qty is not None and Decimal(batch_qty) < Decimal(min_batch_qty):
-        warnings.append("Размер партии меньше минимальной партии для выбранного оборудования.")
+        warnings.append("Р Р°Р·РјРµСЂ РїР°СЂС‚РёРё РјРµРЅСЊС€Рµ РјРёРЅРёРјР°Р»СЊРЅРѕР№ РїР°СЂС‚РёРё РґР»СЏ РІС‹Р±СЂР°РЅРЅРѕРіРѕ РѕР±РѕСЂСѓРґРѕРІР°РЅРёСЏ.")
     return warnings
 
 
@@ -390,21 +400,142 @@ def get_initial_component_balances(
     return balances
 
 
+def get_component_actual_batches_with_availability(
+    cursor: RealDictCursor,
+    component_ids: set[int],
+) -> tuple[datetime, dict[int, list[tuple[datetime, Decimal]]]]:
+    cursor.execute("SELECT NOW()::timestamp AS check_at;")
+    check_at_row = cursor.fetchone() or {}
+    check_at = check_at_row.get("check_at")
+    if not isinstance(check_at, datetime):
+        check_at = datetime.now()
+
+    if not component_ids:
+        return check_at, {}
+
+    cursor.execute(
+        """
+        WITH wait_hours_by_nomenclature AS (
+            SELECT DISTINCT ON (r.result_nomenclature_id)
+                r.result_nomenclature_id AS nomenclature_id,
+                COALESCE(step_row.post_process_wait_hours, 0) AS post_process_wait_hours
+            FROM routes AS r
+            INNER JOIN LATERAL (
+                SELECT rs.post_process_wait_hours
+                FROM route_steps AS rs
+                WHERE rs.route_id = r.route_id
+                  AND rs.output_nomenclature_id = r.result_nomenclature_id
+                ORDER BY rs.step_no DESC, rs.route_step_id DESC
+                LIMIT 1
+            ) AS step_row ON TRUE
+            WHERE r.is_active = TRUE
+            ORDER BY
+                r.result_nomenclature_id ASC,
+                r.route_id ASC
+        )
+        SELECT
+            pa.nomenclature_id,
+            COALESCE(pa.actual_qty, 0) AS actual_qty,
+            (
+                CASE
+                    WHEN pa.shift_type = 'day'
+                        THEN pa.actual_date::timestamp + INTERVAL '19 hour'
+                    ELSE pa.actual_date::timestamp + INTERVAL '1 day' + INTERVAL '7 hour'
+                END
+                + (COALESCE(rs.post_process_wait_hours, wait_hours.post_process_wait_hours, 0) * INTERVAL '1 hour')
+            ) AS available_at
+        FROM production_actuals AS pa
+        LEFT JOIN production_week_lines AS pwl
+            ON pwl.production_week_line_id = pa.production_week_line_id
+        LEFT JOIN route_step_equipment AS rse
+            ON rse.step_equipment_id = pwl.route_step_equipment_id
+        LEFT JOIN route_steps AS rs
+            ON rs.route_step_id = rse.route_step_id
+        LEFT JOIN wait_hours_by_nomenclature AS wait_hours
+            ON wait_hours.nomenclature_id = pa.nomenclature_id
+        WHERE pa.nomenclature_id = ANY(%s)
+        ORDER BY
+            pa.nomenclature_id ASC,
+            available_at ASC,
+            pa.production_actual_id ASC;
+        """,
+        (list(component_ids),),
+    )
+
+    batches_by_component: dict[int, list[tuple[datetime, Decimal]]] = {}
+    for row in cursor.fetchall():
+        component_id = int(row["nomenclature_id"])
+        actual_qty = to_decimal(row["actual_qty"])
+        available_at = row["available_at"]
+        if actual_qty <= DECIMAL_ZERO or not isinstance(available_at, datetime):
+            continue
+        batches_by_component.setdefault(component_id, []).append((available_at, actual_qty))
+
+    return check_at, batches_by_component
+
+
+def split_available_and_degassing_batches(
+    check_at: datetime,
+    batches: list[tuple[datetime, Decimal]],
+) -> tuple[Decimal, list[tuple[datetime, Decimal]]]:
+    available_now_qty = DECIMAL_ZERO
+    degassing_batches: list[tuple[datetime, Decimal]] = []
+
+    for available_at, qty in batches:
+        if available_at <= check_at:
+            available_now_qty += qty
+        else:
+            degassing_batches.append((available_at, qty))
+
+    return available_now_qty, degassing_batches
+
+
+def group_degassing_batches(
+    batches: list[tuple[datetime, Decimal]],
+) -> list[tuple[datetime, Decimal]]:
+    if not batches:
+        return []
+
+    grouped: list[tuple[datetime, Decimal]] = []
+    for available_at, qty in batches:
+        if grouped and grouped[-1][0] == available_at:
+            prev_available_at, prev_qty = grouped[-1]
+            grouped[-1] = (prev_available_at, prev_qty + qty)
+        else:
+            grouped.append((available_at, qty))
+    return grouped
+
+
 def build_component_availability_warning(
     component_row: dict[str, Any],
     required_qty: Decimal,
-    available_qty: Decimal,
+    available_now_qty: Decimal,
+    shortage_qty: Decimal,
+    degassing_batches: list[tuple[datetime, Decimal]],
 ) -> str:
-    deficit_qty = required_qty - available_qty
     code = str(component_row.get("nomenclature_code") or "-")
     name = str(component_row.get("nomenclature_name") or "").strip()
-    component_label = f"{code} {name}".strip()
+    component_label = f"{code} — {name}" if name else code
     unit_of_measure = str(component_row.get("unit_of_measure") or "").strip()
-    deficit_label = f"{format_warning_qty(deficit_qty)} {unit_of_measure}".strip()
-    return (
-        f"{component_label}: дефицит {deficit_label}. "
-        f"Нужно {format_warning_qty(required_qty)}, доступно {format_warning_qty(available_qty)}."
-    )
+    required_label = format_warning_qty_with_uom(required_qty, unit_of_measure)
+    available_now_label = format_warning_qty_with_uom(available_now_qty, unit_of_measure)
+    shortage_label = format_warning_qty_with_uom(shortage_qty, unit_of_measure)
+
+    warning_lines = [
+        f"Компонент {component_label}",
+        "",
+        f"Требуется: {required_label}",
+        f"Доступно на текущую дату: {available_now_label}",
+        f"Дефицит компонента: {shortage_label}",
+    ]
+
+    if degassing_batches:
+        warning_lines.extend(["", "В дегазации:"])
+        for available_at, qty in degassing_batches:
+            qty_label = format_warning_qty_with_uom(qty, unit_of_measure)
+            warning_lines.append(f"{qty_label} — доступно с {format_warning_datetime(available_at)}")
+
+    return "\n".join(warning_lines)
 
 
 def build_component_availability_warnings(
@@ -413,37 +544,29 @@ def build_component_availability_warnings(
     production_plan_week_id: int,
     current_week_no: int,
 ) -> dict[int, list[str]]:
+    _ = current_week_no
     cursor.execute(
         """
         SELECT
             pwl.production_week_line_id,
-            pwl.production_plan_week_id,
-            pw.week_no,
-            pwl.sequence_no,
             pwl.planned_qty,
-            ppl.nomenclature_id,
-            n.nomenclature_code
+            ppl.nomenclature_id
         FROM production_week_lines AS pwl
-        INNER JOIN production_plan_weeks AS pw ON pw.production_plan_week_id = pwl.production_plan_week_id
         INNER JOIN production_plan_lines AS ppl ON ppl.production_plan_line_id = pwl.production_plan_line_id
-        INNER JOIN nomenclature AS n ON n.nomenclature_id = ppl.nomenclature_id
-        WHERE pw.production_plan_id = %s
-          AND (pw.week_no < %s OR pw.production_plan_week_id = %s)
+        WHERE pwl.production_plan_week_id = %s
         ORDER BY
-            pw.week_no ASC,
             pwl.sequence_no ASC,
-            pwl.production_week_line_id ASC,
-            n.nomenclature_code ASC;
+            pwl.production_week_line_id ASC;
         """,
-        (production_plan_id, current_week_no, production_plan_week_id),
+        (production_plan_week_id,),
     )
-    timeline_rows = cursor.fetchall()
-    if not timeline_rows:
+    week_lines = cursor.fetchall()
+    if not week_lines:
         return {}
 
     requirements_cache: dict[int, dict[str, Any]] = {}
     component_ids: set[int] = set()
-    for row in timeline_rows:
+    for row in week_lines:
         line_nomenclature_id = int(row["nomenclature_id"])
         if line_nomenclature_id not in requirements_cache:
             requirements_cache[line_nomenclature_id] = get_route_manufactured_component_requirements(
@@ -454,39 +577,60 @@ def build_component_availability_warnings(
         for component in route_requirements["components"]:
             component_ids.add(int(component["nomenclature_id"]))
 
-    running_balances = get_initial_component_balances(
+    initial_balances = get_initial_component_balances(
         cursor=cursor,
         production_plan_id=production_plan_id,
         component_ids=component_ids,
     )
+    check_at, actual_batches_by_component = get_component_actual_batches_with_availability(
+        cursor=cursor,
+        component_ids=component_ids,
+    )
+
+    available_now_by_component: dict[int, Decimal] = {}
+    degassing_by_component: dict[int, list[tuple[datetime, Decimal]]] = {}
+    for component_id in component_ids:
+        inventory_qty = initial_balances.get(component_id, DECIMAL_ZERO)
+        actual_available_qty, actual_degassing_batches = split_available_and_degassing_batches(
+            check_at=check_at,
+            batches=actual_batches_by_component.get(component_id, []),
+        )
+        available_now_by_component[component_id] = inventory_qty + actual_available_qty
+        degassing_by_component[component_id] = group_degassing_batches(actual_degassing_batches)
+
     warnings_by_line: dict[int, list[str]] = {}
 
-    for row in timeline_rows:
+    for row in week_lines:
         line_id = int(row["production_week_line_id"])
-        line_week_id = int(row["production_plan_week_id"])
         line_nomenclature_id = int(row["nomenclature_id"])
         line_planned_qty = to_decimal(row["planned_qty"])
 
         route_requirements = requirements_cache.get(line_nomenclature_id, {"output_qty": None, "components": []})
         output_qty = to_decimal(route_requirements.get("output_qty"))
-        if output_qty > DECIMAL_ZERO:
-            runs_qty = line_planned_qty / output_qty
-            for component in route_requirements["components"]:
-                component_id = int(component["nomenclature_id"])
-                required_qty = runs_qty * to_decimal(component["input_qty"])
-                if required_qty <= DECIMAL_ZERO:
-                    continue
+        if output_qty <= DECIMAL_ZERO:
+            continue
 
-                available_qty = running_balances.get(component_id, DECIMAL_ZERO)
-                if line_week_id == production_plan_week_id and required_qty > available_qty:
-                    warnings_by_line.setdefault(line_id, []).append(
-                        build_component_availability_warning(component, required_qty, available_qty)
-                    )
+        runs_qty = line_planned_qty / output_qty
+        for component in route_requirements["components"]:
+            component_id = int(component["nomenclature_id"])
+            required_qty = runs_qty * to_decimal(component["input_qty"])
+            if required_qty <= DECIMAL_ZERO:
+                continue
 
-                running_balances[component_id] = available_qty - required_qty
+            available_now_qty = available_now_by_component.get(component_id, DECIMAL_ZERO)
+            shortage_qty = required_qty - available_now_qty
+            if shortage_qty <= DECIMAL_ZERO:
+                continue
 
-        # Planned output of the current line can be consumed only by later lines.
-        running_balances[line_nomenclature_id] = running_balances.get(line_nomenclature_id, DECIMAL_ZERO) + line_planned_qty
+            warnings_by_line.setdefault(line_id, []).append(
+                build_component_availability_warning(
+                    component_row=component,
+                    required_qty=required_qty,
+                    available_now_qty=available_now_qty,
+                    shortage_qty=shortage_qty,
+                    degassing_batches=degassing_by_component.get(component_id, []),
+                )
+            )
 
     return warnings_by_line
 
@@ -676,7 +820,7 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
 def require_week_exists(connection, production_plan_week_id: int) -> dict[str, Any]:
     week = get_production_week_by_id(connection, production_plan_week_id)
     if week is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Недельный план не найден.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ РЅРµ РЅР°Р№РґРµРЅ.")
     return week
 
 
@@ -713,7 +857,7 @@ def list_production_plan_weeks(production_plan_id: int = Path(..., gt=0)):
     except HTTPException:
         raise
     except psycopg2.Error as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось получить недельные планы.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Рµ РїР»Р°РЅС‹.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -727,7 +871,7 @@ def create_production_plan_week(
     connection = None
     try:
         if payload.week_end_date < payload.week_start_date:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Дата окончания недели не может быть раньше даты начала недели.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Р”Р°С‚Р° РѕРєРѕРЅС‡Р°РЅРёСЏ РЅРµРґРµР»Рё РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ СЂР°РЅСЊС€Рµ РґР°С‚С‹ РЅР°С‡Р°Р»Р° РЅРµРґРµР»Рё.")
 
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -771,15 +915,15 @@ def create_production_plan_week(
     except UniqueViolation as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Недельный план с таким номером уже существует.") from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ СЃ С‚Р°РєРёРј РЅРѕРјРµСЂРѕРј СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚.") from exc
     except CheckViolation as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте номер недели и диапазон дат недели.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РЅРѕРјРµСЂ РЅРµРґРµР»Рё Рё РґРёР°РїР°Р·РѕРЅ РґР°С‚ РЅРµРґРµР»Рё.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось создать недельный план.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -794,7 +938,7 @@ def get_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     except HTTPException:
         raise
     except psycopg2.Error as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось получить недельный план.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -813,7 +957,7 @@ def update_production_plan_week(
             next_start = payload.week_start_date or week_row["week_start_date"]
             next_end = payload.week_end_date or week_row["week_end_date"]
             if next_end < next_start:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Дата окончания недели не может быть раньше даты начала недели.")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Р”Р°С‚Р° РѕРєРѕРЅС‡Р°РЅРёСЏ РЅРµРґРµР»Рё РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ СЂР°РЅСЊС€Рµ РґР°С‚С‹ РЅР°С‡Р°Р»Р° РЅРµРґРµР»Рё.")
 
             next_comment = payload.comment if payload.comment is not None else week_row["comment"]
             cursor.execute(
@@ -838,11 +982,11 @@ def update_production_plan_week(
     except CheckViolation as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте диапазон дат недели.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РґРёР°РїР°Р·РѕРЅ РґР°С‚ РЅРµРґРµР»Рё.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить недельный план.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -871,8 +1015,8 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "Нельзя удалить недельный план: по его строкам уже внесён факт производства. "
-                        "Сначала удалите записи факта в Журнале выполнения."
+                        "РќРµР»СЊР·СЏ СѓРґР°Р»РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ: РїРѕ РµРіРѕ СЃС‚СЂРѕРєР°Рј СѓР¶Рµ РІРЅРµСЃС‘РЅ С„Р°РєС‚ РїСЂРѕРёР·РІРѕРґСЃС‚РІР°. "
+                        "РЎРЅР°С‡Р°Р»Р° СѓРґР°Р»РёС‚Рµ Р·Р°РїРёСЃРё С„Р°РєС‚Р° РІ Р–СѓСЂРЅР°Р»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ."
                     ),
                 )
             cursor.execute(
@@ -888,7 +1032,7 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
         connection.commit()
         return {
             "production_plan_week_id": int(deleted["production_plan_week_id"]),
-            "message": "Недельный план удалён.",
+            "message": "РќРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ СѓРґР°Р»С‘РЅ.",
         }
     except HTTPException:
         if connection is not None:
@@ -897,7 +1041,7 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось удалить недельный план.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ РЅРµРґРµР»СЊРЅС‹Р№ РїР»Р°РЅ.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -960,18 +1104,18 @@ def create_production_week_line(
             connection.rollback()
         constraint_name = getattr(getattr(exc, "diag", None), "constraint_name", None)
         if constraint_name == "production_week_lines_unique_plan_line_per_week":
-            detail = "Позиция уже есть в недельном плане."
+            detail = "РџРѕР·РёС†РёСЏ СѓР¶Рµ РµСЃС‚СЊ РІ РЅРµРґРµР»СЊРЅРѕРј РїР»Р°РЅРµ."
         else:
-            detail = "Не удалось добавить строку недельного плана."
+            detail = "РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°."
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
     except (ForeignKeyViolation, CheckViolation) as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте данные строки недельного плана.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ СЃС‚СЂРѕРєРё РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось добавить строку недельного плана.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1029,11 +1173,11 @@ def update_production_week_line(
     except (ForeignKeyViolation, CheckViolation) as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверьте данные строки недельного плана.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ СЃС‚СЂРѕРєРё РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось обновить строку недельного плана.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1061,8 +1205,8 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "Нельзя удалить строку недельного плана: по ней уже внесён факт производства. "
-                        "Сначала удалите записи факта в Журнале выполнения."
+                        "РќРµР»СЊР·СЏ СѓРґР°Р»РёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°: РїРѕ РЅРµР№ СѓР¶Рµ РІРЅРµСЃС‘РЅ С„Р°РєС‚ РїСЂРѕРёР·РІРѕРґСЃС‚РІР°. "
+                        "РЎРЅР°С‡Р°Р»Р° СѓРґР°Р»РёС‚Рµ Р·Р°РїРёСЃРё С„Р°РєС‚Р° РІ Р–СѓСЂРЅР°Р»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ."
                     ),
                 )
             cursor.execute(
@@ -1078,7 +1222,7 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
         connection.commit()
         return {
             "production_week_line_id": int(deleted["production_week_line_id"]),
-            "message": "Строка недельного плана удалена.",
+            "message": "РЎС‚СЂРѕРєР° РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР° СѓРґР°Р»РµРЅР°.",
         }
     except HTTPException:
         if connection is not None:
@@ -1087,7 +1231,7 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось удалить строку недельного плана.") from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ СЃС‚СЂРѕРєСѓ РЅРµРґРµР»СЊРЅРѕРіРѕ РїР»Р°РЅР°.") from exc
     finally:
         if connection is not None:
             connection.close()
@@ -1095,3 +1239,4 @@ def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
 
 router.include_router(plans_router)
 router.include_router(weeks_router)
+

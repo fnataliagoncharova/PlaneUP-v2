@@ -6,19 +6,19 @@ import SafetyStockImportPanel from "../components/reports/SafetyStockImportPanel
 import SalesPlanImportPanel from "../components/reports/SalesPlanImportPanel";
 import {
   commitInventoryBalanceImport,
-  getInventoryBalanceImportTemplateUrl,
+  downloadInventoryBalanceImportTemplate,
   getInventoryBalanceList,
   previewInventoryBalanceImport,
 } from "../services/inventoryBalanceApi";
 import {
   commitSafetyStockImport,
-  getSafetyStockImportTemplateUrl,
+  downloadSafetyStockImportTemplate,
   getSafetyStockList,
   previewSafetyStockImport,
 } from "../services/safetyStockApi";
 import {
   commitSalesPlanImport,
-  getSalesPlanImportTemplateUrl,
+  downloadSalesPlanImportTemplate,
   getSalesPlanList,
   previewSalesPlanImport,
 } from "../services/salesPlanApi";
@@ -65,6 +65,7 @@ function ReportsSection() {
   const [importErrorContext, setImportErrorContext] = useState(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isCommitLoading, setIsCommitLoading] = useState(false);
+  const [isTemplateDownloading, setIsTemplateDownloading] = useState(false);
 
   const reloadSalesPlan = useCallback(async () => {
     setIsSalesPlanLoading(true);
@@ -165,39 +166,46 @@ function ReportsSection() {
     setIsImportOpen(false);
   };
 
-  const handleDownloadTemplate = (context = importContext) => {
+  const handleDownloadTemplate = async (context = importContext) => {
     if (!context) {
       return;
     }
 
     setImportError("");
     setImportErrorContext(context);
+    setIsTemplateDownloading(true);
 
     try {
-      let url = "";
+      let templateBlob = null;
       let fileName = "";
 
       if (context === IMPORT_CONTEXT_SALES_PLAN) {
-        url = getSalesPlanImportTemplateUrl();
+        templateBlob = await downloadSalesPlanImportTemplate();
         fileName = "sales_plan_import_template.xlsx";
       } else if (context === IMPORT_CONTEXT_INVENTORY_BALANCE) {
-        url = getInventoryBalanceImportTemplateUrl();
+        templateBlob = await downloadInventoryBalanceImportTemplate();
         fileName = "inventory_balance_import_template.xlsx";
       } else {
-        url = getSafetyStockImportTemplateUrl();
+        templateBlob = await downloadSafetyStockImportTemplate();
         fileName = "safety_stock_import_template.xlsx";
       }
 
+      if (!templateBlob) {
+        throw new Error("Не удалось скачать шаблон Excel.");
+      }
+
+      const blobUrl = URL.createObjectURL(templateBlob);
       const link = document.createElement("a");
-      link.href = url;
+      link.href = blobUrl;
       link.download = fileName;
-      link.target = "_blank";
-      link.rel = "noopener";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
       setImportError(error.message || "Не удалось скачать шаблон Excel.");
+    } finally {
+      setIsTemplateDownloading(false);
     }
   };
 
@@ -298,6 +306,7 @@ function ReportsSection() {
           onCommit={handleCommitImport}
           onCancel={handleCloseImportPanel}
           onDownloadTemplate={() => handleDownloadTemplate(IMPORT_CONTEXT_INVENTORY_BALANCE)}
+          isTemplateDownloading={isTemplateDownloading}
         />
       );
     }
@@ -316,6 +325,7 @@ function ReportsSection() {
           onCommit={handleCommitImport}
           onCancel={handleCloseImportPanel}
           onDownloadTemplate={() => handleDownloadTemplate(IMPORT_CONTEXT_SAFETY_STOCK)}
+          isTemplateDownloading={isTemplateDownloading}
         />
       );
     }
@@ -333,7 +343,7 @@ function ReportsSection() {
         onCommit={handleCommitImport}
         onCancel={handleCloseImportPanel}
         onDownloadTemplate={() => handleDownloadTemplate(IMPORT_CONTEXT_SALES_PLAN)}
-        isTemplateDownloading={false}
+        isTemplateDownloading={isTemplateDownloading}
       />
     );
   };
@@ -382,10 +392,11 @@ function ReportsSection() {
               <button
                 type="button"
                 onClick={() => handleDownloadTemplate(IMPORT_CONTEXT_SALES_PLAN)}
+                disabled={isTemplateDownloading}
                 className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
-                Скачать шаблон Excel
+                {isTemplateDownloading ? "Скачиваем..." : "Скачать шаблон Excel"}
               </button>
             </div>
           </div>
@@ -496,10 +507,11 @@ function ReportsSection() {
               <button
                 type="button"
                 onClick={() => handleDownloadTemplate(IMPORT_CONTEXT_INVENTORY_BALANCE)}
+                disabled={isTemplateDownloading}
                 className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
-                Скачать шаблон Excel
+                {isTemplateDownloading ? "Скачиваем..." : "Скачать шаблон Excel"}
               </button>
             </div>
           </div>
@@ -610,10 +622,11 @@ function ReportsSection() {
               <button
                 type="button"
                 onClick={() => handleDownloadTemplate(IMPORT_CONTEXT_SAFETY_STOCK)}
+                disabled={isTemplateDownloading}
                 className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
-                Скачать шаблон Excel
+                {isTemplateDownloading ? "Скачиваем..." : "Скачать шаблон Excel"}
               </button>
             </div>
           </div>

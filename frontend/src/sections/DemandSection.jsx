@@ -25,8 +25,8 @@ import {
   commitInventoryBalanceImport,
   createInventoryBalanceItem,
   deleteInventoryBalanceItem,
+  downloadInventoryBalanceImportTemplate,
   getInventoryBalanceDates,
-  getInventoryBalanceImportTemplateUrl,
   getInventoryBalanceList,
   previewInventoryBalanceImport,
   updateInventoryBalanceItem,
@@ -35,7 +35,7 @@ import {
   commitSafetyStockImport,
   createSafetyStockItem,
   deleteSafetyStockItem,
-  getSafetyStockImportTemplateUrl,
+  downloadSafetyStockImportTemplate,
   getSafetyStockList,
   previewSafetyStockImport,
   updateSafetyStockItem,
@@ -44,7 +44,7 @@ import {
   commitSalesPlanImport,
   createSalesPlanItem,
   deleteSalesPlanItem,
-  getSalesPlanImportTemplateUrl,
+  downloadSalesPlanImportTemplate,
   getSalesPlanList,
   previewSalesPlanImport,
   updateSalesPlanItem,
@@ -216,6 +216,7 @@ function DemandSection() {
   const [importErrorContext, setImportErrorContext] = useState(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isCommitLoading, setIsCommitLoading] = useState(false);
+  const [isTemplateDownloading, setIsTemplateDownloading] = useState(false);
   const [nomenclatureItems, setNomenclatureItems] = useState([]);
   const [isNomenclatureLoading, setIsNomenclatureLoading] = useState(false);
   const [isSalesPlanFormOpen, setIsSalesPlanFormOpen] = useState(false);
@@ -502,6 +503,20 @@ function DemandSection() {
     setImportError("");
   }, []);
 
+  useEffect(() => {
+    if (!isImportOpen) {
+      return;
+    }
+
+    if (importContext === activeSourceTab) {
+      return;
+    }
+
+    setImportContext(activeSourceTab);
+    setImportErrorContext(activeSourceTab);
+    resetImportState();
+  }, [activeSourceTab, importContext, isImportOpen, resetImportState]);
+
   const handleOpenImportPanel = (context) => {
     setImportContext(context);
     setImportErrorContext(context);
@@ -518,39 +533,47 @@ function DemandSection() {
     setIsImportOpen(false);
   };
 
-  const handleDownloadTemplate = (context = importContext) => {
-    if (!context) {
+  const handleDownloadTemplate = async (context = importContext) => {
+    const resolvedContext = context || activeSourceTab;
+    if (!resolvedContext) {
       return;
     }
 
     setImportError("");
-    setImportErrorContext(context);
+    setImportErrorContext(resolvedContext);
+    setIsTemplateDownloading(true);
 
     try {
-      let url = "";
+      let templateBlob = null;
       let fileName = "";
 
-      if (context === IMPORT_CONTEXT_SALES_PLAN) {
-        url = getSalesPlanImportTemplateUrl();
+      if (resolvedContext === IMPORT_CONTEXT_SALES_PLAN) {
+        templateBlob = await downloadSalesPlanImportTemplate();
         fileName = "sales_plan_import_template.xlsx";
-      } else if (context === IMPORT_CONTEXT_INVENTORY_BALANCE) {
-        url = getInventoryBalanceImportTemplateUrl();
+      } else if (resolvedContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
+        templateBlob = await downloadInventoryBalanceImportTemplate();
         fileName = "inventory_balance_import_template.xlsx";
       } else {
-        url = getSafetyStockImportTemplateUrl();
+        templateBlob = await downloadSafetyStockImportTemplate();
         fileName = "safety_stock_import_template.xlsx";
       }
 
+      if (!templateBlob) {
+        throw new Error("Не удалось скачать шаблон Excel.");
+      }
+
+      const blobUrl = URL.createObjectURL(templateBlob);
       const link = document.createElement("a");
-      link.href = url;
+      link.href = blobUrl;
       link.download = fileName;
-      link.target = "_blank";
-      link.rel = "noopener";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
       setImportError(error.message || "Не удалось скачать шаблон Excel.");
+    } finally {
+      setIsTemplateDownloading(false);
     }
   };
 
@@ -567,6 +590,8 @@ function DemandSection() {
       return;
     }
 
+    const resolvedContext = importContext || activeSourceTab;
+
     setIsPreviewLoading(true);
     setImportError("");
     setCommitResult(null);
@@ -574,9 +599,9 @@ function DemandSection() {
     try {
       let response = null;
 
-      if (importContext === IMPORT_CONTEXT_SALES_PLAN) {
+      if (resolvedContext === IMPORT_CONTEXT_SALES_PLAN) {
         response = await previewSalesPlanImport(importFile);
-      } else if (importContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
+      } else if (resolvedContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
         response = await previewInventoryBalanceImport(importFile);
       } else {
         response = await previewSafetyStockImport(importFile);
@@ -602,15 +627,17 @@ function DemandSection() {
       return;
     }
 
+    const resolvedContext = importContext || activeSourceTab;
+
     setIsCommitLoading(true);
     setImportError("");
 
     try {
       let response = null;
 
-      if (importContext === IMPORT_CONTEXT_SALES_PLAN) {
+      if (resolvedContext === IMPORT_CONTEXT_SALES_PLAN) {
         response = await commitSalesPlanImport(importFile);
-      } else if (importContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
+      } else if (resolvedContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
         response = await commitInventoryBalanceImport(importFile);
       } else {
         response = await commitSafetyStockImport(importFile);
@@ -618,9 +645,9 @@ function DemandSection() {
 
       setCommitResult(response);
 
-      if (importContext === IMPORT_CONTEXT_SALES_PLAN) {
+      if (resolvedContext === IMPORT_CONTEXT_SALES_PLAN) {
         await reloadSalesPlan();
-      } else if (importContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
+      } else if (resolvedContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
         await reloadInventoryBalanceDates();
         await reloadInventoryBalance();
       } else {
@@ -638,7 +665,9 @@ function DemandSection() {
       return null;
     }
 
-    if (importContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
+    const resolvedContext = importContext || activeSourceTab;
+
+    if (resolvedContext === IMPORT_CONTEXT_INVENTORY_BALANCE) {
       return (
         <InventoryBalanceImportPanel
           selectedFile={importFile}
@@ -652,11 +681,12 @@ function DemandSection() {
           onCommit={handleCommitImport}
           onCancel={handleCloseImportPanel}
           onDownloadTemplate={() => handleDownloadTemplate(IMPORT_CONTEXT_INVENTORY_BALANCE)}
+          isTemplateDownloading={isTemplateDownloading}
         />
       );
     }
 
-    if (importContext === IMPORT_CONTEXT_SAFETY_STOCK) {
+    if (resolvedContext === IMPORT_CONTEXT_SAFETY_STOCK) {
       return (
         <SafetyStockImportPanel
           selectedFile={importFile}
@@ -670,6 +700,7 @@ function DemandSection() {
           onCommit={handleCommitImport}
           onCancel={handleCloseImportPanel}
           onDownloadTemplate={() => handleDownloadTemplate(IMPORT_CONTEXT_SAFETY_STOCK)}
+          isTemplateDownloading={isTemplateDownloading}
         />
       );
     }
@@ -687,7 +718,7 @@ function DemandSection() {
         onCommit={handleCommitImport}
         onCancel={handleCloseImportPanel}
         onDownloadTemplate={() => handleDownloadTemplate(IMPORT_CONTEXT_SALES_PLAN)}
-        isTemplateDownloading={false}
+        isTemplateDownloading={isTemplateDownloading}
       />
     );
   };
@@ -1942,10 +1973,11 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={() => handleDownloadTemplate(currentSourceDataset.context)}
+                  disabled={isTemplateDownloading}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
                 >
                   <Download className="h-4 w-4" />
-                  Скачать шаблон
+                  {isTemplateDownloading ? "Скачиваем..." : "Скачать шаблон"}
                 </button>
               </div>
 

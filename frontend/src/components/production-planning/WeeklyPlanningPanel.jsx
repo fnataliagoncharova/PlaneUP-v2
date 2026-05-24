@@ -72,6 +72,53 @@ function normalizeIntegerInput(value) {
   return integerPart.replace(/\D/g, "");
 }
 
+function getWarningLineClassName(lineText, lineIndex, previousLineText = "") {
+  const normalizedLine = String(lineText || "");
+  const trimmedLine = normalizedLine.trimStart();
+  const previousTrimmedLine = String(previousLineText || "").trimStart();
+
+  if (!trimmedLine) {
+    const isAfterComponentLine =
+      previousTrimmedLine.startsWith("Компонент:") || previousTrimmedLine.startsWith("Компонент ");
+    return isAfterComponentLine ? "h-2 whitespace-pre-wrap" : "h-3 whitespace-pre-wrap";
+  }
+
+  const isComponentLine = trimmedLine.startsWith("Компонент:") || trimmedLine.startsWith("Компонент ");
+  const isRequiredLine = trimmedLine.startsWith("Требуется:");
+  const isAvailableNowLine = trimmedLine.startsWith("Доступно на текущую дату:");
+  const isShortageLine =
+    trimmedLine.startsWith("Дефицит доступного компонента:") || trimmedLine.startsWith("Дефицит компонента:");
+  const isDegassingLine = trimmedLine.startsWith("В дегазации:");
+  const isDegassingBatchLine = previousTrimmedLine.startsWith("В дегазации:");
+
+  if (isComponentLine) {
+    return [
+      "whitespace-pre-wrap font-semibold text-slate-100",
+      lineIndex > 0 ? "mt-1" : "",
+    ]
+      .join(" ")
+      .trim();
+  }
+
+  if (isShortageLine) {
+    return "whitespace-pre-wrap ml-4 font-medium text-amber-200";
+  }
+
+  if (isDegassingLine) {
+    return "whitespace-pre-wrap ml-4 font-medium text-cyan-200";
+  }
+
+  if (isRequiredLine || isAvailableNowLine) {
+    return "whitespace-pre-wrap ml-4 text-slate-300";
+  }
+
+  if (isDegassingBatchLine) {
+    return "whitespace-pre-wrap ml-6 text-slate-300";
+  }
+
+  return "whitespace-pre-wrap text-slate-300";
+}
+
 function buildSystemWeeks(planMonthValue) {
   if (!planMonthValue) {
     return [];
@@ -898,11 +945,21 @@ function WeeklyPlanningPanel() {
                   {weekWarnings.map((warning) => (
                     <li key={warning.warningKey} className="flex items-start gap-2">
                       <span className="mt-0.5 text-amber-300">⚠</span>
-                      <span>
-                        <span className="font-medium text-slate-100">{warning.nomenclatureCode}</span>
-                        {" — "}
-                        <span className="text-slate-300">{warning.warningText}</span>
-                      </span>
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-100">{warning.nomenclatureCode}</div>
+                        <div className="mt-0.5">
+                          {String(warning.warningText || "")
+                            .split("\n")
+                            .map((lineText, lineIndex, lines) => (
+                              <div
+                                key={`${warning.warningKey}-${lineIndex}`}
+                                className={getWarningLineClassName(lineText, lineIndex, lines[lineIndex - 1] || "")}
+                              >
+                                {lineText || "\u00A0"}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>

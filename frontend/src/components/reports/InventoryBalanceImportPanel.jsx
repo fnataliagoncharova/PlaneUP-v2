@@ -48,6 +48,7 @@ function InventoryBalanceImportPanel({
   onCommit,
   onCancel,
   onDownloadTemplate,
+  isTemplateDownloading,
 }) {
   const canRunPreview = selectedFile && !isPreviewLoading && !isCommitLoading;
   const canRunCommit = selectedFile && previewData && !isPreviewLoading && !isCommitLoading;
@@ -108,11 +109,11 @@ function InventoryBalanceImportPanel({
           <button
             type="button"
             onClick={onDownloadTemplate}
-            disabled={isPreviewLoading || isCommitLoading}
+            disabled={isTemplateDownloading || isPreviewLoading || isCommitLoading}
             className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Download className="h-3.5 w-3.5" />
-            Скачать шаблон Excel
+            {isTemplateDownloading ? "Скачиваем..." : "Скачать шаблон Excel"}
           </button>
 
           <div className="flex flex-wrap items-center gap-2">

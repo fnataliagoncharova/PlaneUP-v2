@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest } from "./apiClient";
+import { API_BASE_URL, apiRequest, apiRequestBlob } from "./apiClient";
 
 export function getSafetyStockList(nomenclatureId) {
   const query = nomenclatureId ? `?nomenclature_id=${encodeURIComponent(nomenclatureId)}` : "";
@@ -45,6 +45,10 @@ export function commitSafetyStockImport(file) {
     method: "POST",
     body: formData,
   });
+}
+
+export function downloadSafetyStockImportTemplate() {
+  return apiRequestBlob("/safety-stock/import/template");
 }
 
 export function getSafetyStockImportTemplateUrl() {

@@ -46,17 +46,17 @@ REQUIRED_IMPORT_HEADERS = {
 
 HEADER_ALIASES: dict[str, set[str]] = {
     HEADER_FIELD_PLAN_DATE: {
-        "РїРµСЂРёРѕРґРїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ",
-        "РјРµСЃСЏС†РїР»Р°РЅР°",
+        "периодпланирования",
+        "месяцплана",
         "planningperiod",
         "planmonth",
-        "РґР°С‚Р°РїР»Р°РЅР°",
+        "датаплана",
         "plandate",
     },
-    HEADER_FIELD_NOMENCLATURE_CODE: {"РєРѕРґРЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹", "nomenclaturecode"},
-    HEADER_FIELD_NOMENCLATURE_NAME: {"РЅР°РёРјРµРЅРѕРІР°РЅРёРµРЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹", "nomenclaturename"},
-    HEADER_FIELD_PLAN_QTY: {"РєРѕР»РёС‡РµСЃС‚РІРѕ", "planqty"},
-    HEADER_FIELD_UNIT_OF_MEASURE: {"РµРґРёРЅРёС†Р°РёР·РјРµСЂРµРЅРёСЏ", "unitofmeasure"},
+    HEADER_FIELD_NOMENCLATURE_CODE: {"кодноменклатуры", "nomenclaturecode"},
+    HEADER_FIELD_NOMENCLATURE_NAME: {"наименованиеноменклатуры", "nomenclaturename"},
+    HEADER_FIELD_PLAN_QTY: {"количество", "planqty"},
+    HEADER_FIELD_UNIT_OF_MEASURE: {"единицаизмерения", "unitofmeasure"},
 }
 
 
@@ -64,7 +64,7 @@ def normalize_header_name(value: object) -> str:
     if value is None:
         return ""
 
-    normalized_value = str(value).strip().lower().replace("С‘", "Рµ")
+    normalized_value = str(value).strip().lower().replace("ё", "е")
     return re.sub(r"[\s_\-./\\]+", "", normalized_value)
 
 
@@ -85,7 +85,7 @@ def normalize_import_mode(import_mode: str | None) -> SalesPlanImportMode:
     if normalized_mode != IMPORT_MODE_UPSERT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РџРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ СЂРµР¶РёРј upsert.",
+            detail="Поддерживается только режим upsert.",
         )
 
     return IMPORT_MODE_UPSERT
@@ -146,7 +146,7 @@ def canonicalize_system_unit(value: object) -> str:
 
 def normalize_plan_qty(value: object) -> tuple[Decimal | None, str | None]:
     if value is None:
-        return None, "РџСѓСЃС‚РѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ"
+        return None, "Пустое количество"
 
     if isinstance(value, Decimal):
         decimal_value = value
@@ -155,16 +155,16 @@ def normalize_plan_qty(value: object) -> tuple[Decimal | None, str | None]:
     else:
         raw_text = str(value).strip().replace(" ", "")
         if not raw_text:
-            return None, "РџСѓСЃС‚РѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ"
+            return None, "Пустое количество"
         raw_text = raw_text.replace(",", ".")
 
         try:
             decimal_value = Decimal(raw_text)
         except InvalidOperation:
-            return None, "РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ"
+            return None, "Некорректное количество"
 
     if decimal_value <= 0:
-        return None, "РљРѕР»РёС‡РµСЃС‚РІРѕ РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ Р±РѕР»СЊС€Рµ 0"
+        return None, "Количество должно быть больше 0"
 
     return decimal_value.quantize(Decimal("0.001")), None
 
@@ -174,7 +174,7 @@ def normalize_plan_date(value: object) -> tuple[date | None, str | None]:
         return date(parsed_date.year, parsed_date.month, 1)
 
     if value is None:
-        return None, "РџСѓСЃС‚РѕР№ РїРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ"
+        return None, "Пустой период планирования"
 
     if isinstance(value, datetime):
         return to_month_start(value.date()), None
@@ -190,13 +190,13 @@ def normalize_plan_date(value: object) -> tuple[date | None, str | None]:
             if isinstance(excel_datetime, date):
                 return to_month_start(excel_datetime), None
         except Exception:
-            return None, "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РїРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ"
+            return None, "Некорректный период планирования"
 
-        return None, "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РїРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ"
+        return None, "Некорректный период планирования"
 
     raw_value = str(value).strip()
     if not raw_value:
-        return None, "РџСѓСЃС‚РѕР№ РїРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ"
+        return None, "Пустой период планирования"
 
     month_formats = [
         "%Y-%m",
@@ -223,7 +223,7 @@ def normalize_plan_date(value: object) -> tuple[date | None, str | None]:
         except ValueError:
             continue
 
-    return None, "РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РїРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ"
+    return None, "Некорректный период планирования"
 
 
 def normalize_month_start(plan_date: date) -> date:
@@ -235,13 +235,13 @@ def validate_import_file(file: UploadFile, file_bytes: bytes) -> None:
     if not file_name.lower().endswith(".xlsx"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РџРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ С„РѕСЂРјР°С‚ .xlsx.",
+            detail="Поддерживается только формат .xlsx.",
         )
 
     if len(file_bytes) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Р¤Р°Р№Р» РїСѓСЃС‚РѕР№.",
+            detail="Файл пустой.",
         )
 
 
@@ -251,7 +251,7 @@ def read_import_rows(file_bytes: bytes) -> list[dict[str, Any]]:
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ Excel-С„Р°Р№Р». РџСЂРѕРІРµСЂСЊС‚Рµ С„РѕСЂРјР°С‚ .xlsx.",
+            detail="Не удалось прочитать Excel-файл. Проверьте формат .xlsx.",
         ) from exc
 
     try:
@@ -262,7 +262,7 @@ def read_import_rows(file_bytes: bytes) -> list[dict[str, Any]]:
         if max_column == 0 or max_row == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Р¤Р°Р№Р» РїСѓСЃС‚РѕР№.",
+                detail="Файл пустой.",
             )
 
         header_indexes: dict[str, int] = {}
@@ -280,8 +280,8 @@ def read_import_rows(file_bytes: bytes) -> list[dict[str, Any]]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "РќРµ РЅР°Р№РґРµРЅС‹ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ РєРѕР»РѕРЅРєРё С€Р°Р±Р»РѕРЅР°: "
-                    "РџРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ, РљРѕРґ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹, РќР°РёРјРµРЅРѕРІР°РЅРёРµ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹, РљРѕР»РёС‡РµСЃС‚РІРѕ, Р•РґРёРЅРёС†Р° РёР·РјРµСЂРµРЅРёСЏ."
+                    "Не найдены обязательные колонки шаблона: "
+                    "Период планирования, Код номенклатуры, Наименование номенклатуры, Количество, Единица измерения."
                 ),
             )
 
@@ -329,7 +329,7 @@ def read_import_rows(file_bytes: bytes) -> list[dict[str, Any]]:
                 row_errors.append(plan_date_error)
 
             if not normalized_code:
-                row_errors.append("РџСѓСЃС‚РѕР№ РєРѕРґ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹")
+                row_errors.append("Пустой код номенклатуры")
 
             if plan_qty_error:
                 row_errors.append(plan_qty_error)
@@ -360,7 +360,7 @@ def read_import_rows(file_bytes: bytes) -> list[dict[str, Any]]:
         if not rows:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Р¤Р°Р№Р» РїСѓСЃС‚РѕР№.",
+                detail="Файл пустой.",
             )
 
         return rows
@@ -462,7 +462,7 @@ def build_preview(
         nomenclature_row = nomenclature_by_code.get(code_key) if code_key else None
 
         if nomenclature_row is None and code_key:
-            row_errors.append("РќРѕРјРµРЅРєР»Р°С‚СѓСЂР° РЅРµ РЅР°Р№РґРµРЅР°")
+            row_errors.append("Номенклатура не найдена")
 
         if nomenclature_row is not None and row["nomenclature_name"] is None:
             row["nomenclature_name"] = nomenclature_row["nomenclature_name"]
@@ -470,7 +470,7 @@ def build_preview(
         if nomenclature_row is not None and row["unit_of_measure"] is not None:
             system_uom = canonicalize_system_unit(nomenclature_row["unit_of_measure"])
             if row["unit_of_measure"] != system_uom:
-                row_errors.append("Р•РґРёРЅРёС†Р° РёР·РјРµСЂРµРЅРёСЏ РЅРµ СЃРѕРІРїР°РґР°РµС‚ СЃ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂРѕР№")
+                row_errors.append("Единица измерения не совпадает с номенклатурой")
 
         duplicate_key = (
             row["plan_date"],
@@ -481,7 +481,7 @@ def build_preview(
             and code_key is not None
             and duplicate_counts.get(duplicate_key, 0) > 1
         ):
-            row_errors.append("Р”СѓР±Р»РёРєР°С‚ СЃС‚СЂРѕРєРё РІ С„Р°Р№Р»Рµ")
+            row_errors.append("Дубликат строки в файле")
 
         status_value = "error"
         can_import = False
@@ -531,24 +531,24 @@ def build_preview(
 def create_template_workbook() -> bytes:
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "РџР»Р°РЅ РїСЂРѕРґР°Р¶"
+    sheet.title = "План продаж"
 
     sheet.append(
         [
-            "РџРµСЂРёРѕРґ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ",
-            "РљРѕРґ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹",
-            "РќР°РёРјРµРЅРѕРІР°РЅРёРµ РЅРѕРјРµРЅРєР»Р°С‚СѓСЂС‹",
-            "РљРѕР»РёС‡РµСЃС‚РІРѕ",
-            "Р•РґРёРЅРёС†Р° РёР·РјРµСЂРµРЅРёСЏ",
+            "Период планирования",
+            "Код номенклатуры",
+            "Наименование номенклатуры",
+            "Количество",
+            "Единица измерения",
         ]
     )
     sheet.append(
         [
             "2026-04",
             "NM-001",
-            "РџРѕР»РѕС‚РЅРѕ Р»Р°РјРёРЅРёСЂРѕРІР°РЅРЅРѕРµ Р±РµР»РѕРµ",
+            "Полотно ламинированное белое",
             "1200",
-            "РјВІ",
+            "м²",
         ]
     )
 
@@ -640,7 +640,7 @@ def list_sales_plan(
     except psycopg2.Error as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РїР»Р°РЅ РїСЂРѕРґР°Р¶.",
+            detail="Не удалось получить план продаж.",
         ) from exc
     finally:
         if connection is not None:
@@ -667,7 +667,7 @@ def create_sales_plan_item(payload: SalesPlanCreate):
             if nomenclature_row is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="РќРѕРјРµРЅРєР»Р°С‚СѓСЂР° РЅРµ РЅР°Р№РґРµРЅР°.",
+                    detail="Номенклатура не найдена.",
                 )
 
             cursor.execute(
@@ -717,14 +717,14 @@ def create_sales_plan_item(payload: SalesPlanCreate):
             connection.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="РџРѕР·РёС†РёСЏ СѓР¶Рµ РµСЃС‚СЊ РІ РїР»Р°РЅРµ РїСЂРѕРґР°Р¶ Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ.",
+            detail="Позиция уже есть в плане продаж за выбранный период.",
         ) from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ СЃС‚СЂРѕРєСѓ РїР»Р°РЅР° РїСЂРѕРґР°Р¶.",
+            detail="Не удалось создать строку плана продаж.",
         ) from exc
     finally:
         if connection is not None:
@@ -760,7 +760,7 @@ def update_sales_plan_item(
             if updated_row is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РїСЂРѕРґР°Р¶ РЅРµ РЅР°Р№РґРµРЅР°.",
+                    detail="Строка плана продаж не найдена.",
                 )
 
             cursor.execute(
@@ -792,7 +792,7 @@ def update_sales_plan_item(
             connection.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ СЃС‚СЂРѕРєСѓ РїР»Р°РЅР° РїСЂРѕРґР°Р¶.",
+            detail="Не удалось обновить строку плана продаж.",
         ) from exc
     finally:
         if connection is not None:
@@ -819,13 +819,13 @@ def delete_sales_plan_item(sales_plan_id: int = Path(..., gt=0)):
             if deleted_row is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РїСЂРѕРґР°Р¶ РЅРµ РЅР°Р№РґРµРЅР°.",
+                    detail="Строка плана продаж не найдена.",
                 )
 
         connection.commit()
         return SalesPlanDeleteResponse(
             sales_plan_id=sales_plan_id,
-            message="РЎС‚СЂРѕРєР° РїР»Р°РЅР° РїСЂРѕРґР°Р¶ СѓРґР°Р»РµРЅР°.",
+            message="Строка плана продаж удалена.",
         )
     except HTTPException:
         if connection is not None:
@@ -836,7 +836,7 @@ def delete_sales_plan_item(sales_plan_id: int = Path(..., gt=0)):
             connection.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ СЃС‚СЂРѕРєСѓ РїР»Р°РЅР° РїСЂРѕРґР°Р¶.",
+            detail="Не удалось удалить строку плана продаж.",
         ) from exc
     finally:
         if connection is not None:
@@ -885,7 +885,7 @@ async def preview_sales_plan_import(
     except psycopg2.Error as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРіРѕС‚РѕРІРёС‚СЊ РїСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ РёРјРїРѕСЂС‚Р° РїР»Р°РЅР° РїСЂРѕРґР°Р¶.",
+            detail="Не удалось подготовить предпросмотр импорта плана продаж.",
         ) from exc
     finally:
         if connection is not None:
@@ -938,7 +938,7 @@ async def commit_sales_plan_import(
                             message=(
                                 preview_row.messages[0]
                                 if preview_row.messages
-                                else "РЎС‚СЂРѕРєР° РЅРµ РїСЂРѕС€Р»Р° РІР°Р»РёРґР°С†РёСЋ"
+                                else "Строка не прошла валидацию"
                             ),
                         )
                     )
@@ -955,7 +955,7 @@ async def commit_sales_plan_import(
                             plan_date=preview_row.plan_date,
                             nomenclature_code=preview_row.nomenclature_code,
                             status="error",
-                            message="РЎС‚СЂРѕРєР° РЅРµ РїСЂРѕС€Р»Р° РїРѕРІС‚РѕСЂРЅСѓСЋ РїСЂРѕРІРµСЂРєСѓ",
+                            message="Строка не прошла повторную проверку",
                         )
                     )
                     continue
@@ -974,7 +974,7 @@ async def commit_sales_plan_import(
                             plan_date=preview_row.plan_date,
                             nomenclature_code=preview_row.nomenclature_code,
                             status="created",
-                            message="РЎРѕР·РґР°РЅРѕ",
+                            message="Создано",
                         )
                     )
                 else:
@@ -985,7 +985,7 @@ async def commit_sales_plan_import(
                             plan_date=preview_row.plan_date,
                             nomenclature_code=preview_row.nomenclature_code,
                             status="updated",
-                            message="РћР±РЅРѕРІР»РµРЅРѕ",
+                            message="Обновлено",
                         )
                     )
 
@@ -1005,7 +1005,7 @@ async def commit_sales_plan_import(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РёРјРїРѕСЂС‚ РїР»Р°РЅР° РїСЂРѕРґР°Р¶.",
+            detail="Не удалось выполнить импорт плана продаж.",
         ) from exc
     finally:
         if connection is not None:
