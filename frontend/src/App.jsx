@@ -1,10 +1,11 @@
-﻿import { BarChart3, Boxes, Cog, ScrollText, Workflow } from "lucide-react";
+﻿import { BarChart3, Boxes, Cog, ScrollText, Wrench, Workflow } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
-import MachinesSection from "./sections/MachinesSection";
 import DemandSection from "./sections/DemandSection";
+import EquipmentMaintenanceSection from "./sections/EquipmentMaintenanceSection";
+import MachinesSection from "./sections/MachinesSection";
 import MasterWorkspaceSection from "./sections/MasterWorkspaceSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
@@ -60,6 +61,7 @@ const navigationItems = [
   { id: "processes", label: "Технологические операции", icon: Workflow },
   { id: "routes", label: "Маршруты", icon: ScrollText },
   { id: "machines", label: "Оборудование", icon: Cog },
+  { id: "equipment_maintenance", label: "Плановое ТО", icon: Wrench },
   { id: "demand", label: "Потребность", icon: BarChart3 },
   { id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon },
   { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
@@ -74,6 +76,8 @@ const sectionDescriptions = {
     "Маршруты связывают номенклатуру, шаги, входы и оборудование в производственную цепочку V2.",
   machines:
     "Справочник оборудования с ролями, производительностью и привязкой к шагам маршрутов.",
+  equipment_maintenance:
+    "Плановые интервалы недоступности оборудования для расчёта доступности в недельном плане.",
   demand:
     "Подготовка исходных данных, запуск расчёта потребности и проверка результатов.",
   production_planning:
@@ -124,6 +128,8 @@ function App() {
               <RoutesSection routeOpenRequest={routeOpenRequest} />
             ) : activeSection === "machines" ? (
               <MachinesSection />
+            ) : activeSection === "equipment_maintenance" ? (
+              <EquipmentMaintenanceSection />
             ) : activeSection === "demand" ? (
               <DemandSection />
             ) : activeSection === "production_planning" ? (
@@ -145,6 +151,3 @@ function App() {
 }
 
 export default App;
-
-
-
