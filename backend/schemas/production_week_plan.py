@@ -39,6 +39,19 @@ class ProductionWeekLineRead(BaseModel):
     updated_at: datetime
 
 
+class EquipmentAvailabilityRead(BaseModel):
+    machine_id: int
+    machine_code: str
+    machine_name: str
+    week_fund_minutes: int
+    maintenance_minutes: int
+    available_minutes: int
+    planned_load_minutes: Decimal
+    remaining_minutes: Decimal
+    overload_minutes: Decimal
+    load_percent: Decimal
+
+
 class ProductionWeekRead(BaseModel):
     production_plan_week_id: int
     production_plan_id: int
@@ -50,6 +63,7 @@ class ProductionWeekRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     lines: list[ProductionWeekLineRead] = Field(default_factory=list)
+    equipment_availability: list[EquipmentAvailabilityRead] = Field(default_factory=list)
 
 
 class ProductionWeekSummary(BaseModel):

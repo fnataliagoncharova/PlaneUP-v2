@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -39,6 +39,7 @@ WEEK_COLUMNS = """
 
 DECIMAL_ZERO = Decimal("0")
 QTY_SCALE = Decimal("0.001")
+HOURS_WARNING_SCALE = Decimal("0.01")
 
 
 def to_decimal(value: Any) -> Decimal:
@@ -635,16 +636,16 @@ def build_component_availability_warnings(
     return warnings_by_line
 
 
-def apply_component_availability_warnings_to_week(
+def apply_line_warnings_to_week(
     lines: list[dict[str, Any]],
-    component_warnings_by_line: dict[int, list[str]],
+    warnings_by_line: dict[int, list[str]],
 ) -> None:
-    if not component_warnings_by_line:
+    if not warnings_by_line:
         return
 
     for line in lines:
         line_id = int(line["production_week_line_id"])
-        extra_warnings = component_warnings_by_line.get(line_id, [])
+        extra_warnings = warnings_by_line.get(line_id, [])
         if not extra_warnings:
             continue
 
@@ -654,6 +655,219 @@ def apply_component_availability_warnings_to_week(
                 continue
             line["warnings"].append(warning)
             existing.add(warning)
+
+
+def get_week_period_bounds(week_start_date: date, week_end_date: date) -> tuple[datetime, datetime]:
+    week_start_at = datetime.combine(week_start_date, datetime.min.time())
+    week_end_at = datetime.combine(week_end_date + timedelta(days=1), datetime.min.time())
+    return week_start_at, week_end_at
+
+
+def merge_intervals(intervals: list[tuple[datetime, datetime]]) -> list[tuple[datetime, datetime]]:
+    if not intervals:
+        return []
+
+    sorted_intervals = sorted(intervals, key=lambda interval: (interval[0], interval[1]))
+    merged: list[tuple[datetime, datetime]] = [sorted_intervals[0]]
+
+    for current_start, current_end in sorted_intervals[1:]:
+        prev_start, prev_end = merged[-1]
+        if current_start <= prev_end:
+            if current_end > prev_end:
+                merged[-1] = (prev_start, current_end)
+        else:
+            merged.append((current_start, current_end))
+
+    return merged
+
+
+def format_warning_hours_from_minutes(minutes_value: Decimal | int) -> str:
+    hours_value = to_decimal(minutes_value) / Decimal("60")
+    return format_warning_qty(hours_value.quantize(HOURS_WARNING_SCALE))
+
+
+def build_equipment_overload_warning(
+    machine_code: str,
+    machine_name: str,
+    available_minutes: int,
+    planned_load_minutes: Decimal,
+    overload_minutes: Decimal,
+) -> str:
+    code = str(machine_code or "").strip() or "—"
+    name = str(machine_name or "").strip()
+    machine_label = f"{code} {name}".strip()
+
+    lines = [
+        f"Оборудование {machine_label} перегружено:",
+        f"  Доступно: {format_warning_hours_from_minutes(available_minutes)} ч",
+        f"  Загрузка планом: {format_warning_hours_from_minutes(planned_load_minutes)} ч",
+        f"  Перегруз: {format_warning_hours_from_minutes(overload_minutes)} ч",
+    ]
+    return "\n".join(lines)
+
+
+def build_equipment_availability(
+    cursor: RealDictCursor,
+    week_row: dict[str, Any],
+    lines: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[int, list[str]]]:
+    week_start_at, week_end_at = get_week_period_bounds(
+        week_start_date=week_row["week_start_date"],
+        week_end_date=week_row["week_end_date"],
+    )
+    week_fund_minutes = int((week_end_at - week_start_at).total_seconds() // 60)
+
+    line_ids_by_machine: dict[int, list[int]] = {}
+    machine_meta_by_id: dict[int, tuple[str, str]] = {}
+    planned_load_minutes_by_machine: dict[int, Decimal] = {}
+    warnings_by_line: dict[int, list[str]] = {}
+
+    for line in lines:
+        line_id = int(line["production_week_line_id"])
+        route_step_equipment_id = line.get("route_step_equipment_id")
+        machine_id_raw = line.get("machine_id")
+        if machine_id_raw is None:
+            continue
+
+        machine_id = int(machine_id_raw)
+        line_ids_by_machine.setdefault(machine_id, []).append(line_id)
+
+        machine_code = str(line.get("machine_code") or "").strip()
+        machine_name = str(line.get("machine_name") or "").strip()
+        machine_meta_by_id[machine_id] = (machine_code, machine_name)
+
+        nominal_rate = to_decimal(line.get("nominal_rate"))
+        if route_step_equipment_id is not None and nominal_rate <= DECIMAL_ZERO:
+            warnings_by_line.setdefault(line_id, []).append(
+                "Не задана производительность оборудования для расчёта загрузки."
+            )
+            continue
+
+        planned_qty = to_decimal(line.get("planned_qty"))
+        if planned_qty <= DECIMAL_ZERO or nominal_rate <= DECIMAL_ZERO:
+            continue
+
+        planned_load_minutes = planned_qty / nominal_rate
+        if planned_load_minutes <= DECIMAL_ZERO:
+            continue
+
+        planned_load_minutes_by_machine[machine_id] = (
+            planned_load_minutes_by_machine.get(machine_id, DECIMAL_ZERO) + planned_load_minutes
+        )
+
+    cursor.execute(
+        """
+        SELECT
+            em.machine_id,
+            m.machine_code,
+            m.machine_name,
+            em.started_at,
+            em.ended_at
+        FROM equipment_maintenance AS em
+        INNER JOIN machines AS m ON m.machine_id = em.machine_id
+        WHERE em.started_at < %s
+          AND em.ended_at > %s
+        ORDER BY em.machine_id ASC, em.started_at ASC, em.ended_at ASC;
+        """,
+        (week_end_at, week_start_at),
+    )
+    maintenance_rows = cursor.fetchall()
+
+    maintenance_intervals_by_machine: dict[int, list[tuple[datetime, datetime]]] = {}
+    for maintenance_row in maintenance_rows:
+        machine_id = int(maintenance_row["machine_id"])
+        machine_code = str(maintenance_row.get("machine_code") or "").strip()
+        machine_name = str(maintenance_row.get("machine_name") or "").strip()
+        machine_meta_by_id[machine_id] = (machine_code, machine_name)
+
+        started_at = maintenance_row.get("started_at")
+        ended_at = maintenance_row.get("ended_at")
+        if not isinstance(started_at, datetime) or not isinstance(ended_at, datetime):
+            continue
+
+        effective_start = started_at if started_at >= week_start_at else week_start_at
+        effective_end = ended_at if ended_at <= week_end_at else week_end_at
+        if effective_start >= effective_end:
+            continue
+
+        maintenance_intervals_by_machine.setdefault(machine_id, []).append((effective_start, effective_end))
+
+    machine_ids = set(machine_meta_by_id.keys()) | set(planned_load_minutes_by_machine.keys())
+    equipment_availability: list[dict[str, Any]] = []
+
+    for machine_id in sorted(
+        machine_ids,
+        key=lambda value: (
+            machine_meta_by_id.get(value, ("", ""))[0],
+            machine_meta_by_id.get(value, ("", ""))[1],
+            value,
+        ),
+    ):
+        machine_code, machine_name = machine_meta_by_id.get(machine_id, ("", ""))
+
+        merged_intervals = merge_intervals(maintenance_intervals_by_machine.get(machine_id, []))
+        maintenance_minutes = sum(
+            int((interval_end - interval_start).total_seconds() // 60)
+            for interval_start, interval_end in merged_intervals
+        )
+        if maintenance_minutes < 0:
+            maintenance_minutes = 0
+        if maintenance_minutes > week_fund_minutes:
+            maintenance_minutes = week_fund_minutes
+
+        available_minutes = week_fund_minutes - maintenance_minutes
+        if available_minutes < 0:
+            available_minutes = 0
+
+        planned_load_minutes_raw = planned_load_minutes_by_machine.get(machine_id, DECIMAL_ZERO)
+        if planned_load_minutes_raw < DECIMAL_ZERO:
+            planned_load_minutes_raw = DECIMAL_ZERO
+
+        available_minutes_decimal = Decimal(available_minutes)
+        remaining_minutes_raw = available_minutes_decimal - planned_load_minutes_raw
+        overload_minutes_raw = DECIMAL_ZERO
+        if remaining_minutes_raw < DECIMAL_ZERO:
+            overload_minutes_raw = -remaining_minutes_raw
+            remaining_minutes_raw = DECIMAL_ZERO
+
+        if available_minutes > 0:
+            load_percent = ((planned_load_minutes_raw / available_minutes_decimal) * Decimal("100")).quantize(QTY_SCALE)
+        elif planned_load_minutes_raw > DECIMAL_ZERO:
+            load_percent = Decimal("100").quantize(QTY_SCALE)
+        else:
+            load_percent = DECIMAL_ZERO.quantize(QTY_SCALE)
+
+        planned_load_minutes = planned_load_minutes_raw.quantize(QTY_SCALE)
+        remaining_minutes = remaining_minutes_raw.quantize(QTY_SCALE)
+        overload_minutes = overload_minutes_raw.quantize(QTY_SCALE)
+
+        if overload_minutes > DECIMAL_ZERO:
+            overload_warning = build_equipment_overload_warning(
+                machine_code=machine_code,
+                machine_name=machine_name,
+                available_minutes=available_minutes,
+                planned_load_minutes=planned_load_minutes,
+                overload_minutes=overload_minutes,
+            )
+            for line_id in line_ids_by_machine.get(machine_id, []):
+                warnings_by_line.setdefault(line_id, []).append(overload_warning)
+
+        equipment_availability.append(
+            {
+                "machine_id": machine_id,
+                "machine_code": machine_code,
+                "machine_name": machine_name,
+                "week_fund_minutes": week_fund_minutes,
+                "maintenance_minutes": maintenance_minutes,
+                "available_minutes": available_minutes,
+                "planned_load_minutes": planned_load_minutes,
+                "remaining_minutes": remaining_minutes,
+                "overload_minutes": overload_minutes,
+                "load_percent": load_percent,
+            }
+        )
+
+    return equipment_availability, warnings_by_line
 
 
 def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[str, Any] | None:
@@ -811,9 +1025,17 @@ def get_production_week_by_id(connection, production_plan_week_id: int) -> dict[
             production_plan_week_id=production_plan_week_id,
             current_week_no=int(week_row["week_no"]),
         )
-        apply_component_availability_warnings_to_week(prepared_lines, component_warnings_by_line)
+        apply_line_warnings_to_week(prepared_lines, component_warnings_by_line)
+
+        equipment_availability, equipment_warnings_by_line = build_equipment_availability(
+            cursor=cursor,
+            week_row=week_row,
+            lines=prepared_lines,
+        )
+        apply_line_warnings_to_week(prepared_lines, equipment_warnings_by_line)
 
         week_row["lines"] = prepared_lines
+        week_row["equipment_availability"] = equipment_availability
         return week_row
 
 
