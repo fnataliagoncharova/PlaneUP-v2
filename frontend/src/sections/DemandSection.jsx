@@ -32,6 +32,12 @@ import {
   updateInventoryBalanceItem,
 } from "../services/inventoryBalanceApi";
 import {
+  createInventoryBalanceDegassing,
+  deleteInventoryBalanceDegassing,
+  getInventoryBalanceDegassing,
+  updateInventoryBalanceDegassing,
+} from "../services/inventoryBalanceDegassingApi";
+import {
   commitSafetyStockImport,
   createSafetyStockItem,
   deleteSafetyStockItem,
@@ -112,6 +118,63 @@ function formatQty(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 3,
   });
+}
+
+function formatQtyWithUnit(value, unitOfMeasure) {
+  const qtyText = formatQty(value);
+  if (!qtyText) {
+    return "";
+  }
+  return `${qtyText} ${String(unitOfMeasure || "").trim()}`.trim();
+}
+
+function formatDateTimeLabel(value) {
+  if (!value) {
+    return "—";
+  }
+
+  const normalized = String(value).trim().replace(" ", "T");
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (match) {
+    const [, year, month, day, hours, minutes] = match;
+    return `${day}.${month}.${year} ${hours}:${minutes}`;
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return String(value);
+  }
+
+  return parsedDate.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function splitDateTimeParts(value) {
+  const normalized = String(value || "").trim().replace(" ", "T");
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  if (match) {
+    return {
+      date: match[1],
+      time: match[2],
+    };
+  }
+
+  return {
+    date: "",
+    time: "07:00",
+  };
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) {
+    return "";
+  }
+  return `${dateValue}T${timeValue}:00`;
 }
 
 function filterItemsBySearch(items, query) {
@@ -201,6 +264,24 @@ function DemandSection() {
   const [inventoryBalanceDates, setInventoryBalanceDates] = useState([]);
   const [isInventoryDatesLoading, setIsInventoryDatesLoading] = useState(true);
   const [inventoryDatesError, setInventoryDatesError] = useState("");
+  const [inventoryDegassingItems, setInventoryDegassingItems] = useState([]);
+  const [isInventoryDegassingLoading, setIsInventoryDegassingLoading] = useState(false);
+  const [inventoryDegassingError, setInventoryDegassingError] = useState("");
+  const [inventoryDegassingNomenclatureId, setInventoryDegassingNomenclatureId] = useState("");
+  const [isInventoryDegassingFormOpen, setIsInventoryDegassingFormOpen] = useState(false);
+  const [inventoryDegassingFormMode, setInventoryDegassingFormMode] = useState("create");
+  const [inventoryDegassingFormItem, setInventoryDegassingFormItem] = useState(null);
+  const [inventoryDegassingFormError, setInventoryDegassingFormError] = useState("");
+  const [isInventoryDegassingSaving, setIsInventoryDegassingSaving] = useState(false);
+  const [inventoryDegassingFormAsOfDate, setInventoryDegassingFormAsOfDate] = useState("");
+  const [inventoryDegassingFormNomenclatureId, setInventoryDegassingFormNomenclatureId] = useState("");
+  const [inventoryDegassingFormQty, setInventoryDegassingFormQty] = useState("");
+  const [inventoryDegassingFormAvailableDate, setInventoryDegassingFormAvailableDate] = useState("");
+  const [inventoryDegassingFormAvailableTime, setInventoryDegassingFormAvailableTime] = useState("07:00");
+  const [inventoryDegassingFormComment, setInventoryDegassingFormComment] = useState("");
+  const [inventoryDegassingDeleteCandidate, setInventoryDegassingDeleteCandidate] = useState(null);
+  const [inventoryDegassingDeleteError, setInventoryDegassingDeleteError] = useState("");
+  const [deletingInventoryDegassingId, setDeletingInventoryDegassingId] = useState(null);
 
   const [safetyStockItems, setSafetyStockItems] = useState([]);
   const [isSafetyStockLoading, setIsSafetyStockLoading] = useState(true);
@@ -298,6 +379,33 @@ function DemandSection() {
     }
   }, [balanceDate]);
 
+  const reloadInventoryDegassing = useCallback(async () => {
+    if (!balanceDate) {
+      setInventoryDegassingItems([]);
+      setInventoryDegassingError("");
+      setIsInventoryDegassingLoading(false);
+      return;
+    }
+
+    setIsInventoryDegassingLoading(true);
+    setInventoryDegassingError("");
+
+    try {
+      const response = await getInventoryBalanceDegassing({
+        as_of_date: balanceDate,
+        nomenclature_id: inventoryDegassingNomenclatureId
+          ? Number(inventoryDegassingNomenclatureId)
+          : undefined,
+      });
+      setInventoryDegassingItems(Array.isArray(response) ? response : []);
+    } catch (error) {
+      setInventoryDegassingItems([]);
+      setInventoryDegassingError(error.message || "Не удалось загрузить остатки в дегазации.");
+    } finally {
+      setIsInventoryDegassingLoading(false);
+    }
+  }, [balanceDate, inventoryDegassingNomenclatureId]);
+
   const reloadInventoryBalanceDates = useCallback(async () => {
     setIsInventoryDatesLoading(true);
     setInventoryDatesError("");
@@ -348,6 +456,10 @@ function DemandSection() {
   }, [reloadInventoryBalance]);
 
   useEffect(() => {
+    reloadInventoryDegassing();
+  }, [reloadInventoryDegassing]);
+
+  useEffect(() => {
     reloadSafetyStock();
   }, [reloadSafetyStock]);
 
@@ -370,6 +482,12 @@ function DemandSection() {
       setInventoryFormItem(null);
       setInventoryFormQty("");
       setInventoryFormNomenclatureId("");
+      setIsInventoryDegassingFormOpen(false);
+      setInventoryDegassingFormError("");
+      setInventoryDegassingDeleteError("");
+      setInventoryDegassingDeleteCandidate(null);
+      setInventoryDegassingFormItem(null);
+      setInventoryDegassingNomenclatureId("");
     }
 
     if (activeSourceTab !== IMPORT_CONTEXT_SAFETY_STOCK) {
@@ -405,6 +523,12 @@ function DemandSection() {
     }
   }, [activeSourceTab, isNomenclatureLoading, nomenclatureItems.length]);
 
+  useEffect(() => {
+    if (activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE && nomenclatureItems.length === 0) {
+      loadNomenclatureItems();
+    }
+  }, [activeSourceTab, loadNomenclatureItems, nomenclatureItems.length]);
+
   const filteredSalesPlanItems = useMemo(
     () => filterItemsBySearch(salesPlanItems, salesPlanSearch),
     [salesPlanItems, salesPlanSearch],
@@ -412,6 +536,13 @@ function DemandSection() {
   const filteredInventoryItems = useMemo(
     () => filterItemsBySearch(inventoryItems, inventorySearch),
     [inventoryItems, inventorySearch],
+  );
+  const sortedNomenclatureItems = useMemo(
+    () =>
+      [...nomenclatureItems].sort((left, right) =>
+        String(left.nomenclature_code || "").localeCompare(String(right.nomenclature_code || ""), "ru"),
+      ),
+    [nomenclatureItems],
   );
   const filteredSafetyStockItems = useMemo(
     () => filterItemsBySearch(safetyStockItems, safetyStockSearch),
@@ -435,6 +566,9 @@ function DemandSection() {
     [demandResult],
   );
   const canCreateProductionPlan = demandResult && demandInternalItems.length > 0;
+  const selectedInventoryDegassingFormNomenclature = sortedNomenclatureItems.find(
+    (item) => String(item.nomenclature_id) === String(inventoryDegassingFormNomenclatureId || ""),
+  );
 
   const salesPlanStatus = resolveStatusMeta({
     isLoading: isSalesPlanLoading,
@@ -1104,6 +1238,142 @@ function DemandSection() {
     }
   };
 
+  const handleOpenCreateInventoryDegassingForm = async () => {
+    if (!balanceDate) {
+      setInventoryDegassingFormError("Сначала загрузите общие остатки. После этого можно указать часть остатков в дегазации.");
+      return;
+    }
+
+    setInventoryDegassingFormMode("create");
+    setInventoryDegassingFormItem(null);
+    setInventoryDegassingFormError("");
+    setInventoryDegassingFormAsOfDate(balanceDate);
+    setInventoryDegassingFormNomenclatureId("");
+    setInventoryDegassingFormQty("");
+    setInventoryDegassingFormAvailableDate(balanceDate);
+    setInventoryDegassingFormAvailableTime("07:00");
+    setInventoryDegassingFormComment("");
+    setIsInventoryDegassingFormOpen(true);
+    await loadNomenclatureItems();
+  };
+
+  const handleOpenEditInventoryDegassingForm = async (item) => {
+    const { date: availableDate, time: availableTime } = splitDateTimeParts(item?.available_at);
+    setInventoryDegassingFormMode("edit");
+    setInventoryDegassingFormItem(item);
+    setInventoryDegassingFormError("");
+    setInventoryDegassingFormAsOfDate(String(item?.as_of_date || balanceDate || ""));
+    setInventoryDegassingFormNomenclatureId(String(item?.nomenclature_id || ""));
+    setInventoryDegassingFormQty(String(item?.qty ?? ""));
+    setInventoryDegassingFormAvailableDate(availableDate);
+    setInventoryDegassingFormAvailableTime(availableTime === "19:00" ? "19:00" : "07:00");
+    setInventoryDegassingFormComment(String(item?.comment || ""));
+    setIsInventoryDegassingFormOpen(true);
+    if (nomenclatureItems.length === 0) {
+      await loadNomenclatureItems();
+    }
+  };
+
+  const handleCloseInventoryDegassingForm = () => {
+    if (isInventoryDegassingSaving) {
+      return;
+    }
+    setIsInventoryDegassingFormOpen(false);
+    setInventoryDegassingFormError("");
+  };
+
+  const handleSaveInventoryDegassingForm = async () => {
+    if (!inventoryDegassingFormAsOfDate) {
+      setInventoryDegassingFormError("Выберите дату остатков.");
+      return;
+    }
+
+    if (!inventoryDegassingFormNomenclatureId) {
+      setInventoryDegassingFormError("Выберите номенклатуру.");
+      return;
+    }
+
+    const normalizedQtyText = String(inventoryDegassingFormQty ?? "").replace(",", ".").trim();
+    const parsedQty = Number(normalizedQtyText);
+    if (!normalizedQtyText || !Number.isFinite(parsedQty) || parsedQty <= 0) {
+      setInventoryDegassingFormError("Количество должно быть больше 0.");
+      return;
+    }
+
+    if (!inventoryDegassingFormAvailableDate) {
+      setInventoryDegassingFormError("Выберите дату доступности.");
+      return;
+    }
+
+    if (!["07:00", "19:00"].includes(inventoryDegassingFormAvailableTime)) {
+      setInventoryDegassingFormError("Выберите корректное время доступности.");
+      return;
+    }
+
+    const availableAt = combineDateAndTime(
+      inventoryDegassingFormAvailableDate,
+      inventoryDegassingFormAvailableTime,
+    );
+    if (!availableAt) {
+      setInventoryDegassingFormError("Укажите дату и время доступности.");
+      return;
+    }
+
+    setIsInventoryDegassingSaving(true);
+    setInventoryDegassingFormError("");
+    try {
+      if (inventoryDegassingFormMode === "create") {
+        await createInventoryBalanceDegassing({
+          as_of_date: inventoryDegassingFormAsOfDate,
+          nomenclature_id: Number(inventoryDegassingFormNomenclatureId),
+          qty: normalizedQtyText,
+          available_at: availableAt,
+          comment: inventoryDegassingFormComment.trim() || null,
+        });
+      } else if (inventoryDegassingFormItem?.balance_degassing_id) {
+        await updateInventoryBalanceDegassing(inventoryDegassingFormItem.balance_degassing_id, {
+          qty: normalizedQtyText,
+          available_at: availableAt,
+          comment: inventoryDegassingFormComment.trim() || null,
+        });
+      }
+
+      await reloadInventoryDegassing();
+      setIsInventoryDegassingFormOpen(false);
+      setInventoryDegassingFormItem(null);
+      setInventoryDegassingFormError("");
+    } catch (error) {
+      setInventoryDegassingFormError(error.message || "Не удалось сохранить запись остатков в дегазации.");
+    } finally {
+      setIsInventoryDegassingSaving(false);
+    }
+  };
+
+  const handleAskDeleteInventoryDegassing = (item) => {
+    setInventoryDegassingDeleteError("");
+    setInventoryDegassingDeleteCandidate(item);
+  };
+
+  const handleConfirmDeleteInventoryDegassing = async () => {
+    if (!inventoryDegassingDeleteCandidate?.balance_degassing_id) {
+      return;
+    }
+
+    const deletingId = inventoryDegassingDeleteCandidate.balance_degassing_id;
+    setDeletingInventoryDegassingId(deletingId);
+    setInventoryDegassingDeleteError("");
+    try {
+      await deleteInventoryBalanceDegassing(deletingId);
+      await reloadInventoryDegassing();
+      setInventoryDegassingDeleteCandidate(null);
+    } catch (error) {
+      setInventoryDegassingDeleteCandidate(null);
+      setInventoryDegassingDeleteError(error.message || "Не удалось удалить запись остатков в дегазации.");
+    } finally {
+      setDeletingInventoryDegassingId(null);
+    }
+  };
+
   const handleOpenCreateSafetyStockForm = async () => {
     setSafetyStockFormMode("create");
     setSafetyStockFormItem(null);
@@ -1336,6 +1606,375 @@ function DemandSection() {
     currentSourceDataset.items.length === 0;
   const showImportErrorInContext =
     importError && !isImportOpen && importErrorContext === currentSourceDataset.context;
+  const isInventorySourceTab = activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE;
+  const showInventorySearchEmpty =
+    !isInventoryLoading &&
+    !inventoryError &&
+    inventoryItems.length > 0 &&
+    filteredInventoryItems.length === 0;
+  const showInventoryNoData =
+    !isInventoryLoading &&
+    !inventoryError &&
+    inventoryItems.length === 0;
+  const showInventoryDegassingNoData =
+    !isInventoryDegassingLoading &&
+    !inventoryDegassingError &&
+    inventoryBalanceDates.length > 0 &&
+    inventoryDegassingItems.length === 0;
+  const selectedDegassingFilterNomenclatureLabel = inventoryDegassingNomenclatureId
+    ? sortedNomenclatureItems.find(
+        (item) => String(item.nomenclature_id) === String(inventoryDegassingNomenclatureId),
+      )
+    : null;
+  const inventorySourceContent = (
+    <section className="glass-panel p-4 sm:p-5">
+      <div className="space-y-4">
+        <div className="w-full">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="text-xl font-semibold tracking-tight text-slate-50">Остатки</h2>
+            <p className="text-sm text-slate-400">
+              Общий снимок складских остатков и временно недоступной части в дегазации.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)]">
+          <section className="rounded-none border border-cyan-300/10 bg-[linear-gradient(180deg,rgba(17,31,43,0.5),rgba(10,19,29,0.6))] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-50">Загруженные остатки</h3>
+              </div>
+              <div className="text-xs text-slate-500">
+                {balanceDate ? `Дата: ${balanceDate}` : "Дата остатков не выбрана"}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-[minmax(220px,240px)_minmax(260px,1fr)_auto_auto]">
+              <div>
+                <label htmlFor="inventory-balance-date-filter" className="mb-2 block text-xs tracking-[0.08em] text-slate-500">
+                  Дата остатков
+                </label>
+                <select
+                  id="inventory-balance-date-filter"
+                  value={balanceDate}
+                  onChange={(event) => setBalanceDate(event.target.value)}
+                  disabled={isInventoryDatesLoading || inventoryBalanceDates.length === 0}
+                  className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {inventoryBalanceDates.length > 0 ? (
+                    inventoryBalanceDates.map((optionDate, index) => (
+                      <option key={optionDate} value={optionDate}>
+                        {index === 0 ? `${optionDate} — последняя загрузка` : optionDate}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Остатки ещё не загружены.</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="inventory-balance-search-filter" className="mb-2 block text-xs tracking-[0.08em] text-slate-500">
+                  Поиск
+                </label>
+                <div className="flex h-10 items-center border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3">
+                  <Search className="h-4 w-4 text-slate-400" />
+                  <input
+                    id="inventory-balance-search-filter"
+                    type="search"
+                    value={inventorySearch}
+                    onChange={(event) => setInventorySearch(event.target.value)}
+                    placeholder="Поиск по коду или наименованию..."
+                    className="w-full bg-transparent pl-2 text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenCreateInventoryForm}
+                  disabled={!balanceDate || isInventorySaving || deletingInventoryId !== null}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-4 w-4" />
+                  Добавить позицию
+                </button>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={reloadInventoryBalance}
+                  disabled={isInventoryLoading}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RefreshCw className={["h-4 w-4", isInventoryLoading ? "animate-spin" : ""].join(" ")} />
+                  Обновить
+                </button>
+              </div>
+            </div>
+
+            {inventoryError ? (
+              <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{inventoryError}</span>
+              </div>
+            ) : null}
+            {inventoryDatesError ? (
+              <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{inventoryDatesError}</span>
+              </div>
+            ) : null}
+
+            <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10 bg-[linear-gradient(180deg,rgba(17,31,43,0.72),rgba(10,19,29,0.76))]">
+              {isInventoryLoading ? (
+                <div className="px-4 py-4 text-sm text-slate-300">Загружаем данные...</div>
+              ) : showInventoryNoData ? (
+                <div className="px-4 py-4 text-sm text-slate-400">
+                  {inventoryBalanceDates.length === 0 ? "Остатки ещё не загружены." : "За выбранную дату остатки не загружены."}
+                </div>
+              ) : showInventorySearchEmpty ? (
+                <div className="px-4 py-4 text-sm text-slate-400">Поиск не нашёл подходящих строк.</div>
+              ) : (
+                <div className="max-h-[520px] overflow-auto">
+                  <table className="min-w-full border-collapse">
+                    <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))]">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Номенклатура</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 text-right">Общий остаток</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Ед.</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredInventoryItems.map((item) => (
+                        <tr key={item.balance_id} className="border-t border-white/[0.05] transition hover:bg-cyan-300/[0.03]">
+                          <td className="px-3 py-2 text-sm text-slate-200">
+                            <div className="font-semibold leading-5 text-slate-100">{item.nomenclature_code || ""}</div>
+                            <div className="mt-0.5 leading-5 text-slate-400">{item.nomenclature_name || ""}</div>
+                          </td>
+                          <td className="px-3 py-2 text-right text-sm tabular-nums text-slate-200">{formatQty(item.available_qty)}</td>
+                          <td className="px-3 py-2 text-sm text-slate-300">{item.unit_of_measure || ""}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <IconActionButton
+                                label="Редактировать"
+                                onClick={() => handleOpenEditInventoryForm(item)}
+                                disabled={isInventorySaving || deletingInventoryId === item.balance_id}
+                              >
+                                <PencilLine className="h-3.5 w-3.5" />
+                              </IconActionButton>
+                              <IconActionButton
+                                label="Удалить"
+                                onClick={() => handleAskDeleteInventory(item)}
+                                disabled={isInventorySaving || deletingInventoryId === item.balance_id}
+                                tone="danger"
+                              >
+                                {deletingInventoryId === item.balance_id ? (
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </IconActionButton>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-cyan-300/14 bg-cyan-400/[0.06]">
+                        <td className="px-3 py-2 text-xs tracking-[0.08em] text-slate-300">Итого</td>
+                        <td className="px-3 py-2 text-sm text-slate-300">Позиций: {filteredInventoryItems.length}</td>
+                        <td className="px-3 py-2 text-sm text-slate-500"></td>
+                        <td className="px-3 py-2 text-sm text-slate-500"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-none border border-cyan-300/10 bg-[linear-gradient(180deg,rgba(17,31,43,0.5),rgba(10,19,29,0.6))] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-50">Из них в дегазации</h3>
+              </div>
+              <div className="text-right text-xs text-slate-500">
+                <div>{balanceDate ? `Дата: ${balanceDate}` : "Дата остатков не выбрана"}</div>
+                {selectedDegassingFilterNomenclatureLabel ? (
+                  <div>
+                    {selectedDegassingFilterNomenclatureLabel.nomenclature_code} — {selectedDegassingFilterNomenclatureLabel.nomenclature_name}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(180px,210px)_minmax(220px,1fr)]">
+              <div>
+                <label htmlFor="inventory-degassing-date-filter" className="mb-2 block text-xs tracking-[0.08em] text-slate-500">
+                  Дата остатков
+                </label>
+                <select
+                  id="inventory-degassing-date-filter"
+                  value={balanceDate}
+                  onChange={(event) => setBalanceDate(event.target.value)}
+                  disabled={isInventoryDatesLoading || inventoryBalanceDates.length === 0}
+                  className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {inventoryBalanceDates.length > 0 ? (
+                    inventoryBalanceDates.map((optionDate) => (
+                      <option key={optionDate} value={optionDate}>
+                        {optionDate}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Сначала загрузите общие остатки</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="inventory-degassing-nomenclature-filter" className="mb-2 block text-xs tracking-[0.08em] text-slate-500">
+                  Номенклатура
+                </label>
+                <select
+                  id="inventory-degassing-nomenclature-filter"
+                  value={inventoryDegassingNomenclatureId}
+                  onChange={(event) => setInventoryDegassingNomenclatureId(event.target.value)}
+                  disabled={isNomenclatureLoading || sortedNomenclatureItems.length === 0}
+                  className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="">Все номенклатуры</option>
+                  {sortedNomenclatureItems.map((item) => (
+                    <option key={item.nomenclature_id} value={item.nomenclature_id}>
+                      {item.nomenclature_code} — {item.nomenclature_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={handleOpenCreateInventoryDegassingForm}
+                disabled={inventoryBalanceDates.length === 0 || isInventoryDegassingSaving || deletingInventoryDegassingId !== null}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Plus className="h-4 w-4" />
+                Добавить запись
+              </button>
+              <button
+                type="button"
+                onClick={reloadInventoryDegassing}
+                disabled={isInventoryDegassingLoading || inventoryBalanceDates.length === 0}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw className={["h-4 w-4", isInventoryDegassingLoading ? "animate-spin" : ""].join(" ")} />
+                Обновить
+              </button>
+            </div>
+
+            {inventoryDegassingError ? (
+              <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{inventoryDegassingError}</span>
+              </div>
+            ) : null}
+
+            <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10 bg-[linear-gradient(180deg,rgba(17,31,43,0.72),rgba(10,19,29,0.76))]">
+              {inventoryBalanceDates.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-400">
+                  Сначала загрузите общие остатки. После этого можно указать часть остатков в дегазации.
+                </div>
+              ) : isInventoryDegassingLoading ? (
+                <div className="px-4 py-4 text-sm text-slate-300">Загружаем остатки в дегазации...</div>
+              ) : showInventoryDegassingNoData ? (
+                <div className="px-4 py-4 text-sm text-slate-400">Нет остатков в дегазации для выбранных условий.</div>
+              ) : (
+                <div className="max-h-[520px] overflow-auto">
+                  <table className="min-w-full border-collapse">
+                    <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))]">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Номенклатура</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 text-right">Кол-во</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Доступно с</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryDegassingItems.map((item) => (
+                        <tr key={item.balance_degassing_id} className="border-t border-white/[0.05] transition hover:bg-cyan-300/[0.03]">
+                          <td className="px-3 py-2 text-sm text-slate-200">
+                            <div className="font-semibold leading-5 text-slate-100">{item.nomenclature_code || ""}</div>
+                            <div className="mt-0.5 leading-5 text-slate-400">{item.nomenclature_name || ""}</div>
+                            {item.comment ? (
+                              <div className="mt-1 text-xs leading-4 text-slate-500">
+                                Комментарий: {item.comment}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2 text-right text-sm tabular-nums text-slate-200">
+                            {formatQtyWithUnit(item.qty, item.unit_of_measure)}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-slate-300">
+                            {(() => {
+                              const formatted = formatDateTimeLabel(item.available_at);
+                              const parts = String(formatted).split(" ");
+                              return (
+                                <div className="leading-4">
+                                  <div>{parts[0] || formatted}</div>
+                                  {parts[1] ? <div className="mt-0.5 text-slate-500">{parts[1]}</div> : null}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <IconActionButton
+                                label="Изменить"
+                                onClick={() => handleOpenEditInventoryDegassingForm(item)}
+                                disabled={isInventoryDegassingSaving || deletingInventoryDegassingId === item.balance_degassing_id}
+                              >
+                                <PencilLine className="h-3.5 w-3.5" />
+                              </IconActionButton>
+                              <IconActionButton
+                                label="Удалить"
+                                onClick={() => handleAskDeleteInventoryDegassing(item)}
+                                disabled={isInventoryDegassingSaving || deletingInventoryDegassingId === item.balance_degassing_id}
+                                tone="danger"
+                              >
+                                {deletingInventoryDegassingId === item.balance_degassing_id ? (
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </IconActionButton>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-cyan-300/14 bg-cyan-400/[0.06]">
+                        <td className="px-3 py-2 text-xs tracking-[0.08em] text-slate-300">Итого</td>
+                        <td className="px-3 py-2 text-sm text-slate-300">Позиций: {inventoryDegassingItems.length}</td>
+                        <td className="px-3 py-2 text-sm text-slate-500"></td>
+                        <td className="px-3 py-2 text-sm text-slate-500"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <section className="space-y-6">
@@ -1419,6 +2058,7 @@ function DemandSection() {
               })}
             </section>
 
+            {isInventorySourceTab ? inventorySourceContent : (
             <section className="glass-panel p-4 sm:p-5">
               <div className="space-y-4">
                 <div className="w-full">
@@ -1704,6 +2344,7 @@ function DemandSection() {
                 )}
               </div>
             </section>
+            )}
           </div>
 
           {isImportOpen ? (
@@ -1789,89 +2430,6 @@ function DemandSection() {
                   >
                     {isSalesPlanSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
                     {isSalesPlanSaving ? "Сохраняем..." : "Сохранить"}
-                  </button>
-                </div>
-              </div>
-            </aside>
-          ) : activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE && isInventoryFormOpen ? (
-            <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
-              <div className="panel-title">
-                {inventoryFormMode === "create" ? "Добавление" : "Редактирование"}
-              </div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-50">
-                {inventoryFormMode === "create" ? "Добавить позицию остатков" : "Редактировать остаток"}
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-400">
-                {inventoryFormMode === "create"
-                  ? "Заполните данные и сохраните новую строку снимка остатков."
-                  : "Измените доступный остаток и сохраните корректировку."}
-              </p>
-
-              <div className="panel-divider mt-5" />
-
-              <div className="mt-5 space-y-4">
-                <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Дата остатков</div>
-                  <input
-                    type="text"
-                    readOnly
-                    value={balanceDate || ""}
-                    className="w-full rounded-none border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200"
-                  />
-                </div>
-
-                {inventoryFormMode === "create" ? (
-                  <NomenclatureSearchSelect
-                    label="Номенклатура"
-                    items={nomenclatureItems}
-                    value={inventoryFormNomenclatureId}
-                    onChange={(value) => setInventoryFormNomenclatureId(String(value))}
-                    disabled={isInventorySaving || isNomenclatureLoading}
-                  />
-                ) : (
-                  <div className="space-y-3 rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
-                    <div className="text-slate-200">Код: {inventoryFormItem?.nomenclature_code}</div>
-                    <div className="text-slate-200">Наименование: {inventoryFormItem?.nomenclature_name}</div>
-                    <div className="text-slate-300">Ед.: {inventoryFormItem?.unit_of_measure}</div>
-                  </div>
-                )}
-
-                <div>
-                  <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Доступный остаток</div>
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    value={inventoryFormQty}
-                    onChange={(event) => setInventoryFormQty(event.target.value)}
-                    className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
-                  />
-                </div>
-
-                {inventoryFormError ? (
-                  <div className="flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{inventoryFormError}</span>
-                  </div>
-                ) : null}
-
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCloseInventoryForm}
-                    disabled={isInventorySaving}
-                    className="inline-flex items-center rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Отмена
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveInventoryForm}
-                    disabled={isInventorySaving}
-                    className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isInventorySaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
-                    {isInventorySaving ? "Сохраняем..." : "Сохранить"}
                   </button>
                 </div>
               </div>
@@ -2051,6 +2609,236 @@ function DemandSection() {
         </section>
       ) : null}
 
+      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryFormOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
+          <div className="glass-panel w-full max-w-2xl p-5 sm:p-6">
+            <div className="panel-title">
+              {inventoryFormMode === "create" ? "Добавление" : "Редактирование"}
+            </div>
+            <h3 className="mt-3 text-2xl font-semibold text-slate-50">
+              {inventoryFormMode === "create" ? "Добавить позицию остатков" : "Редактировать остаток"}
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              {inventoryFormMode === "create"
+                ? "Заполните данные и сохраните новую строку снимка остатков."
+                : "Измените доступный остаток и сохраните корректировку."}
+            </p>
+
+            <div className="panel-divider mt-5" />
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Дата остатков</div>
+                <input
+                  type="text"
+                  readOnly
+                  value={balanceDate || ""}
+                  className="w-full rounded-none border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200"
+                />
+              </div>
+              <div>
+                {inventoryFormMode === "create" ? (
+                  <NomenclatureSearchSelect
+                    label="Номенклатура"
+                    items={nomenclatureItems}
+                    value={inventoryFormNomenclatureId}
+                    onChange={(value) => setInventoryFormNomenclatureId(String(value))}
+                    disabled={isInventorySaving || isNomenclatureLoading}
+                  />
+                ) : (
+                  <>
+                    <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Номенклатура</div>
+                    <div className="space-y-1 rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                      <div className="text-slate-100">{inventoryFormItem?.nomenclature_code}</div>
+                      <div className="text-slate-300">{inventoryFormItem?.nomenclature_name}</div>
+                      <div className="text-slate-500">{inventoryFormItem?.unit_of_measure}</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Доступный остаток</div>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={inventoryFormQty}
+                onChange={(event) => setInventoryFormQty(event.target.value)}
+                className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
+              />
+            </div>
+
+            {inventoryFormError ? (
+              <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{inventoryFormError}</span>
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseInventoryForm}
+                disabled={isInventorySaving}
+                className="inline-flex items-center rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveInventoryForm}
+                disabled={isInventorySaving}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isInventorySaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+                {isInventorySaving ? "Сохраняем..." : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryDegassingFormOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
+          <div className="glass-panel w-full max-w-3xl p-5 sm:p-6">
+            <div className="panel-title">
+              {inventoryDegassingFormMode === "create" ? "Добавление" : "Редактирование"}
+            </div>
+            <h3 className="mt-3 text-2xl font-semibold text-slate-50">
+              {inventoryDegassingFormMode === "create" ? "Добавить запись дегазации" : "Редактировать запись дегазации"}
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Часть общего остатка временно исключается из доступного остатка недельного плана до даты «Доступно с».
+            </p>
+
+            <div className="panel-divider mt-5" />
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Дата остатков</div>
+                {inventoryDegassingFormMode === "create" ? (
+                  <select
+                    value={inventoryDegassingFormAsOfDate}
+                    onChange={(event) => setInventoryDegassingFormAsOfDate(event.target.value)}
+                    disabled={isInventoryDegassingSaving || inventoryBalanceDates.length === 0}
+                    className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {inventoryBalanceDates.map((optionDate) => (
+                      <option key={optionDate} value={optionDate}>
+                        {optionDate}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    readOnly
+                    value={inventoryDegassingFormAsOfDate}
+                    className="w-full rounded-none border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-200"
+                  />
+                )}
+              </div>
+
+              <div>
+                {inventoryDegassingFormMode === "create" ? (
+                  <NomenclatureSearchSelect
+                    label="Номенклатура"
+                    items={nomenclatureItems}
+                    value={inventoryDegassingFormNomenclatureId}
+                    onChange={(value) => setInventoryDegassingFormNomenclatureId(String(value))}
+                    disabled={isInventoryDegassingSaving || isNomenclatureLoading}
+                  />
+                ) : (
+                  <>
+                    <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Номенклатура</div>
+                    <div className="space-y-1 rounded-none border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                      <div className="text-slate-100">{inventoryDegassingFormItem?.nomenclature_code}</div>
+                      <div className="text-slate-300">{inventoryDegassingFormItem?.nomenclature_name}</div>
+                      <div className="text-slate-500">{inventoryDegassingFormItem?.unit_of_measure}</div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">
+                  Количество{selectedInventoryDegassingFormNomenclature?.unit_of_measure ? `, ${selectedInventoryDegassingFormNomenclature.unit_of_measure}` : ""}
+                </div>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={inventoryDegassingFormQty}
+                  onChange={(event) => setInventoryDegassingFormQty(event.target.value)}
+                  className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Дата доступности</div>
+                <input
+                  type="date"
+                  value={inventoryDegassingFormAvailableDate}
+                  onChange={(event) => setInventoryDegassingFormAvailableDate(event.target.value)}
+                  className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Время доступности</div>
+                <select
+                  value={inventoryDegassingFormAvailableTime}
+                  onChange={(event) => setInventoryDegassingFormAvailableTime(event.target.value)}
+                  className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
+                >
+                  <option value="07:00">07:00</option>
+                  <option value="19:00">19:00</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Комментарий</div>
+                <textarea
+                  rows={4}
+                  value={inventoryDegassingFormComment}
+                  onChange={(event) => setInventoryDegassingFormComment(event.target.value)}
+                  className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45"
+                />
+              </div>
+            </div>
+
+            {inventoryDegassingFormError ? (
+              <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{inventoryDegassingFormError}</span>
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseInventoryDegassingForm}
+                disabled={isInventoryDegassingSaving}
+                className="inline-flex items-center rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveInventoryDegassingForm}
+                disabled={isInventoryDegassingSaving}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isInventoryDegassingSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+                {isInventoryDegassingSaving ? "Сохраняем..." : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <V2ConfirmDialog
         isOpen={Boolean(productionPlanRefreshCandidate) && isRefreshProductionPlanConfirmOpen}
         title="Обновить план выпуска из расчёта?"
@@ -2108,6 +2896,22 @@ function DemandSection() {
       />
 
       <V2ConfirmDialog
+        isOpen={Boolean(inventoryDegassingDeleteCandidate)}
+        title="Удалить запись остатков в дегазации?"
+        message="Запись будет удалена. Общий остаток на дату не изменится."
+        confirmText={deletingInventoryDegassingId ? "Удаляем..." : "Удалить"}
+        cancelText="Отмена"
+        isConfirmDisabled={Boolean(deletingInventoryDegassingId)}
+        isCancelDisabled={Boolean(deletingInventoryDegassingId)}
+        onCancel={() => {
+          if (!deletingInventoryDegassingId) {
+            setInventoryDegassingDeleteCandidate(null);
+          }
+        }}
+        onConfirm={handleConfirmDeleteInventoryDegassing}
+      />
+
+      <V2ConfirmDialog
         isOpen={Boolean(safetyStockDeleteCandidate)}
         title="Удалить позицию страхового запаса?"
         message={
@@ -2135,6 +2939,11 @@ function DemandSection() {
       {inventoryDeleteError ? (
         <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] p-4 text-sm text-rose-100">
           {inventoryDeleteError}
+        </div>
+      ) : null}
+      {inventoryDegassingDeleteError ? (
+        <div className="glass-panel border-rose-300/30 bg-rose-500/[0.1] p-4 text-sm text-rose-100">
+          {inventoryDegassingDeleteError}
         </div>
       ) : null}
       {safetyStockDeleteError ? (
