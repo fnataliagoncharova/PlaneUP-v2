@@ -54,6 +54,15 @@ function asNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function toFiniteNumber(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const normalized = typeof value === "string" ? value.replace(/\s+/g, "").replace(",", ".") : value;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
 function formatNumber(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) {
@@ -63,6 +72,49 @@ function formatNumber(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 3,
   }).format(number);
+}
+
+function formatMinutesAsHours(minutes) {
+  const number = toFiniteNumber(minutes);
+  if (number == null) {
+    return "—";
+  }
+  return `${new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(number / 60)} ч`;
+}
+
+function formatPercent(value) {
+  const number = toFiniteNumber(value);
+  if (number == null) {
+    return "—";
+  }
+  return `${new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(number)}%`;
+}
+
+function getEquipmentAvailabilityRank(item) {
+  const overloadMinutes = toFiniteNumber(item?.overload_minutes) || 0;
+  const loadPercent = toFiniteNumber(item?.load_percent) || 0;
+  const plannedLoadMinutes = toFiniteNumber(item?.planned_load_minutes) || 0;
+  const maintenanceMinutes = toFiniteNumber(item?.maintenance_minutes) || 0;
+
+  if (overloadMinutes > 0) {
+    return 0;
+  }
+  if (loadPercent >= 85) {
+    return 1;
+  }
+  if (plannedLoadMinutes > 0) {
+    return 2;
+  }
+  if (maintenanceMinutes > 0) {
+    return 3;
+  }
+  return 4;
 }
 
 function normalizeIntegerInput(value) {
@@ -150,6 +202,7 @@ function WeeklyPlanningPanel() {
   const [distributedTotals, setDistributedTotals] = useState({});
   const [equipmentByPlanLine, setEquipmentByPlanLine] = useState({});
   const [rowEdits, setRowEdits] = useState({});
+  const [isEquipmentAvailabilityExpanded, setIsEquipmentAvailabilityExpanded] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -370,6 +423,10 @@ function WeeklyPlanningPanel() {
   useEffect(() => {
     syncSelectedWeekDetails();
   }, [syncSelectedWeekDetails]);
+
+  useEffect(() => {
+    setIsEquipmentAvailabilityExpanded(false);
+  }, [selectedWeek?.production_plan_week_id]);
 
   const tableRows = useMemo(() => {
     if (!selectedPlan?.lines?.length) {
@@ -620,6 +677,29 @@ function WeeklyPlanningPanel() {
     [rowEdits, tableRows],
   );
 
+  const equipmentAvailabilityItems = useMemo(() => {
+    const items = Array.isArray(selectedWeek?.equipment_availability) ? selectedWeek.equipment_availability : [];
+    return [...items].sort((a, b) => {
+      const rankDelta = getEquipmentAvailabilityRank(a) - getEquipmentAvailabilityRank(b);
+      if (rankDelta !== 0) {
+        return rankDelta;
+      }
+
+      const loadDelta = (toFiniteNumber(b?.load_percent) || 0) - (toFiniteNumber(a?.load_percent) || 0);
+      if (loadDelta !== 0) {
+        return loadDelta;
+      }
+
+      return String(a?.machine_code || "").localeCompare(String(b?.machine_code || ""), "ru");
+    });
+  }, [selectedWeek?.equipment_availability]);
+
+  const visibleEquipmentAvailabilityItems = isEquipmentAvailabilityExpanded
+    ? equipmentAvailabilityItems
+    : equipmentAvailabilityItems.slice(0, 3);
+  const hasEquipmentAvailability = equipmentAvailabilityItems.length > 0;
+  const canToggleEquipmentAvailability = equipmentAvailabilityItems.length > 3;
+
   const ensureSelectedWeekExists = async () => {
     if (!selectedPlanId || !selectedMergedWeek) {
       throw new Error("Выберите месяц и неделю.");
@@ -819,8 +899,126 @@ function WeeklyPlanningPanel() {
             {!selectedPlan ? null : !selectedPlan.lines?.length ? (
               <section className="glass-panel px-4 py-5 text-sm text-slate-400">В месячном плане нет позиций для распределения.</section>
             ) : (
-              <section className="glass-panel p-5 sm:p-6">
-                <h3 className="text-xl font-semibold tracking-tight text-slate-50">План недели</h3>
+              <>
+                {hasEquipmentAvailability ? (
+                  <section className="glass-panel p-4 sm:p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold tracking-tight text-slate-50">Загрузка оборудования на неделю</h3>
+                        <div className="mt-1 text-xs text-slate-500">С учётом планового ТО и производительности оборудования</div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-400">
+                        <span>
+                          Показаны {visibleEquipmentAvailabilityItems.length} из {equipmentAvailabilityItems.length}
+                        </span>
+                        {canToggleEquipmentAvailability ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsEquipmentAvailabilityExpanded((prev) => !prev)}
+                            className="text-cyan-200 transition hover:text-cyan-100"
+                          >
+                            {isEquipmentAvailabilityExpanded ? "Скрыть" : "Показать все"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                      {visibleEquipmentAvailabilityItems.map((item) => {
+                        const loadPercent = toFiniteNumber(item.load_percent);
+                        const plannedLoadMinutes = toFiniteNumber(item.planned_load_minutes);
+                        const remainingMinutes = toFiniteNumber(item.remaining_minutes);
+                        const overloadMinutes = toFiniteNumber(item.overload_minutes);
+                        const maintenanceMinutes = toFiniteNumber(item.maintenance_minutes);
+                        const hasPlannedLoad = (plannedLoadMinutes || 0) > 0;
+                        const hasMaintenance = (maintenanceMinutes || 0) > 0;
+                        const hasOverload = (overloadMinutes || 0) > 0 || (loadPercent || 0) > 100;
+                        const isHighLoad = !hasOverload && (loadPercent || 0) >= 85;
+                        const tone = hasOverload ? "danger" : !hasPlannedLoad ? "idle" : isHighLoad ? "warning" : "normal";
+                        const toneClasses = {
+                          normal: {
+                            badge: "border-cyan-300/25 bg-cyan-400/[0.09] text-cyan-100",
+                            bar: "bg-gradient-to-r from-cyan-300 to-emerald-300",
+                          },
+                          warning: {
+                            badge: "border-amber-300/30 bg-amber-400/[0.12] text-amber-100",
+                            bar: "bg-amber-300",
+                          },
+                          danger: {
+                            badge: "border-rose-300/35 bg-rose-500/[0.13] text-rose-100",
+                            bar: "bg-rose-400",
+                          },
+                          idle: {
+                            badge: "border-slate-400/20 bg-slate-400/[0.08] text-slate-300",
+                            bar: "bg-slate-500",
+                          },
+                        }[tone];
+                        const progressPercent = Math.min(Math.max(loadPercent || 0, 0), 100);
+                        const badgeText =
+                          (overloadMinutes || 0) > 0
+                            ? `Перегруз +${formatMinutesAsHours(overloadMinutes)}`
+                            : hasMaintenance && !hasPlannedLoad
+                              ? `ТО: ${formatMinutesAsHours(maintenanceMinutes)}`
+                              : `Загрузка ${formatPercent(loadPercent)}`;
+
+                        return (
+                          <div
+                            key={item.machine_id || item.machine_code}
+                            className="rounded-none border border-white/[0.08] bg-[rgba(7,18,29,0.72)] p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 text-sm font-semibold text-slate-100">
+                                <span className="break-words">{item.machine_code || "—"} — {item.machine_name || "Оборудование"}</span>
+                              </div>
+                              <span className={["shrink-0 rounded-none border px-2 py-1 text-[11px] font-medium", toneClasses.badge].join(" ")}>
+                                {badgeText}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 h-1.5 overflow-hidden rounded-none bg-white/[0.06]">
+                              <div className={["h-full rounded-none", toneClasses.bar].join(" ")} style={{ width: `${progressPercent}%` }} />
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                              <div className="text-slate-500">Доступно:</div>
+                              <div className="text-right tabular-nums text-slate-200">{formatMinutesAsHours(item.available_minutes)}</div>
+                              <div className="text-slate-500">Загрузка планом:</div>
+                              <div className="text-right tabular-nums text-slate-200">
+                                {hasPlannedLoad ? formatMinutesAsHours(plannedLoadMinutes) : "—"}
+                              </div>
+                              <div className="text-slate-500">ТО:</div>
+                              <div className={["text-right tabular-nums", hasMaintenance ? "text-amber-200" : "text-slate-500"].join(" ")}>
+                                {hasMaintenance ? formatMinutesAsHours(maintenanceMinutes) : "—"}
+                              </div>
+                              {(overloadMinutes || 0) > 0 ? (
+                                <>
+                                  <div className="text-rose-200">Перегруз:</div>
+                                  <div className="text-right tabular-nums font-semibold text-rose-100">{formatMinutesAsHours(overloadMinutes)}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-slate-500">Осталось:</div>
+                                  <div className="text-right tabular-nums text-slate-200">{formatMinutesAsHours(remainingMinutes)}</div>
+                                </>
+                              )}
+                            </div>
+                            {!hasPlannedLoad ? <div className="mt-2 text-xs text-slate-500">Заданий нет</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 bg-emerald-300" />Норма</span>
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 bg-amber-300" />Высокая загрузка</span>
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 bg-rose-300" />Перегруз</span>
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 bg-slate-500" />Нет загрузки</span>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section className="glass-panel p-5 sm:p-6">
+                  <h3 className="text-xl font-semibold tracking-tight text-slate-50">План недели</h3>
                 <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10">
                   <div className="max-h-[620px] overflow-auto">
                     <table className="min-w-full text-sm">
@@ -934,7 +1132,8 @@ function WeeklyPlanningPanel() {
 </table>
                   </div>
                 </div>
-              </section>
+                </section>
+              </>
             )}
           </div>
 
