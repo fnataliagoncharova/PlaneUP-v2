@@ -6,6 +6,7 @@ from db import get_connection
 from routers.demand import router as demand_router
 from routers.equipment_maintenance import router as equipment_maintenance_router
 from routers.inventory_balance import router as inventory_balance_router
+from routers.inventory_balance_degassing import router as inventory_balance_degassing_router
 from routers.machines import router as machines_router
 from routers.nomenclature import router as nomenclature_router
 from routers.processes import router as processes_router
@@ -42,6 +43,7 @@ app.include_router(demand_router)
 app.include_router(equipment_maintenance_router)
 app.include_router(sales_plan_router)
 app.include_router(inventory_balance_router)
+app.include_router(inventory_balance_degassing_router)
 app.include_router(safety_stock_router)
 app.include_router(production_plans_router)
 app.include_router(production_week_plans_router)
