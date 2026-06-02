@@ -362,15 +362,18 @@ def get_route_manufactured_component_requirements(
     }
 
 
-def get_initial_component_balances(
+def get_initial_component_balances_with_degassing(
     cursor: RealDictCursor,
     production_plan_id: int,
     component_ids: set[int],
-) -> dict[int, Decimal]:
+    check_at: datetime,
+) -> tuple[dict[int, Decimal], dict[int, list[tuple[datetime, Decimal]]]]:
     if not component_ids:
-        return {}
+        return {}, {}
 
-    balances = {component_id: DECIMAL_ZERO for component_id in component_ids}
+    total_balances = {component_id: DECIMAL_ZERO for component_id in component_ids}
+    unavailable_degassing_qty = {component_id: DECIMAL_ZERO for component_id in component_ids}
+    degassing_batches_by_component = {component_id: [] for component_id in component_ids}
 
     cursor.execute(
         """
@@ -383,7 +386,7 @@ def get_initial_component_balances(
     plan_row = cursor.fetchone()
     source_balance_date = plan_row["source_balance_date"] if plan_row else None
     if source_balance_date is None:
-        return balances
+        return total_balances, degassing_batches_by_component
 
     cursor.execute(
         """
@@ -397,8 +400,42 @@ def get_initial_component_balances(
         (source_balance_date, list(component_ids)),
     )
     for row in cursor.fetchall():
-        balances[int(row["nomenclature_id"])] = to_decimal(row["available_qty"])
-    return balances
+        total_balances[int(row["nomenclature_id"])] = to_decimal(row["available_qty"])
+
+    cursor.execute(
+        """
+        SELECT
+            nomenclature_id,
+            qty,
+            available_at
+        FROM inventory_balance_degassing
+        WHERE as_of_date = %s
+          AND nomenclature_id = ANY(%s)
+          AND available_at > %s
+        ORDER BY
+            nomenclature_id ASC,
+            available_at ASC,
+            balance_degassing_id ASC;
+        """,
+        (source_balance_date, list(component_ids), check_at),
+    )
+    for row in cursor.fetchall():
+        component_id = int(row["nomenclature_id"])
+        qty = to_decimal(row["qty"])
+        available_at = row["available_at"]
+        if qty <= DECIMAL_ZERO or not isinstance(available_at, datetime):
+            continue
+        unavailable_degassing_qty[component_id] += qty
+        degassing_batches_by_component.setdefault(component_id, []).append((available_at, qty))
+
+    available_balances: dict[int, Decimal] = {}
+    for component_id in component_ids:
+        available_balances[component_id] = max(
+            total_balances.get(component_id, DECIMAL_ZERO) - unavailable_degassing_qty.get(component_id, DECIMAL_ZERO),
+            DECIMAL_ZERO,
+        )
+
+    return available_balances, degassing_batches_by_component
 
 
 def get_component_actual_batches_with_availability(
@@ -497,8 +534,9 @@ def group_degassing_batches(
     if not batches:
         return []
 
+    sorted_batches = sorted(batches, key=lambda batch: batch[0])
     grouped: list[tuple[datetime, Decimal]] = []
-    for available_at, qty in batches:
+    for available_at, qty in sorted_batches:
         if grouped and grouped[-1][0] == available_at:
             prev_available_at, prev_qty = grouped[-1]
             grouped[-1] = (prev_available_at, prev_qty + qty)
@@ -578,14 +616,15 @@ def build_component_availability_warnings(
         for component in route_requirements["components"]:
             component_ids.add(int(component["nomenclature_id"]))
 
-    initial_balances = get_initial_component_balances(
-        cursor=cursor,
-        production_plan_id=production_plan_id,
-        component_ids=component_ids,
-    )
     check_at, actual_batches_by_component = get_component_actual_batches_with_availability(
         cursor=cursor,
         component_ids=component_ids,
+    )
+    initial_balances, inventory_degassing_by_component = get_initial_component_balances_with_degassing(
+        cursor=cursor,
+        production_plan_id=production_plan_id,
+        component_ids=component_ids,
+        check_at=check_at,
     )
 
     available_now_by_component: dict[int, Decimal] = {}
@@ -597,7 +636,8 @@ def build_component_availability_warnings(
             batches=actual_batches_by_component.get(component_id, []),
         )
         available_now_by_component[component_id] = inventory_qty + actual_available_qty
-        degassing_by_component[component_id] = group_degassing_batches(actual_degassing_batches)
+        combined_degassing_batches = actual_degassing_batches + inventory_degassing_by_component.get(component_id, [])
+        degassing_by_component[component_id] = group_degassing_batches(combined_degassing_batches)
 
     warnings_by_line: dict[int, list[str]] = {}
 
