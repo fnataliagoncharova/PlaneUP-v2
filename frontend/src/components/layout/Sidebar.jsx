@@ -1,4 +1,4 @@
-import { ChevronRight, Factory, Sparkles } from "lucide-react";
+import { ChevronRight, Factory } from "lucide-react";
 
 function Sidebar({ items, activeSection, onSelect }) {
   return (
@@ -67,19 +67,6 @@ function Sidebar({ items, activeSection, onSelect }) {
             );
           })}
         </nav>
-
-        <div className="mt-auto pt-5">
-          <div className="glass-panel px-4 py-4">
-            <div className="flex items-center gap-2 text-cyan-100">
-              <Sparkles className="h-4 w-4" />
-              <span className="panel-title">V2 foundation</span>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
-              Каркас готов для подключения backend V2, CRUD-операций и развития остальных
-              разделов в едином визуальном языке.
-            </p>
-          </div>
-        </div>
       </div>
     </aside>
   );

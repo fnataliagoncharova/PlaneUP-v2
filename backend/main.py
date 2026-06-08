@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import get_connection
 from routers.demand import router as demand_router
+from routers.downtime_reasons import router as downtime_reasons_router
+from routers.equipment_downtimes import router as equipment_downtimes_router
 from routers.equipment_maintenance import router as equipment_maintenance_router
 from routers.inventory_balance import router as inventory_balance_router
 from routers.inventory_balance_degassing import router as inventory_balance_degassing_router
@@ -40,6 +42,8 @@ app.include_router(route_steps_router)
 app.include_router(route_step_inputs_router)
 app.include_router(route_step_equipment_router)
 app.include_router(demand_router)
+app.include_router(downtime_reasons_router)
+app.include_router(equipment_downtimes_router)
 app.include_router(equipment_maintenance_router)
 app.include_router(sales_plan_router)
 app.include_router(inventory_balance_router)

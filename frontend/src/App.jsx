@@ -1,9 +1,20 @@
-﻿import { BarChart3, Boxes, Cog, ScrollText, Wrench, Workflow } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  Boxes,
+  Cog,
+  OctagonPause,
+  ScrollText,
+  Wrench,
+  Workflow,
+} from "lucide-react";
 import { useCallback, useState } from "react";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
 import DemandSection from "./sections/DemandSection";
+import DowntimeReasonsSection from "./sections/DowntimeReasonsSection";
+import EquipmentDowntimesSection from "./sections/EquipmentDowntimesSection";
 import EquipmentMaintenanceSection from "./sections/EquipmentMaintenanceSection";
 import MachinesSection from "./sections/MachinesSection";
 import MasterWorkspaceSection from "./sections/MasterWorkspaceSection";
@@ -62,6 +73,12 @@ const navigationItems = [
   { id: "routes", label: "Маршруты", icon: ScrollText },
   { id: "machines", label: "Оборудование", icon: Cog },
   { id: "equipment_maintenance", label: "Плановое ТО", icon: Wrench },
+  { id: "downtime_reasons", label: "Причины простоев", icon: AlertTriangle },
+  {
+    id: "equipment_downtimes",
+    label: "Журнал внеплановых простоев",
+    icon: OctagonPause,
+  },
   { id: "demand", label: "Потребность", icon: BarChart3 },
   { id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon },
   { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
@@ -77,9 +94,13 @@ const sectionDescriptions = {
   machines:
     "Справочник оборудования с ролями, производительностью и привязкой к шагам маршрутов.",
   equipment_maintenance:
-    "Плановые интервалы недоступности оборудования для расчёта доступности в недельном плане.",
+    "Плановые интервалы недоступности оборудования для расчета доступности в недельном плане.",
+  downtime_reasons:
+    "Справочник причин для будущего журнала внеплановых простоев оборудования и чистой аналитики.",
+  equipment_downtimes:
+    "Журнал фактических внеплановых остановок оборудования с открытыми и закрытыми простоями.",
   demand:
-    "Подготовка исходных данных, запуск расчёта потребности и проверка результатов.",
+    "Подготовка исходных данных, запуск расчета потребности и проверка результатов.",
   production_planning:
     "Месячный план выпуска по производимой номенклатуре с приоритетами и комментариями.",
   master_workspace:
@@ -130,6 +151,10 @@ function App() {
               <MachinesSection />
             ) : activeSection === "equipment_maintenance" ? (
               <EquipmentMaintenanceSection />
+            ) : activeSection === "downtime_reasons" ? (
+              <DowntimeReasonsSection />
+            ) : activeSection === "equipment_downtimes" ? (
+              <EquipmentDowntimesSection />
             ) : activeSection === "demand" ? (
               <DemandSection />
             ) : activeSection === "production_planning" ? (
