@@ -48,3 +48,33 @@ export function importInventoryBalanceDegassing(file) {
 export function downloadInventoryBalanceDegassingTemplate() {
   return apiRequestBlob("/inventory-balance-degassing/template");
 }
+
+export function getInventoryDegassingSuggestionReport(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.as_of_date) {
+    searchParams.set("as_of_date", params.as_of_date);
+  }
+
+  if (params.lookback_days) {
+    searchParams.set("lookback_days", String(params.lookback_days));
+  }
+
+  const query = searchParams.toString();
+  return apiRequest(`/inventory-balance-degassing/suggestion-report${query ? `?${query}` : ""}`);
+}
+
+export function downloadInventoryDegassingSuggestionReport(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  if (params.as_of_date) {
+    searchParams.set("as_of_date", params.as_of_date);
+  }
+
+  if (params.lookback_days) {
+    searchParams.set("lookback_days", String(params.lookback_days));
+  }
+
+  const query = searchParams.toString();
+  return apiRequestBlob(`/inventory-balance-degassing/suggestion-report/export${query ? `?${query}` : ""}`);
+}

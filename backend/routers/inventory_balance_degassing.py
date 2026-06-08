@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import re
@@ -17,6 +17,9 @@ from schemas.inventory_balance_degassing import (
     InventoryBalanceDegassingDeleteResponse,
     InventoryBalanceDegassingImportResponse,
     InventoryBalanceDegassingRead,
+    InventoryBalanceDegassingSuggestionItem,
+    InventoryBalanceDegassingSuggestionReportResponse,
+    InventoryBalanceDegassingSuggestionSourceBatch,
     InventoryBalanceDegassingUpdate,
 )
 
@@ -409,6 +412,230 @@ def create_template_workbook() -> bytes:
     return output.getvalue()
 
 
+def format_import_date(value: date) -> str:
+    return value.strftime("%d.%m.%Y")
+
+
+def format_import_datetime(value: datetime) -> str:
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
+def get_suggestion_report_check_at(as_of_date: date) -> datetime:
+    return get_balance_start_datetime(as_of_date)
+
+
+def get_shift_label(shift_type: str) -> str:
+    return "день" if shift_type == "day" else "ночь"
+
+
+def fetch_suggestion_report_items(
+    cursor: RealDictCursor,
+    as_of_date: date,
+    lookback_days: int,
+) -> tuple[datetime, list[InventoryBalanceDegassingSuggestionItem]]:
+    check_at = get_suggestion_report_check_at(as_of_date)
+    date_from = as_of_date - timedelta(days=lookback_days)
+    date_to = as_of_date
+
+    cursor.execute(
+        """
+        WITH wait_hours_by_nomenclature AS (
+            SELECT DISTINCT ON (r.result_nomenclature_id)
+                r.result_nomenclature_id AS nomenclature_id,
+                COALESCE(step_row.post_process_wait_hours, 0) AS post_process_wait_hours
+            FROM routes AS r
+            INNER JOIN LATERAL (
+                SELECT rs.post_process_wait_hours
+                FROM route_steps AS rs
+                WHERE rs.route_id = r.route_id
+                  AND rs.output_nomenclature_id = r.result_nomenclature_id
+                ORDER BY rs.step_no DESC, rs.route_step_id DESC
+                LIMIT 1
+            ) AS step_row ON TRUE
+            WHERE r.is_active = TRUE
+            ORDER BY
+                r.result_nomenclature_id ASC,
+                r.route_id ASC
+        )
+        SELECT
+            pa.production_actual_id,
+            pa.nomenclature_id,
+            n.nomenclature_code,
+            n.nomenclature_name,
+            COALESCE(NULLIF(BTRIM(pa.unit_of_measure), ''), n.unit_of_measure, '') AS unit_of_measure,
+            pa.actual_date,
+            pa.shift_type,
+            COALESCE(pa.actual_qty, 0) AS actual_qty,
+            CASE
+                WHEN pa.shift_type = 'day'
+                    THEN pa.actual_date::timestamp + INTERVAL '19 hour'
+                ELSE pa.actual_date::timestamp + INTERVAL '1 day' + INTERVAL '7 hour'
+            END AS shift_finish_at,
+            COALESCE(rs.post_process_wait_hours, wait_hours.post_process_wait_hours, 0) AS degassing_hours,
+            (
+                CASE
+                    WHEN pa.shift_type = 'day'
+                        THEN pa.actual_date::timestamp + INTERVAL '19 hour'
+                    ELSE pa.actual_date::timestamp + INTERVAL '1 day' + INTERVAL '7 hour'
+                END
+                + (COALESCE(rs.post_process_wait_hours, wait_hours.post_process_wait_hours, 0) * INTERVAL '1 hour')
+            ) AS available_at
+        FROM production_actuals AS pa
+        INNER JOIN nomenclature AS n
+            ON n.nomenclature_id = pa.nomenclature_id
+        LEFT JOIN production_week_lines AS pwl
+            ON pwl.production_week_line_id = pa.production_week_line_id
+        LEFT JOIN route_step_equipment AS rse
+            ON rse.step_equipment_id = pwl.route_step_equipment_id
+        LEFT JOIN route_steps AS rs
+            ON rs.route_step_id = rse.route_step_id
+        LEFT JOIN wait_hours_by_nomenclature AS wait_hours
+            ON wait_hours.nomenclature_id = pa.nomenclature_id
+        WHERE pa.actual_date >= %s
+          AND pa.actual_date < %s
+          AND COALESCE(rs.post_process_wait_hours, wait_hours.post_process_wait_hours, 0) > 0
+        ORDER BY
+            n.nomenclature_code ASC,
+            available_at ASC,
+            pa.actual_date ASC,
+            pa.production_actual_id ASC;
+        """,
+        (date_from, date_to),
+    )
+
+    grouped_items: dict[tuple[int, datetime], dict[str, Any]] = {}
+    nomenclature_ids: set[int] = set()
+
+    for row in cursor.fetchall():
+        available_at = row["available_at"]
+        actual_qty = row["actual_qty"]
+        if not isinstance(available_at, datetime):
+            continue
+
+        if not isinstance(actual_qty, Decimal):
+            actual_qty = Decimal(str(actual_qty or 0))
+
+        if actual_qty <= Decimal("0") or available_at <= check_at:
+            continue
+
+        nomenclature_id = int(row["nomenclature_id"])
+        key = (nomenclature_id, available_at)
+        nomenclature_ids.add(nomenclature_id)
+
+        source_batch = InventoryBalanceDegassingSuggestionSourceBatch(
+            actual_date=row["actual_date"],
+            shift_type=row["shift_type"],
+            actual_qty=actual_qty,
+        )
+
+        if key not in grouped_items:
+            grouped_items[key] = {
+                "nomenclature_id": nomenclature_id,
+                "nomenclature_code": str(row["nomenclature_code"] or ""),
+                "nomenclature_name": str(row["nomenclature_name"] or ""),
+                "unit_of_measure": str(row["unit_of_measure"] or ""),
+                "actual_qty": Decimal("0"),
+                "available_at": available_at,
+                "degassing_hours": Decimal(str(row["degassing_hours"] or 0)),
+                "source_batches": [],
+                "actual_date": row["actual_date"],
+                "shift_type": row["shift_type"],
+                "shift_finish_at": row["shift_finish_at"],
+            }
+
+        grouped_items[key]["actual_qty"] += actual_qty
+        grouped_items[key]["source_batches"].append(source_batch)
+
+        if len(grouped_items[key]["source_batches"]) > 1:
+            grouped_items[key]["actual_date"] = None
+            grouped_items[key]["shift_type"] = None
+            grouped_items[key]["shift_finish_at"] = None
+
+    inventory_balances = fetch_inventory_balances_by_groups(
+        cursor,
+        {as_of_date},
+        nomenclature_ids,
+    )
+
+    items: list[InventoryBalanceDegassingSuggestionItem] = []
+    for key in sorted(
+        grouped_items,
+        key=lambda item_key: (
+            grouped_items[item_key]["nomenclature_code"],
+            item_key[1],
+        ),
+    ):
+        item = grouped_items[key]
+        balance_key = (as_of_date, item["nomenclature_id"])
+        inventory_balance_qty = inventory_balances.get(balance_key)
+        source_batches = item["source_batches"]
+        if len(source_batches) == 1:
+            only_batch = source_batches[0]
+            source_summary = f"{format_import_date(only_batch.actual_date)} / {get_shift_label(only_batch.shift_type)}"
+        else:
+            source_summary = "несколько фактов"
+
+        items.append(
+            InventoryBalanceDegassingSuggestionItem(
+                nomenclature_id=item["nomenclature_id"],
+                nomenclature_code=item["nomenclature_code"],
+                nomenclature_name=item["nomenclature_name"],
+                unit_of_measure=item["unit_of_measure"],
+                actual_date=item["actual_date"],
+                shift_type=item["shift_type"],
+                actual_qty=item["actual_qty"].quantize(Decimal("0.001")),
+                shift_finish_at=item["shift_finish_at"],
+                degassing_hours=item["degassing_hours"].quantize(Decimal("0.001")),
+                available_at=item["available_at"],
+                status="Будет доступен",
+                has_inventory_balance=inventory_balance_qty is not None,
+                inventory_balance_qty=(
+                    inventory_balance_qty.quantize(Decimal("0.001"))
+                    if isinstance(inventory_balance_qty, Decimal)
+                    else inventory_balance_qty
+                ),
+                source_summary=source_summary,
+                source_batches=source_batches,
+            )
+        )
+
+    return check_at, items
+
+
+def create_suggestion_report_export_workbook(
+    as_of_date: date,
+    items: list[InventoryBalanceDegassingSuggestionItem],
+) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "ПФ в дегазации"
+    sheet.append(
+        [
+            "Дата остатков",
+            "Код номенклатуры",
+            "Количество",
+            "Доступно с",
+            "Комментарий",
+        ]
+    )
+
+    for item in items:
+        sheet.append(
+            [
+                format_import_date(as_of_date),
+                item.nomenclature_code,
+                float(item.actual_qty),
+                format_import_datetime(item.available_at),
+                "Выпуск последней недели месяца",
+            ]
+        )
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
 def ensure_nomenclature_exists(cursor: RealDictCursor, nomenclature_id: int) -> None:
     cursor.execute(
         """
@@ -556,6 +783,69 @@ def list_inventory_balance_degassing(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось получить список остатков в дегазации.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.get("/suggestion-report", response_model=InventoryBalanceDegassingSuggestionReportResponse)
+def get_inventory_balance_degassing_suggestion_report(
+    as_of_date: date = Query(...),
+    lookback_days: int = Query(default=7, ge=1),
+):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            check_at, items = fetch_suggestion_report_items(cursor, as_of_date, lookback_days)
+            return InventoryBalanceDegassingSuggestionReportResponse(
+                as_of_date=as_of_date,
+                check_at=check_at,
+                lookback_days=lookback_days,
+                items=items,
+            )
+    except HTTPException:
+        raise
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось сформировать отчёт по ПФ в дегазации.",
+        ) from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@router.get("/suggestion-report/export")
+def export_inventory_balance_degassing_suggestion_report(
+    as_of_date: date = Query(...),
+    lookback_days: int = Query(default=7, ge=1),
+):
+    connection = None
+
+    try:
+        connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            _, items = fetch_suggestion_report_items(cursor, as_of_date, lookback_days)
+
+        workbook_bytes = create_suggestion_report_export_workbook(as_of_date, items)
+        return StreamingResponse(
+            BytesIO(workbook_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="inventory_balance_degassing_suggestion_{as_of_date.isoformat()}.xlsx"'
+                ),
+            },
+        )
+    except HTTPException:
+        raise
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось выгрузить отчёт по ПФ в дегазации.",
         ) from exc
     finally:
         if connection is not None:

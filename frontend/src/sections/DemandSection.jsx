@@ -35,7 +35,9 @@ import {
   createInventoryBalanceDegassing,
   deleteInventoryBalanceDegassing,
   downloadInventoryBalanceDegassingTemplate,
+  downloadInventoryDegassingSuggestionReport,
   getInventoryBalanceDegassing,
+  getInventoryDegassingSuggestionReport,
   importInventoryBalanceDegassing,
   updateInventoryBalanceDegassing,
 } from "../services/inventoryBalanceDegassingApi";
@@ -236,6 +238,18 @@ function resolveErrorMessages(error, fallbackMessage) {
   return [fallbackMessage];
 }
 
+function normalizeLookbackDays(value, fallbackValue = 7) {
+  const parsedValue = Number.parseInt(String(value ?? "").trim(), 10);
+  if (!Number.isFinite(parsedValue) || parsedValue < 1) {
+    return fallbackValue;
+  }
+  return parsedValue;
+}
+
+function formatShiftLabel(value) {
+  return value === "night" ? "ночь" : "день";
+}
+
 function IconActionButton({ label, onClick, disabled = false, tone = "edit", children }) {
   const toneClassName =
     tone === "danger"
@@ -307,6 +321,14 @@ function DemandSection() {
   const [inventoryDegassingImportSuccess, setInventoryDegassingImportSuccess] = useState("");
   const [pendingInventoryDegassingImportFile, setPendingInventoryDegassingImportFile] = useState(null);
   const [isInventoryDegassingImportConfirmOpen, setIsInventoryDegassingImportConfirmOpen] = useState(false);
+  const [isInventoryDegassingSuggestionOpen, setIsInventoryDegassingSuggestionOpen] = useState(false);
+  const [isInventoryDegassingSuggestionLoading, setIsInventoryDegassingSuggestionLoading] = useState(false);
+  const [inventoryDegassingSuggestionError, setInventoryDegassingSuggestionError] = useState("");
+  const [inventoryDegassingSuggestionErrors, setInventoryDegassingSuggestionErrors] = useState([]);
+  const [inventoryDegassingSuggestionItems, setInventoryDegassingSuggestionItems] = useState([]);
+  const [inventoryDegassingSuggestionMeta, setInventoryDegassingSuggestionMeta] = useState(null);
+  const [inventoryDegassingSuggestionLookbackDays, setInventoryDegassingSuggestionLookbackDays] = useState("7");
+  const [isInventoryDegassingSuggestionDownloading, setIsInventoryDegassingSuggestionDownloading] = useState(false);
   const inventoryDegassingFileInputRef = useRef(null);
 
   const [safetyStockItems, setSafetyStockItems] = useState([]);
@@ -516,6 +538,11 @@ function DemandSection() {
       setInventoryDegassingNomenclatureId("");
       setPendingInventoryDegassingImportFile(null);
       setIsInventoryDegassingImportConfirmOpen(false);
+      setIsInventoryDegassingSuggestionOpen(false);
+      setInventoryDegassingSuggestionError("");
+      setInventoryDegassingSuggestionErrors([]);
+      setInventoryDegassingSuggestionItems([]);
+      setInventoryDegassingSuggestionMeta(null);
     }
 
     if (activeSourceTab !== IMPORT_CONTEXT_SAFETY_STOCK) {
@@ -1508,6 +1535,103 @@ function DemandSection() {
     }
   };
 
+  const handleCloseInventoryDegassingSuggestion = () => {
+    if (isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading) {
+      return;
+    }
+    setIsInventoryDegassingSuggestionOpen(false);
+  };
+
+  const handleLoadInventoryDegassingSuggestion = async (nextLookbackDays) => {
+    if (!balanceDate) {
+      setInventoryDegassingSuggestionError("Сначала выберите дату остатков.");
+      setInventoryDegassingSuggestionErrors(["Сначала выберите дату остатков."]);
+      setInventoryDegassingSuggestionItems([]);
+      setInventoryDegassingSuggestionMeta(null);
+      setIsInventoryDegassingSuggestionOpen(true);
+      return;
+    }
+
+    const normalizedLookbackDays = normalizeLookbackDays(nextLookbackDays, 7);
+    setInventoryDegassingSuggestionLookbackDays(String(normalizedLookbackDays));
+    setIsInventoryDegassingSuggestionOpen(true);
+    setIsInventoryDegassingSuggestionLoading(true);
+    setInventoryDegassingSuggestionError("");
+    setInventoryDegassingSuggestionErrors([]);
+
+    try {
+      const response = await getInventoryDegassingSuggestionReport({
+        as_of_date: balanceDate,
+        lookback_days: normalizedLookbackDays,
+      });
+      setInventoryDegassingSuggestionItems(Array.isArray(response?.items) ? response.items : []);
+      setInventoryDegassingSuggestionMeta({
+        as_of_date: response?.as_of_date || balanceDate,
+        check_at: response?.check_at || null,
+        lookback_days: response?.lookback_days ?? normalizedLookbackDays,
+      });
+    } catch (error) {
+      const messages = resolveErrorMessages(
+        error,
+        "Не удалось сформировать отчёт по ПФ в дегазации.",
+      );
+      setInventoryDegassingSuggestionError(messages[0] || "Не удалось сформировать отчёт по ПФ в дегазации.");
+      setInventoryDegassingSuggestionErrors(messages);
+      setInventoryDegassingSuggestionItems([]);
+      setInventoryDegassingSuggestionMeta({
+        as_of_date: balanceDate,
+        check_at: null,
+        lookback_days: normalizedLookbackDays,
+      });
+    } finally {
+      setIsInventoryDegassingSuggestionLoading(false);
+    }
+  };
+
+  const handleOpenInventoryDegassingSuggestion = async () => {
+    await handleLoadInventoryDegassingSuggestion(inventoryDegassingSuggestionLookbackDays);
+  };
+
+  const handleDownloadInventoryDegassingSuggestion = async (lookbackDays = inventoryDegassingSuggestionLookbackDays) => {
+    if (!balanceDate) {
+      setInventoryDegassingSuggestionError("Сначала выберите дату остатков.");
+      setInventoryDegassingSuggestionErrors(["Сначала выберите дату остатков."]);
+      setIsInventoryDegassingSuggestionOpen(true);
+      return;
+    }
+
+    const normalizedLookbackDays = normalizeLookbackDays(lookbackDays, 7);
+    setInventoryDegassingSuggestionLookbackDays(String(normalizedLookbackDays));
+    setIsInventoryDegassingSuggestionDownloading(true);
+    setInventoryDegassingSuggestionError("");
+    setInventoryDegassingSuggestionErrors([]);
+
+    try {
+      const reportBlob = await downloadInventoryDegassingSuggestionReport({
+        as_of_date: balanceDate,
+        lookback_days: normalizedLookbackDays,
+      });
+      const blobUrl = URL.createObjectURL(reportBlob);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = blobUrl;
+      downloadLink.download = `inventory_balance_degassing_suggestion_${balanceDate}.xlsx`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      const messages = resolveErrorMessages(
+        error,
+        "Не удалось скачать отчёт по ПФ в дегазации.",
+      );
+      setInventoryDegassingSuggestionError(messages[0] || "Не удалось скачать отчёт по ПФ в дегазации.");
+      setInventoryDegassingSuggestionErrors(messages);
+      setIsInventoryDegassingSuggestionOpen(true);
+    } finally {
+      setIsInventoryDegassingSuggestionDownloading(false);
+    }
+  };
+
   const handleOpenCreateSafetyStockForm = async () => {
     setSafetyStockFormMode("create");
     setSafetyStockFormItem(null);
@@ -1755,6 +1879,10 @@ function DemandSection() {
     !inventoryDegassingError &&
     inventoryBalanceDates.length > 0 &&
     inventoryDegassingItems.length === 0;
+  const showInventoryDegassingSuggestionNoData =
+    !isInventoryDegassingSuggestionLoading &&
+    !inventoryDegassingSuggestionError &&
+    inventoryDegassingSuggestionItems.length === 0;
   const selectedDegassingFilterNomenclatureLabel = inventoryDegassingNomenclatureId
     ? sortedNomenclatureItems.find(
         (item) => String(item.nomenclature_id) === String(inventoryDegassingNomenclatureId),
@@ -2002,6 +2130,20 @@ function DemandSection() {
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <button
                 type="button"
+                onClick={handleOpenInventoryDegassingSuggestion}
+                disabled={
+                  inventoryBalanceDates.length === 0 ||
+                  !balanceDate ||
+                  isInventoryDegassingSuggestionLoading ||
+                  isInventoryDegassingSuggestionDownloading
+                }
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {isInventoryDegassingSuggestionLoading ? "Формируем..." : "Отчёт по ПФ"}
+              </button>
+              <button
+                type="button"
                 onClick={handleOpenInventoryDegassingImport}
                 disabled={
                   inventoryBalanceDates.length === 0 ||
@@ -2011,7 +2153,7 @@ function DemandSection() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Upload className="h-4 w-4" />
-                {isInventoryDegassingImporting ? "Импорт..." : "Импорт Excel"}
+                {isInventoryDegassingImporting ? "Импорт..." : "Импорт"}
               </button>
               <button
                 type="button"
@@ -2020,7 +2162,7 @@ function DemandSection() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
-                {isInventoryDegassingTemplateDownloading ? "Скачивание..." : "Скачать шаблон"}
+                {isInventoryDegassingTemplateDownloading ? "Скачивание..." : "Шаблон"}
               </button>
               <button
                 type="button"
@@ -3031,6 +3173,172 @@ function DemandSection() {
               >
                 {isInventoryDegassingSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
                 {isInventoryDegassingSaving ? "Сохраняем..." : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryDegassingSuggestionOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
+          <div className="glass-panel w-full max-w-6xl p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="panel-title">Отчёт по ПФ</div>
+                <h3 className="mt-3 text-2xl font-semibold text-slate-50">ПФ в дегазации на начало месяца</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Проверка на 07:00 даты остатков.
+                </p>
+                <div className="mt-2 text-xs text-slate-500">
+                  {inventoryDegassingSuggestionMeta?.check_at
+                    ? `Контрольная точка: ${formatDateTimeLabel(inventoryDegassingSuggestionMeta.check_at)}`
+                    : balanceDate
+                      ? `Дата остатков: ${balanceDate}`
+                      : "Дата остатков не выбрана"}
+                </div>
+              </div>
+
+              <div className="grid min-w-[220px] gap-3 sm:grid-cols-[120px_auto_auto]">
+                <div>
+                  <label className="mb-2 block text-xs tracking-[0.08em] text-slate-500">Выпуск за последние, дней</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={inventoryDegassingSuggestionLookbackDays}
+                    onChange={(event) => setInventoryDegassingSuggestionLookbackDays(event.target.value)}
+                    disabled={isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading}
+                    className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => handleLoadInventoryDegassingSuggestion(inventoryDegassingSuggestionLookbackDays)}
+                    disabled={isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading}
+                    className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw className={["h-4 w-4", isInventoryDegassingSuggestionLoading ? "animate-spin" : ""].join(" ")} />
+                    Обновить
+                  </button>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadInventoryDegassingSuggestion(inventoryDegassingSuggestionLookbackDays)}
+                    disabled={isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading}
+                    className="inline-flex h-10 items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Download className="h-4 w-4" />
+                    {isInventoryDegassingSuggestionDownloading ? "Скачивание..." : "Скачать Excel для импорта"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="panel-divider mt-5" />
+
+            {inventoryDegassingSuggestionErrors.length > 0 ? (
+              <div className="mt-5 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <div className="font-medium text-rose-100">
+                      {inventoryDegassingSuggestionError || "Не удалось сформировать отчёт по ПФ в дегазации."}
+                    </div>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-rose-100/90">
+                      {inventoryDegassingSuggestionErrors.map((message, index) => (
+                        <li key={`${message}-${index}`}>{message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-5 overflow-hidden rounded-none border border-cyan-300/10 bg-[linear-gradient(180deg,rgba(17,31,43,0.72),rgba(10,19,29,0.76))]">
+              {isInventoryDegassingSuggestionLoading ? (
+                <div className="px-4 py-4 text-sm text-slate-300">Формируем отчёт по ПФ...</div>
+              ) : showInventoryDegassingSuggestionNoData ? (
+                <div className="px-4 py-4 text-sm text-slate-400">
+                  Нет ПФ, которые требуют внесения в остатки в дегазации.
+                </div>
+              ) : (
+                <div className="max-h-[520px] overflow-auto">
+                  <table className="min-w-full border-collapse">
+                    <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))]">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Номенклатура</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 text-right">Количество</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Доступно с</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Выпуск / смена</th>
+                        <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryDegassingSuggestionItems.map((item, index) => (
+                        <tr
+                          key={`${item.nomenclature_id}-${item.available_at}-${index}`}
+                          className="border-t border-white/[0.05] transition hover:bg-cyan-300/[0.03]"
+                        >
+                          <td className="px-3 py-2 text-sm text-slate-200">
+                            <div className="font-semibold leading-5 text-slate-100">{item.nomenclature_code || ""}</div>
+                            <div className="mt-0.5 leading-5 text-slate-400">{item.nomenclature_name || ""}</div>
+                            {!item.has_inventory_balance ? (
+                              <div className="mt-1 text-xs leading-4 text-amber-200">Нет общего остатка на дату</div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2 text-right text-sm tabular-nums text-slate-200">
+                            {formatQtyWithUnit(item.actual_qty, item.unit_of_measure)}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-slate-300">
+                            {(() => {
+                              const formatted = formatDateTimeLabel(item.available_at);
+                              const parts = String(formatted).split(" ");
+                              return (
+                                <div className="leading-4">
+                                  <div>{parts[0] || formatted}</div>
+                                  {parts[1] ? <div className="mt-0.5 text-slate-500">{parts[1]}</div> : null}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-slate-300">
+                            {item.source_summary === "несколько фактов" ? (
+                              <div className="leading-5 text-slate-300">несколько фактов</div>
+                            ) : (
+                              <div className="leading-5 text-slate-300">
+                                {item.actual_date ? formatDateTimeLabel(`${item.actual_date} 00:00`).split(" ")[0] : "—"} / {" "}
+                                {formatShiftLabel(item.shift_type)}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-slate-300">
+                            <div className="leading-5 text-slate-100">{item.status || "Будет доступен"}</div>
+                            {item.has_inventory_balance ? (
+                              <div className="mt-0.5 text-xs text-slate-500">
+                                Общий остаток: {formatQtyWithUnit(item.inventory_balance_qty, item.unit_of_measure)}
+                              </div>
+                            ) : (
+                              <div className="mt-0.5 text-xs text-amber-200">Сначала загрузите общий остаток</div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseInventoryDegassingSuggestion}
+                disabled={isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading}
+                className="inline-flex items-center rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Закрыть
               </button>
             </div>
           </div>
