@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, apiRequestBlob } from "./apiClient";
 
 export function getInventoryBalanceDegassing(filters = {}) {
   const params = new URLSearchParams();
@@ -33,4 +33,18 @@ export function deleteInventoryBalanceDegassing(balanceDegassingId) {
   return apiRequest(`/inventory-balance-degassing/${balanceDegassingId}`, {
     method: "DELETE",
   });
+}
+
+export function importInventoryBalanceDegassing(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return apiRequest("/inventory-balance-degassing/import", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function downloadInventoryBalanceDegassingTemplate() {
+  return apiRequestBlob("/inventory-balance-degassing/template");
 }

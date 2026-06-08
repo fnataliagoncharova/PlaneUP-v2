@@ -35,3 +35,9 @@ class InventoryBalanceDegassingRead(BaseModel):
 class InventoryBalanceDegassingDeleteResponse(BaseModel):
     balance_degassing_id: int
     message: str
+
+
+class InventoryBalanceDegassingImportResponse(BaseModel):
+    imported_count: int
+    affected_dates: list[date]
+    message: str

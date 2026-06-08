@@ -13,7 +13,7 @@
   Trash2,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
 import NomenclatureSearchSelect from "../components/shared/NomenclatureSearchSelect";
@@ -34,7 +34,9 @@ import {
 import {
   createInventoryBalanceDegassing,
   deleteInventoryBalanceDegassing,
+  downloadInventoryBalanceDegassingTemplate,
   getInventoryBalanceDegassing,
+  importInventoryBalanceDegassing,
   updateInventoryBalanceDegassing,
 } from "../services/inventoryBalanceDegassingApi";
 import {
@@ -218,6 +220,22 @@ function resolveStatusMeta({ isLoading, error, items }) {
   };
 }
 
+function resolveErrorMessages(error, fallbackMessage) {
+  const details = Array.isArray(error?.details) ? error.details.filter(Boolean) : [];
+  if (details.length > 0) {
+    return details;
+  }
+
+  if (error?.message) {
+    return String(error.message)
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [fallbackMessage];
+}
+
 function IconActionButton({ label, onClick, disabled = false, tone = "edit", children }) {
   const toneClassName =
     tone === "danger"
@@ -282,6 +300,14 @@ function DemandSection() {
   const [inventoryDegassingDeleteCandidate, setInventoryDegassingDeleteCandidate] = useState(null);
   const [inventoryDegassingDeleteError, setInventoryDegassingDeleteError] = useState("");
   const [deletingInventoryDegassingId, setDeletingInventoryDegassingId] = useState(null);
+  const [isInventoryDegassingImporting, setIsInventoryDegassingImporting] = useState(false);
+  const [isInventoryDegassingTemplateDownloading, setIsInventoryDegassingTemplateDownloading] = useState(false);
+  const [inventoryDegassingImportError, setInventoryDegassingImportError] = useState("");
+  const [inventoryDegassingImportErrors, setInventoryDegassingImportErrors] = useState([]);
+  const [inventoryDegassingImportSuccess, setInventoryDegassingImportSuccess] = useState("");
+  const [pendingInventoryDegassingImportFile, setPendingInventoryDegassingImportFile] = useState(null);
+  const [isInventoryDegassingImportConfirmOpen, setIsInventoryDegassingImportConfirmOpen] = useState(false);
+  const inventoryDegassingFileInputRef = useRef(null);
 
   const [safetyStockItems, setSafetyStockItems] = useState([]);
   const [isSafetyStockLoading, setIsSafetyStockLoading] = useState(true);
@@ -488,6 +514,8 @@ function DemandSection() {
       setInventoryDegassingDeleteCandidate(null);
       setInventoryDegassingFormItem(null);
       setInventoryDegassingNomenclatureId("");
+      setPendingInventoryDegassingImportFile(null);
+      setIsInventoryDegassingImportConfirmOpen(false);
     }
 
     if (activeSourceTab !== IMPORT_CONTEXT_SAFETY_STOCK) {
@@ -1374,6 +1402,112 @@ function DemandSection() {
     }
   };
 
+  const handleDownloadInventoryDegassingTemplate = async () => {
+    setInventoryDegassingImportError("");
+    setInventoryDegassingImportErrors([]);
+
+    setIsInventoryDegassingTemplateDownloading(true);
+    try {
+      const templateBlob = await downloadInventoryBalanceDegassingTemplate();
+      const blobUrl = URL.createObjectURL(templateBlob);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = blobUrl;
+      downloadLink.download = "inventory_balance_degassing_template.xlsx";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      const messages = resolveErrorMessages(
+        error,
+        "Не удалось скачать шаблон остатков в дегазации.",
+      );
+      setInventoryDegassingImportError(messages[0] || "Не удалось скачать шаблон остатков в дегазации.");
+      setInventoryDegassingImportErrors(messages);
+    } finally {
+      setIsInventoryDegassingTemplateDownloading(false);
+    }
+  };
+
+  const handleOpenInventoryDegassingImport = () => {
+    if (inventoryBalanceDates.length === 0 || isInventoryDegassingImporting) {
+      return;
+    }
+
+    setInventoryDegassingImportSuccess("");
+    setInventoryDegassingImportError("");
+    setInventoryDegassingImportErrors([]);
+
+    if (inventoryDegassingFileInputRef.current) {
+      inventoryDegassingFileInputRef.current.value = "";
+      inventoryDegassingFileInputRef.current.click();
+    }
+  };
+
+  const resetInventoryDegassingImportSelection = () => {
+    setPendingInventoryDegassingImportFile(null);
+    setIsInventoryDegassingImportConfirmOpen(false);
+
+    if (inventoryDegassingFileInputRef.current) {
+      inventoryDegassingFileInputRef.current.value = "";
+    }
+  };
+
+  const handleCancelInventoryDegassingImport = () => {
+    if (isInventoryDegassingImporting) {
+      return;
+    }
+
+    resetInventoryDegassingImportSelection();
+  };
+
+  const handleInventoryDegassingFileChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setPendingInventoryDegassingImportFile(file);
+    setIsInventoryDegassingImportConfirmOpen(true);
+  };
+
+  const handleConfirmInventoryDegassingImport = async () => {
+    if (!pendingInventoryDegassingImportFile) {
+      return;
+    }
+
+    setIsInventoryDegassingImporting(true);
+    setInventoryDegassingImportSuccess("");
+    setInventoryDegassingImportError("");
+    setInventoryDegassingImportErrors([]);
+
+    try {
+      const response = await importInventoryBalanceDegassing(pendingInventoryDegassingImportFile);
+      await reloadInventoryBalanceDates();
+      await reloadInventoryDegassing();
+
+      const importedCount = Number(response?.imported_count ?? 0);
+      const affectedDates = Array.isArray(response?.affected_dates) ? response.affected_dates : [];
+      const datesLabel = affectedDates.length > 0 ? ` Даты: ${affectedDates.join(", ")}.` : "";
+      setInventoryDegassingImportSuccess(
+        `${response?.message || "Остатки в дегазации загружены."} Импортировано строк: ${importedCount}.${datesLabel}`,
+      );
+      resetInventoryDegassingImportSelection();
+    } catch (error) {
+      const messages = resolveErrorMessages(
+        error,
+        "Не удалось загрузить остатки в дегазации из Excel.",
+      );
+      setInventoryDegassingImportError(messages[0] || "Не удалось загрузить остатки в дегазации из Excel.");
+      setInventoryDegassingImportErrors(messages);
+      resetInventoryDegassingImportSelection();
+    } finally {
+      setIsInventoryDegassingImporting(false);
+    }
+  };
+
   const handleOpenCreateSafetyStockForm = async () => {
     setSafetyStockFormMode("create");
     setSafetyStockFormItem(null);
@@ -1812,6 +1946,14 @@ function DemandSection() {
               </div>
             </div>
 
+            <input
+              ref={inventoryDegassingFileInputRef}
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              onChange={handleInventoryDegassingFileChange}
+            />
+
             <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(180px,210px)_minmax(220px,1fr)]">
               <div>
                 <label htmlFor="inventory-degassing-date-filter" className="mb-2 block text-xs tracking-[0.08em] text-slate-500">
@@ -1847,7 +1989,7 @@ function DemandSection() {
                   disabled={isNomenclatureLoading || sortedNomenclatureItems.length === 0}
                   className="h-10 w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-3 text-sm text-slate-100 outline-none transition focus:border-cyan-300/45 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <option value="">Все номенклатуры</option>
+                  <option value=""></option>
                   {sortedNomenclatureItems.map((item) => (
                     <option key={item.nomenclature_id} value={item.nomenclature_id}>
                       {item.nomenclature_code} — {item.nomenclature_name}
@@ -1860,8 +2002,35 @@ function DemandSection() {
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <button
                 type="button"
+                onClick={handleOpenInventoryDegassingImport}
+                disabled={
+                  inventoryBalanceDates.length === 0 ||
+                  isInventoryDegassingImporting ||
+                  isInventoryDegassingImportConfirmOpen
+                }
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Upload className="h-4 w-4" />
+                {isInventoryDegassingImporting ? "Импорт..." : "Импорт Excel"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadInventoryDegassingTemplate}
+                disabled={isInventoryDegassingTemplateDownloading}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                {isInventoryDegassingTemplateDownloading ? "Скачивание..." : "Скачать шаблон"}
+              </button>
+              <button
+                type="button"
                 onClick={handleOpenCreateInventoryDegassingForm}
-                disabled={inventoryBalanceDates.length === 0 || isInventoryDegassingSaving || deletingInventoryDegassingId !== null}
+                disabled={
+                  inventoryBalanceDates.length === 0 ||
+                  isInventoryDegassingSaving ||
+                  deletingInventoryDegassingId !== null ||
+                  isInventoryDegassingImporting
+                }
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Plus className="h-4 w-4" />
@@ -1870,13 +2039,42 @@ function DemandSection() {
               <button
                 type="button"
                 onClick={reloadInventoryDegassing}
-                disabled={isInventoryDegassingLoading || inventoryBalanceDates.length === 0}
+                disabled={isInventoryDegassingLoading || inventoryBalanceDates.length === 0 || isInventoryDegassingImporting}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw className={["h-4 w-4", isInventoryDegassingLoading ? "animate-spin" : ""].join(" ")} />
                 Обновить
               </button>
             </div>
+
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Импорт заменяет записи остатков в дегазации по датам, указанным в файле.
+            </p>
+
+            {inventoryDegassingImportSuccess ? (
+              <div className="mt-4 flex items-start gap-3 border border-emerald-300/30 bg-emerald-500/[0.1] px-4 py-3 text-sm text-emerald-100">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{inventoryDegassingImportSuccess}</span>
+              </div>
+            ) : null}
+
+            {inventoryDegassingImportErrors.length > 0 ? (
+              <div className="mt-4 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <div className="font-medium text-rose-100">
+                      {inventoryDegassingImportError || "Не удалось загрузить остатки в дегазации."}
+                    </div>
+                    <ul className="mt-2 space-y-1 pl-5 text-rose-100/90 list-disc">
+                      {inventoryDegassingImportErrors.map((message, index) => (
+                        <li key={`${message}-${index}`}>{message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {inventoryDegassingError ? (
               <div className="mt-4 flex items-start gap-3 border border-rose-300/30 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-100">
@@ -2893,6 +3091,25 @@ function DemandSection() {
           }
         }}
         onConfirm={handleConfirmDeleteInventory}
+      />
+
+      <V2ConfirmDialog
+        isOpen={isInventoryDegassingImportConfirmOpen}
+        title="Загрузить файл остатков в дегазации?"
+        message={
+          <>
+            Файл заменит текущие записи за даты, которые есть в Excel.
+            <br />
+            <br />
+            Если за эти даты уже были строки, они будут удалены и загружены заново из файла.
+          </>
+        }
+        confirmText={isInventoryDegassingImporting ? "Импорт..." : "Загрузить файл"}
+        cancelText="Отмена"
+        isConfirmDisabled={isInventoryDegassingImporting || !pendingInventoryDegassingImportFile}
+        isCancelDisabled={isInventoryDegassingImporting}
+        onCancel={handleCancelInventoryDegassingImport}
+        onConfirm={handleConfirmInventoryDegassingImport}
       />
 
       <V2ConfirmDialog

@@ -18,12 +18,30 @@ function getErrorMessage(payload, status) {
 
   if (Array.isArray(payload.detail) && payload.detail.length > 0) {
     return payload.detail
-      .map((item) => item?.msg)
+      .map((item) => (typeof item === "string" ? item : item?.msg))
       .filter(Boolean)
-      .join(" ");
+      .join("\n");
   }
 
   return `Ошибка запроса (${status})`;
+}
+
+function getErrorDetails(payload) {
+  if (!payload) {
+    return [];
+  }
+
+  if (typeof payload.detail === "string") {
+    return [payload.detail];
+  }
+
+  if (Array.isArray(payload.detail)) {
+    return payload.detail
+      .map((item) => (typeof item === "string" ? item : item?.msg))
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 async function parsePayload(response) {
@@ -54,7 +72,11 @@ export async function apiRequest(path, options = {}) {
   const payload = await parsePayload(response);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, response.status));
+    const error = new Error(getErrorMessage(payload, response.status));
+    error.status = response.status;
+    error.details = getErrorDetails(payload);
+    error.payload = payload;
+    throw error;
   }
 
   return payload;
@@ -76,7 +98,11 @@ export async function apiRequestBlob(path, options = {}) {
 
   if (!response.ok) {
     const payload = await parsePayload(response);
-    throw new Error(getErrorMessage(payload, response.status));
+    const error = new Error(getErrorMessage(payload, response.status));
+    error.status = response.status;
+    error.details = getErrorDetails(payload);
+    error.payload = payload;
+    throw error;
   }
 
   return response.blob();
