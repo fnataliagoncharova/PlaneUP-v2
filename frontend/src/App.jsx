@@ -3,6 +3,7 @@ import {
   BarChart3,
   Boxes,
   Cog,
+  LineChart,
   OctagonPause,
   ScrollText,
   Wrench,
@@ -21,6 +22,7 @@ import MasterWorkspaceSection from "./sections/MasterWorkspaceSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
 import ProductionPlanningSection from "./sections/ProductionPlanningSection";
+import ProductionAnalyticsSection from "./sections/ProductionAnalyticsSection";
 import RoutesSection from "./sections/RoutesSection";
 
 function ProductionPlanningIcon({ className }) {
@@ -81,6 +83,7 @@ const navigationItems = [
   },
   { id: "demand", label: "Потребность", icon: BarChart3 },
   { id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon },
+  { id: "production_analytics", label: "Анализ выпуска", icon: LineChart },
   { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
 ];
 
@@ -103,12 +106,15 @@ const sectionDescriptions = {
     "Подготовка исходных данных, запуск расчета потребности и проверка результатов.",
   production_planning:
     "Месячный план выпуска по производимой номенклатуре с приоритетами и комментариями.",
+  production_analytics:
+    "Контроль выполнения месячного плана выпуска и анализ производственных отклонений.",
   master_workspace:
     "Фиксация факта выпуска за смену по строкам недельного плана для оперативного контроля выполнения.",
 };
 
 function App() {
   const [activeSection, setActiveSection] = useState("demand");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [routeOpenRequest, setRouteOpenRequest] = useState({
     routeId: null,
     version: 0,
@@ -136,6 +142,8 @@ function App() {
           items={navigationItems}
           activeSection={activeSection}
           onSelect={setActiveSection}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((currentValue) => !currentValue)}
         />
 
         <main className="relative flex-1 overflow-hidden bg-[linear-gradient(180deg,rgba(8,19,30,0.45),rgba(6,13,22,0.72))]">
@@ -159,6 +167,8 @@ function App() {
               <DemandSection />
             ) : activeSection === "production_planning" ? (
               <ProductionPlanningSection />
+            ) : activeSection === "production_analytics" ? (
+              <ProductionAnalyticsSection />
             ) : activeSection === "master_workspace" ? (
               <MasterWorkspaceSection />
             ) : (

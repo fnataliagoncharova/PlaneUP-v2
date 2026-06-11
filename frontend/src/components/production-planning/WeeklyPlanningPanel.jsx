@@ -1022,7 +1022,7 @@ function WeeklyPlanningPanel() {
                 <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10">
                   <div className="max-h-[620px] overflow-auto">
                     <table className="min-w-full text-sm">
-  <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-[11px] uppercase tracking-[0.08em] text-slate-500">
+  <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
     <tr>
       <th colSpan={2} className="px-3 py-1.5 text-left font-medium text-slate-400">Позиция</th>
       <th colSpan={2} className="border-l border-cyan-300/10 bg-cyan-400/[0.03] px-3 py-1.5 text-left font-medium text-slate-400">Месяц</th>

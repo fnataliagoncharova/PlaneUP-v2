@@ -590,7 +590,7 @@ function EquipmentDowntimesSection() {
 
   if (isLoading) {
     return (
-      <section className="rounded-none border border-cyan-500/30 bg-slate-950/70 p-5 shadow-[0_0_0_1px_rgba(34,211,238,0.05)]">
+      <section className="glass-panel p-4 sm:p-5">
         <div className="animate-pulse space-y-3">
           <div className="h-5 w-64 rounded-none bg-slate-800/80" />
           <div className="h-4 w-96 rounded-none bg-slate-900/80" />
@@ -610,13 +610,13 @@ function EquipmentDowntimesSection() {
 
   return (
     <>
-      <section className="space-y-4 rounded-none border border-cyan-500/30 bg-slate-950/70 p-5 shadow-[0_0_0_1px_rgba(34,211,238,0.05)]">
+      <section className="glass-panel space-y-4 p-4 sm:p-5">
         <div className="flex flex-col gap-4 border-b border-cyan-500/10 pb-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
-            <h1 className="text-lg font-semibold text-slate-100">
+            <h1 className="font-['Space_Grotesk'] text-3xl font-semibold text-slate-50 sm:text-4xl">
               Журнал внеплановых простоев оборудования
             </h1>
-            <p className="max-w-3xl text-sm text-slate-400">
+            <p className="max-w-3xl text-sm leading-6 text-slate-400">
               Внеплановые остановки оборудования независимо от причины простоя.
             </p>
             <div
@@ -634,7 +634,7 @@ function EquipmentDowntimesSection() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex items-center justify-center gap-2 rounded-none border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-500/15"
+            className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22]"
           >
             <Plus className="h-4 w-4" />
             Добавить простой
@@ -647,7 +647,7 @@ function EquipmentDowntimesSection() {
             <select
               value={filters.machine_id}
               onChange={(event) => handleFilterChange("machine_id", event.target.value)}
-              className="w-full rounded-none border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60"
+              className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             >
               <option value="">Все</option>
               {machines.map((machine) => (
@@ -665,7 +665,7 @@ function EquipmentDowntimesSection() {
             <select
               value={filters.downtime_reason_id}
               onChange={(event) => handleFilterChange("downtime_reason_id", event.target.value)}
-              className="w-full rounded-none border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60"
+              className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             >
               <option value="">Все</option>
               {downtimeReasons.map((reason) => (
@@ -683,7 +683,7 @@ function EquipmentDowntimesSection() {
             <select
               value={filters.reason_category}
               onChange={(event) => handleFilterChange("reason_category", event.target.value)}
-              className="w-full rounded-none border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60"
+              className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             >
               <option value="">Все</option>
               {categoryOptions.map((category) => (
@@ -699,7 +699,7 @@ function EquipmentDowntimesSection() {
             <select
               value={filters.status}
               onChange={(event) => handleFilterChange("status", event.target.value)}
-              className="w-full rounded-none border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60"
+              className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value || "all"} value={option.value}>
@@ -715,7 +715,7 @@ function EquipmentDowntimesSection() {
               type="date"
               value={filters.date_from}
               onChange={(event) => handleFilterChange("date_from", event.target.value)}
-              className="w-full rounded-none border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60"
+              className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             />
           </label>
 
@@ -725,7 +725,7 @@ function EquipmentDowntimesSection() {
               type="date"
               value={filters.date_to}
               onChange={(event) => handleFilterChange("date_to", event.target.value)}
-              className="w-full rounded-none border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60"
+              className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             />
           </label>
         </div>
@@ -734,21 +734,21 @@ function EquipmentDowntimesSection() {
           <button
             type="button"
             onClick={handleApplyFilters}
-            className="rounded-none border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-500/15"
+            className="h-10 rounded-none border border-cyan-300/35 bg-cyan-400/[0.12] px-4 text-sm text-cyan-50 transition hover:bg-cyan-400/[0.2]"
           >
-            Применить
+            Применить фильтр
           </button>
           <button
             type="button"
             onClick={handleResetFilters}
-            className="rounded-none border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
+            className="h-10 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
           >
             Сбросить
           </button>
           <button
             type="button"
             onClick={() => loadEquipmentDowntimes(filters)}
-            className="rounded-none border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
+            className="h-10 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
           >
             Обновить
           </button>
@@ -760,10 +760,10 @@ function EquipmentDowntimesSection() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-none border border-slate-800/90 bg-slate-950/60">
+        <div className="overflow-hidden rounded-none border border-cyan-300/10">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-800 text-sm text-slate-200">
-              <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.18em] text-slate-500">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Статус</th>
                   <th className="px-3 py-2 text-left font-medium">Период</th>
@@ -775,7 +775,7 @@ function EquipmentDowntimesSection() {
                   <th className="px-3 py-2 text-right font-medium">Действия</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-900/80">
+              <tbody>
                 {isListLoading ? (
                   <tr>
                     <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
@@ -793,7 +793,10 @@ function EquipmentDowntimesSection() {
                     const isOpen = item.status === "open";
 
                     return (
-                      <tr key={item.downtime_id} className="align-top">
+                      <tr
+                        key={item.downtime_id}
+                        className="border-t border-white/[0.05] align-top hover:bg-cyan-300/[0.03]"
+                      >
                         <td className="px-3 py-2.5">
                           <span
                             className={[
@@ -844,7 +847,7 @@ function EquipmentDowntimesSection() {
                               onClick={() => openEditModal(item)}
                               title="Изменить"
                               aria-label="Изменить"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-slate-700 bg-slate-900/80 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]"
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
@@ -864,7 +867,7 @@ function EquipmentDowntimesSection() {
                               onClick={() => setDeleteCandidate(item)}
                               title="Удалить"
                               aria-label="Удалить"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-500/30 bg-rose-500/10 text-rose-100 transition hover:border-rose-400/50 hover:bg-rose-500/15"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/28 bg-rose-500/[0.08] text-rose-100 transition hover:border-rose-300/42 hover:bg-rose-500/[0.16]"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

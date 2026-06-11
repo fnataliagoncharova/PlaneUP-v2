@@ -3570,7 +3570,7 @@ function DemandSection() {
                   </div>
                   <div className="mt-4 max-h-[420px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
                       <tbody>
                         {demandTopLevelItems.length > 0 ? demandTopLevelItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
@@ -3593,7 +3593,7 @@ function DemandSection() {
                   <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Потребность к выпуску</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandInternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
                       <tbody>
                         {demandInternalItems.length > 0 ? demandInternalItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
@@ -3612,7 +3612,7 @@ function DemandSection() {
                   <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешнее обеспечение</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandExternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
                     <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-[11px] uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
                       <tbody>
                         {demandExternalItems.length > 0 ? demandExternalItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
@@ -3632,7 +3632,7 @@ function DemandSection() {
                   {demandProblemItems.length > 0 ? (
                     <div className="mt-4 max-h-[320px] overflow-auto border border-amber-300/20">
                       <table className="min-w-full text-left text-sm text-slate-200">
-                        <thead className="sticky top-0 bg-[rgba(24,20,10,0.55)] text-[11px] uppercase tracking-[0.08em] text-amber-100/70"><tr><th className="px-3 py-2">Код проблемы</th><th className="px-3 py-2">Сообщение</th><th className="px-3 py-2">Номенклатура</th><th className="px-3 py-2">Маршрут</th><th className="px-3 py-2">Детали</th></tr></thead>
+                        <thead className="sticky top-0 bg-[rgba(24,20,10,0.55)] text-xs uppercase tracking-[0.08em] text-amber-100/70"><tr><th className="px-3 py-2">Код проблемы</th><th className="px-3 py-2">Сообщение</th><th className="px-3 py-2">Номенклатура</th><th className="px-3 py-2">Маршрут</th><th className="px-3 py-2">Детали</th></tr></thead>
                         <tbody>
                           {demandProblemItems.map((problem, index) => (
                             <tr key={`${problem.problem_code || "problem"}-${index}`} className="border-t border-white/[0.05]">
