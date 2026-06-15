@@ -69,23 +69,50 @@ function MasterWorkspaceIcon({ className }) {
   );
 }
 
-const navigationItems = [
-  { id: "nomenclature", label: "Номенклатура", icon: Boxes },
-  { id: "processes", label: "Технологические операции", icon: Workflow },
-  { id: "routes", label: "Маршруты", icon: ScrollText },
-  { id: "machines", label: "Оборудование", icon: Cog },
-  { id: "equipment_maintenance", label: "Плановое ТО", icon: Wrench },
-  { id: "downtime_reasons", label: "Причины простоев", icon: AlertTriangle },
+const navigationGroups = [
   {
-    id: "equipment_downtimes",
-    label: "Журнал внеплановых простоев",
-    icon: OctagonPause,
+    label: "ОБЗОР",
+    items: [{ id: "production_analytics", label: "Анализ выпуска", icon: LineChart }],
   },
-  { id: "demand", label: "Потребность", icon: BarChart3 },
-  { id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon },
-  { id: "production_analytics", label: "Анализ выпуска", icon: LineChart },
-  { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
+  {
+    label: "ВХОДНЫЕ ДАННЫЕ",
+    items: [{ id: "demand", label: "Потребность", icon: BarChart3 }],
+  },
+  {
+    label: "ПЛАНИРОВАНИЕ",
+    items: [{ id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon }],
+  },
+  {
+    label: "ИСПОЛНЕНИЕ",
+    items: [
+      { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
+      {
+        id: "equipment_downtimes",
+        label: "Внеплановые простои",
+        icon: OctagonPause,
+      },
+    ],
+  },
+  {
+    label: "ОГРАНИЧЕНИЯ",
+    items: [
+      { id: "machines", label: "Оборудование", icon: Cog },
+      { id: "equipment_maintenance", label: "Плановое ТО", icon: Wrench },
+    ],
+  },
+  {
+    label: "СПРАВОЧНИКИ",
+    collapsible: true,
+    items: [
+      { id: "nomenclature", label: "Номенклатура", icon: Boxes },
+      { id: "processes", label: "Технологические операции", icon: Workflow },
+      { id: "routes", label: "Маршруты", icon: ScrollText },
+      { id: "downtime_reasons", label: "Причины простоев", icon: AlertTriangle },
+    ],
+  },
 ];
+
+const navigationItems = navigationGroups.flatMap((group) => group.items);
 
 const sectionDescriptions = {
   nomenclature:
@@ -139,7 +166,7 @@ function App() {
     <div className="min-h-screen text-slate-100">
       <div className="glass-shell flex min-h-screen w-full overflow-hidden rounded-none">
         <Sidebar
-          items={navigationItems}
+          items={navigationGroups}
           activeSection={activeSection}
           onSelect={setActiveSection}
           isCollapsed={isSidebarCollapsed}

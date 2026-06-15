@@ -1,6 +1,19 @@
 import { ChevronLeft, ChevronRight, Factory } from "lucide-react";
+import { useState } from "react";
 
 function Sidebar({ items, activeSection, onSelect, isCollapsed, onToggleCollapse }) {
+  const groups = items?.[0]?.items ? items : [{ label: "", items }];
+  const [openGroups, setOpenGroups] = useState(() => ({
+    СПРАВОЧНИКИ: true,
+  }));
+
+  const toggleGroup = (groupLabel) => {
+    setOpenGroups((currentGroups) => ({
+      ...currentGroups,
+      [groupLabel]: currentGroups[groupLabel] === false,
+    }));
+  };
+
   return (
     <aside
       className={[
@@ -43,60 +56,91 @@ function Sidebar({ items, activeSection, onSelect, isCollapsed, onToggleCollapse
           </button>
         </div>
 
-        <nav className="space-y-2">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.id === activeSection;
+        <nav className={isCollapsed ? "space-y-2" : "space-y-5"}>
+          {groups.map((group) => {
+            const isGroupCollapsible = Boolean(group.collapsible) && !isCollapsed;
+            const isGroupOpen = !isGroupCollapsible || openGroups[group.label] !== false;
 
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSelect(item.id)}
-                title={isCollapsed ? item.label : undefined}
-                aria-label={item.label}
-                className={[
-                  "group relative flex w-full items-center overflow-hidden rounded-none px-4 py-3 text-left transition-all duration-200",
-                  isCollapsed ? "justify-center" : "gap-3",
-                  isActive
-                    ? "bg-[linear-gradient(90deg,rgba(22,123,156,0.62),rgba(11,40,60,0.94))] text-cyan-50 shadow-[0_0_0_1px_rgba(103,232,249,0.16),inset_0_1px_0_rgba(255,255,255,0.05),0_0_38px_rgba(34,211,238,0.22)]"
-                    : "bg-[linear-gradient(180deg,rgba(18,31,44,0.72),rgba(11,20,31,0.76))] text-slate-300 hover:bg-[linear-gradient(180deg,rgba(20,47,64,0.72),rgba(11,24,37,0.84))] hover:text-cyan-50",
-                ].join(" ")}
-              >
-                {isActive ? (
-                  <>
-                    <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-cyan-200 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
-                    <span className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-[linear-gradient(90deg,rgba(34,211,238,0.28),rgba(34,211,238,0.08),transparent)]" />
-                  </>
+              <div key={group.label || "navigation"} className="space-y-2">
+                {!isCollapsed && group.label ? (
+                  isGroupCollapsible ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.label)}
+                      className="flex w-full items-center justify-between px-4 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 transition hover:text-cyan-100"
+                      aria-expanded={isGroupOpen}
+                    >
+                      <span>{group.label}</span>
+                      <ChevronRight
+                        className={[
+                          "h-3.5 w-3.5 transition-transform duration-200",
+                          isGroupOpen ? "rotate-90 text-cyan-200" : "text-slate-600",
+                        ].join(" ")}
+                      />
+                    </button>
+                  ) : (
+                    <div className="px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {group.label}
+                    </div>
+                  )
                 ) : null}
-                <span
-                  className={[
-                    "relative z-10 flex h-11 w-11 items-center justify-center transition-all duration-200",
-                    isActive
-                      ? "text-cyan-50 drop-shadow-[0_0_10px_rgba(34,211,238,0.35)]"
-                      : "text-slate-400 group-hover:text-cyan-100",
-                  ].join(" ")}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span
-                  className={[
-                    "relative z-10 block text-base font-medium",
-                    isCollapsed ? "hidden lg:hidden" : "flex-1",
-                    item.id === "demand" ? "font-['Space_Grotesk'] font-semibold" : "",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </span>
-                {!isCollapsed ? (
-                  <ChevronRight
+                {isGroupOpen ? group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.id === activeSection;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSelect(item.id)}
+                    title={isCollapsed ? item.label : undefined}
+                    aria-label={item.label}
                     className={[
-                      "relative z-10 h-4 w-4 transition-transform duration-200",
-                      isActive ? "translate-x-0 text-cyan-200" : "text-slate-500 group-hover:translate-x-0.5",
+                      "group relative flex w-full items-center overflow-hidden rounded-none px-4 py-3 text-left transition-all duration-200",
+                      isCollapsed ? "justify-center" : "gap-3",
+                      isActive
+                        ? "bg-[linear-gradient(90deg,rgba(22,123,156,0.62),rgba(11,40,60,0.94))] text-cyan-50 shadow-[0_0_0_1px_rgba(103,232,249,0.16),inset_0_1px_0_rgba(255,255,255,0.05),0_0_38px_rgba(34,211,238,0.22)]"
+                        : "bg-[linear-gradient(180deg,rgba(18,31,44,0.72),rgba(11,20,31,0.76))] text-slate-300 hover:bg-[linear-gradient(180deg,rgba(20,47,64,0.72),rgba(11,24,37,0.84))] hover:text-cyan-50",
                     ].join(" ")}
-                  />
-                ) : null}
-              </button>
+                  >
+                    {isActive ? (
+                      <>
+                        <span className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-cyan-200 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
+                        <span className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-[linear-gradient(90deg,rgba(34,211,238,0.28),rgba(34,211,238,0.08),transparent)]" />
+                      </>
+                    ) : null}
+                    <span
+                      className={[
+                        "relative z-10 flex h-11 w-11 items-center justify-center transition-all duration-200",
+                        isActive
+                          ? "text-cyan-50 drop-shadow-[0_0_10px_rgba(34,211,238,0.35)]"
+                          : "text-slate-400 group-hover:text-cyan-100",
+                      ].join(" ")}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span
+                      className={[
+                        "relative z-10 block text-base font-medium",
+                        isCollapsed ? "hidden lg:hidden" : "flex-1",
+                        item.id === "demand" ? "font-['Space_Grotesk'] font-semibold" : "",
+                      ].join(" ")}
+                    >
+                      {item.label}
+                    </span>
+                    {!isCollapsed ? (
+                      <ChevronRight
+                        className={[
+                          "relative z-10 h-4 w-4 transition-transform duration-200",
+                          isActive ? "translate-x-0 text-cyan-200" : "text-slate-500 group-hover:translate-x-0.5",
+                        ].join(" ")}
+                      />
+                    ) : null}
+                  </button>
+                );
+                }) : null}
+              </div>
             );
           })}
         </nav>
