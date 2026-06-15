@@ -18,3 +18,7 @@ function buildQuery(filters = {}) {
 export function getMonthlyOutputAnalytics(filters = {}) {
   return apiRequest(`/production-analytics/monthly-output${buildQuery(filters)}`);
 }
+
+export function getEquipmentMonthlyAnalytics(filters = {}) {
+  return apiRequest(`/production-analytics/equipment-monthly${buildQuery(filters)}`);
+}
