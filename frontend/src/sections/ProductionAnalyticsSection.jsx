@@ -425,8 +425,8 @@ function ProductionAnalyticsSection() {
         },
       },
       {
-        label: "Простои, ч",
-        value: formatHours(equipmentSummary.unplanned_downtime_hours),
+        label: "Всего простоев, ч",
+        value: formatHours(equipmentSummary.total_downtime_hours),
         icon: Clock3,
         tone: {
           card: "bg-[linear-gradient(180deg,rgba(22,27,45,0.98),rgba(12,18,33,0.98))]",
@@ -439,51 +439,40 @@ function ProductionAnalyticsSection() {
       equipmentSummary.average_load_percent,
       equipmentSummary.equipment_in_plan_count,
       equipmentSummary.overloaded_equipment_count,
-      equipmentSummary.unplanned_downtime_hours,
+      equipmentSummary.total_downtime_hours,
     ],
   );
 
   const downtimeSummaryCards = useMemo(
     () => [
       {
-        label: "Всего простоев",
-        value: `${formatHours(equipmentSummary.total_downtime_hours)} ч`,
-        caption: "за месяц",
+        label: "Всего простоев, ч",
+        value: formatHours(equipmentSummary.total_downtime_hours),
         tone: {
           card: "bg-[linear-gradient(180deg,rgba(22,27,45,0.98),rgba(12,18,33,0.98))]",
-          iconBox: "bg-indigo-400/[0.10] text-indigo-100",
         },
-        icon: Clock3,
       },
       {
-        label: "Плановое ТО",
-        value: `${formatHours(equipmentSummary.planned_maintenance_hours)} ч`,
-        caption: "учтено в доступности",
+        label: "Плановое ТО, ч",
+        value: formatHours(equipmentSummary.planned_maintenance_hours),
         tone: {
           card: "bg-[linear-gradient(180deg,rgba(15,34,49,0.98),rgba(9,23,36,0.98))]",
-          iconBox: "bg-cyan-400/[0.10] text-cyan-100",
         },
-        icon: Gauge,
       },
       {
-        label: "Внеплановые простои",
-        value: `${formatHours(equipmentSummary.unplanned_downtime_hours)} ч`,
-        caption: "факт периода",
+        label: "Внеплановые простои, ч",
+        value: formatHours(equipmentSummary.unplanned_downtime_hours),
         tone: {
           card: "bg-[linear-gradient(180deg,rgba(38,28,17,0.98),rgba(24,19,12,0.98))]",
-          iconBox: "bg-amber-400/[0.10] text-amber-100",
         },
-        icon: TriangleAlert,
       },
       {
-        label: "Доля внеплановых",
+        label: "Доля внеплановых, %",
         value: formatPercent(equipmentSummary.unplanned_share_percent),
         caption: "от всех простоев",
         tone: {
           card: "bg-[linear-gradient(180deg,rgba(43,29,18,0.98),rgba(28,19,12,0.98))]",
-          iconBox: "bg-orange-400/[0.10] text-orange-100",
         },
-        icon: BarChart3,
       },
     ],
     [
@@ -937,235 +926,218 @@ function ProductionAnalyticsSection() {
             })}
           </div>
 
-          <section className="glass-panel mt-4 p-4 sm:p-5">
-            <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
-              Расчётная загрузка оборудования по месячному плану
-            </h2>
+          <div className="mt-4 grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
+            <section className="glass-panel flex h-full flex-col p-4 sm:p-5 xl:min-h-[560px]">
+              <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
+                Расчётная загрузка оборудования по месячному плану
+              </h2>
 
-            {isEquipmentLoading ? (
-              <div className="mt-5 text-sm text-slate-300">Загружаем расчётную загрузку оборудования...</div>
-            ) : equipmentLoadItems.length === 0 ? (
-              <div className="mt-5 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
-                За выбранный период нет данных по загрузке оборудования.
-              </div>
-            ) : (
-              <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10">
-                <div className="max-h-[430px] overflow-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Оборудование</th>
-                        <th className="px-3 py-2 text-right font-medium">Доступно, ч</th>
-                        <th className="px-3 py-2 text-right font-medium">Плановая загрузка, ч</th>
-                        <th className="px-3 py-2 text-right font-medium">Плановое ТО, ч</th>
-                        <th className="px-3 py-2 text-right font-medium">Резерв / перегруз, ч</th>
-                        <th className="px-3 py-2 text-right font-medium">Загрузка, %</th>
-                        <th className="px-3 py-2 text-left font-medium">Статус</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {equipmentLoadItems.map((item) => {
-                        const displayStatus = getEquipmentLoadDisplay(item);
-                        const loadPercent = Number(item.load_percent);
-                        const loadBarWidth = Number.isFinite(loadPercent)
-                          ? Math.max(0, Math.min(loadPercent, 100))
-                          : 0;
-                        const remainingHours = Number(item.remaining_hours);
-                        const maintenanceHours = Number(item.planned_maintenance_hours ?? 0);
+              {isEquipmentLoading ? (
+                <div className="mt-5 text-sm text-slate-300">Загружаем расчётную загрузку оборудования...</div>
+              ) : equipmentLoadItems.length === 0 ? (
+                <div className="mt-5 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
+                  За выбранный период нет данных по загрузке оборудования.
+                </div>
+              ) : (
+                <div className="mt-4 flex-1 overflow-hidden rounded-none border border-cyan-300/10">
+                  <div className="max-h-[430px] overflow-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Оборудование</th>
+                          <th className="px-3 py-2 text-right font-medium">Доступно, ч</th>
+                          <th className="px-3 py-2 text-right font-medium">Плановая загрузка, ч</th>
+                          <th className="px-3 py-2 text-right font-medium">Плановое ТО, ч</th>
+                          <th className="px-3 py-2 text-right font-medium">Резерв / перегруз, ч</th>
+                          <th className="px-3 py-2 text-right font-medium">Загрузка, %</th>
+                          <th className="px-3 py-2 text-left font-medium">Статус</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {equipmentLoadItems.map((item) => {
+                          const displayStatus = getEquipmentLoadDisplay(item);
+                          const loadPercent = Number(item.load_percent);
+                          const loadBarWidth = Number.isFinite(loadPercent)
+                            ? Math.max(0, Math.min(loadPercent, 100))
+                            : 0;
+                          const remainingHours = Number(item.remaining_hours);
+                          const maintenanceHours = Number(item.planned_maintenance_hours ?? 0);
 
-                        return (
-                          <tr
-                            key={`${item.equipment_id}-${item.equipment_code}`}
-                            className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]"
-                          >
-                            <td className="px-3 py-2.5 text-slate-300">
-                              <div className="flex flex-col">
-                                <span className="font-medium text-slate-100">{item.equipment_name}</span>
-                                <span className="text-xs text-slate-500">{item.equipment_code}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5 text-right text-slate-200">
-                              {formatHours(item.available_hours)}
-                            </td>
-                            <td className="px-3 py-2.5 text-right text-slate-200">
-                              {item.planned_load_hours === null ? "—" : formatHours(item.planned_load_hours)}
-                            </td>
-                            <td className="px-3 py-2.5 text-right text-slate-200">
-                              {formatHours(maintenanceHours)}
-                            </td>
-                            <td
-                              className={[
-                                "px-3 py-2.5 text-right font-medium",
-                                remainingHours > 0
-                                  ? "text-emerald-300"
-                                  : remainingHours < 0
-                                    ? "text-rose-300"
-                                    : "text-slate-200",
-                              ].join(" ")}
+                          return (
+                            <tr
+                              key={`${item.equipment_id}-${item.equipment_code}`}
+                              className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]"
                             >
-                              {formatHours(item.remaining_hours)}
-                            </td>
-                            <td className="px-3 py-2.5 text-right">
-                              <div className="flex min-w-[92px] flex-col items-end gap-1">
-                                <span
-                                  className={[
-                                    "font-medium",
-                                    displayStatus.status === "overloaded"
+                              <td className="px-3 py-2.5 text-slate-300">
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-slate-100">{item.equipment_name}</span>
+                                  <span className="text-xs text-slate-500">{item.equipment_code}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-slate-200">
+                                {formatHours(item.available_hours)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-slate-200">
+                                {item.planned_load_hours === null ? "—" : formatHours(item.planned_load_hours)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-slate-200">
+                                {formatHours(maintenanceHours)}
+                              </td>
+                              <td
+                                className={[
+                                  "px-3 py-2.5 text-right font-medium",
+                                  remainingHours > 0
+                                    ? "text-emerald-300"
+                                    : remainingHours < 0
                                       ? "text-rose-300"
-                                      : displayStatus.status === "high_load"
-                                        ? "text-amber-300"
-                                        : displayStatus.status === "no_load"
-                                          ? "text-slate-300"
-                                          : "text-slate-200",
-                                  ].join(" ")}
-                                >
-                                  {item.load_percent === null ? "—" : formatPercent(item.load_percent)}
-                                </span>
-                                <span className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800/80">
+                                      : "text-slate-200",
+                                ].join(" ")}
+                              >
+                                {formatHours(item.remaining_hours)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right">
+                                <div className="flex min-w-[92px] flex-col items-end gap-1">
                                   <span
                                     className={[
-                                      "block h-full rounded-full transition-all",
-                                      getEquipmentLoadBarTone(displayStatus.status, item.load_percent),
+                                      "font-medium",
+                                      displayStatus.status === "overloaded"
+                                        ? "text-rose-300"
+                                        : displayStatus.status === "high_load"
+                                          ? "text-amber-300"
+                                          : displayStatus.status === "no_load"
+                                            ? "text-slate-300"
+                                            : "text-slate-200",
                                     ].join(" ")}
-                                    style={{ width: `${loadBarWidth}%` }}
-                                  />
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex flex-col gap-1">
-                                <span
-                                  className={[
-                                    "inline-flex w-fit items-center rounded-none border px-2.5 py-1 text-xs font-medium",
-                                    getEquipmentStatusTone(displayStatus.status),
-                                  ].join(" ")}
-                                >
-                                  {displayStatus.status_label}
-                                </span>
-                                {item.warning ? (
-                                  <span className="text-xs text-slate-500">{item.warning}</span>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                  >
+                                    {item.load_percent === null ? "—" : formatPercent(item.load_percent)}
+                                  </span>
+                                  <span className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800/80">
+                                    <span
+                                      className={[
+                                        "block h-full rounded-full transition-all",
+                                        getEquipmentLoadBarTone(displayStatus.status, item.load_percent),
+                                      ].join(" ")}
+                                      style={{ width: `${loadBarWidth}%` }}
+                                    />
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex flex-col gap-1">
+                                  <span
+                                    className={[
+                                      "inline-flex w-fit items-center rounded-none border px-2.5 py-1 text-xs font-medium",
+                                      getEquipmentStatusTone(displayStatus.status),
+                                    ].join(" ")}
+                                  >
+                                    {displayStatus.status_label}
+                                  </span>
+                                  {item.warning ? (
+                                    <span className="text-xs text-slate-500">{item.warning}</span>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
-          </section>
+              )}
+            </section>
 
-          <section className="glass-panel mt-4 p-4 sm:p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-slate-700/70 bg-cyan-400/[0.08] text-cyan-100">
-                <Clock3 className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
+            <div className="flex h-full flex-col gap-4 xl:min-h-[560px]">
+              <section className="glass-panel shrink-0 p-4 sm:p-5">
                 <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
                   Сводка простоев за месяц
                 </h2>
-              </div>
-            </div>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {downtimeSummaryCards.map((card) => {
-                const Icon = card.icon;
-
-                return (
-                  <div
-                    key={card.label}
-                    className={[
-                      "rounded-none border border-slate-800/70 px-4 py-4",
-                      card.tone.card,
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={[
-                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-slate-700/70",
-                          card.tone.iconBox,
-                        ].join(" ")}
-                      >
-                        <Icon className="h-5 w-5" />
+                <div className="mt-4 grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2">
+                  {downtimeSummaryCards.map((card) => (
+                    <div
+                      key={card.label}
+                      className={[
+                        "flex h-full min-h-[104px] flex-col justify-center rounded-none border border-slate-800/70 px-4 py-4",
+                        card.tone.card,
+                      ].join(" ")}
+                    >
+                      <div className="text-sm font-medium text-slate-400">{card.label}</div>
+                      <div className="mt-2 text-2xl font-semibold leading-none tracking-tight text-slate-50">
+                        {card.value}
                       </div>
-                      <div className="min-w-0">
-                        <div className="text-sm text-slate-400">{card.label}</div>
-                        <div className="mt-1.5 text-2xl font-semibold leading-none tracking-tight text-slate-50">
-                          {card.value}
-                        </div>
+                      {card.caption ? (
                         <div className="mt-2 text-xs text-slate-500">{card.caption}</div>
-                      </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="glass-panel flex flex-1 flex-col p-4 sm:p-5">
+                <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
+                  Внеплановые простои по категориям
+                </h2>
+
+                {isEquipmentLoading ? (
+                  <div className="mt-5 text-sm text-slate-300">Загружаем категории внеплановых простоев...</div>
+                ) : downtimeCategoryItems.length === 0 ? (
+                  <div className="mt-5 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
+                    За выбранный период внеплановые простои по категориям не зарегистрированы.
+                  </div>
+                ) : (
+                  <div className="mt-4 flex-1 overflow-hidden rounded-none border border-cyan-300/10">
+                    <div className="max-h-[320px] overflow-auto xl:max-h-none">
+                      <table className="min-w-full text-sm">
+                        <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium">Категория</th>
+                            <th className="px-3 py-2 text-right font-medium">Кол-во простоев</th>
+                            <th className="px-3 py-2 text-right font-medium">Время, ч</th>
+                            <th className="px-3 py-2 text-right font-medium">Доля, %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {downtimeCategoryItems.map((item) => {
+                            const sharePercent = Number(item.share_percent ?? 0);
+                            const shareWidth = Number.isFinite(sharePercent)
+                              ? Math.max(0, Math.min(sharePercent, 100))
+                              : 0;
+
+                            return (
+                              <tr
+                                key={item.category}
+                                className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]"
+                              >
+                                <td className="px-3 py-2.5 text-slate-100">{item.category}</td>
+                                <td className="px-3 py-2.5 text-right text-slate-200">{item.downtime_count}</td>
+                                <td className="px-3 py-2.5 text-right text-slate-200">
+                                  {formatHours(item.downtime_hours)}
+                                </td>
+                                <td className="px-3 py-2.5 text-right">
+                                  <div className="flex min-w-[108px] flex-col items-end gap-1">
+                                    <span className="font-medium text-slate-200">
+                                      {formatPercent(item.share_percent)}
+                                    </span>
+                                    <span className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800/80">
+                                      <span
+                                        className="block h-full rounded-full bg-cyan-400/75 transition-all"
+                                        style={{ width: `${shareWidth}%` }}
+                                      />
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                );
-              })}
+                )}
+              </section>
             </div>
-          </section>
-
-          <section className="glass-panel mt-4 p-4 sm:p-5">
-            <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
-              Внеплановые простои по категориям
-            </h2>
-
-            {isEquipmentLoading ? (
-              <div className="mt-5 text-sm text-slate-300">Загружаем категории внеплановых простоев...</div>
-            ) : downtimeCategoryItems.length === 0 ? (
-              <div className="mt-5 rounded-none border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
-                За выбранный период внеплановые простои по категориям не зарегистрированы.
-              </div>
-            ) : (
-              <div className="mt-4 overflow-hidden rounded-none border border-cyan-300/10">
-                <div className="max-h-[360px] overflow-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Категория</th>
-                        <th className="px-3 py-2 text-right font-medium">Кол-во простоев</th>
-                        <th className="px-3 py-2 text-right font-medium">Время, ч</th>
-                        <th className="px-3 py-2 text-right font-medium">Доля, %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {downtimeCategoryItems.map((item) => {
-                        const sharePercent = Number(item.share_percent ?? 0);
-                        const shareWidth = Number.isFinite(sharePercent)
-                          ? Math.max(0, Math.min(sharePercent, 100))
-                          : 0;
-
-                        return (
-                          <tr
-                            key={item.category}
-                            className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]"
-                          >
-                            <td className="px-3 py-2.5 text-slate-100">{item.category}</td>
-                            <td className="px-3 py-2.5 text-right text-slate-200">{item.downtime_count}</td>
-                            <td className="px-3 py-2.5 text-right text-slate-200">
-                              {formatHours(item.downtime_hours)}
-                            </td>
-                            <td className="px-3 py-2.5 text-right">
-                              <div className="flex min-w-[108px] flex-col items-end gap-1">
-                                <span className="font-medium text-slate-200">
-                                  {formatPercent(item.share_percent)}
-                                </span>
-                                <span className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800/80">
-                                  <span
-                                    className="block h-full rounded-full bg-cyan-400/75 transition-all"
-                                    style={{ width: `${shareWidth}%` }}
-                                  />
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </section>
+          </div>
 
           <section className="glass-panel mt-4 p-4 sm:p-5">
             <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">

@@ -236,6 +236,37 @@ def fetch_week_lines_for_equipment_analytics(
     return cursor.fetchall()
 
 
+def fetch_planned_maintenance_minutes_for_period(
+    cursor: RealDictCursor,
+    date_from: datetime,
+    date_to: datetime,
+) -> Decimal:
+    cursor.execute(
+        """
+        SELECT
+            COALESCE(
+                SUM(
+                    GREATEST(
+                        EXTRACT(
+                            EPOCH FROM (
+                                LEAST(em.ended_at, %s) - GREATEST(em.started_at, %s)
+                            )
+                        ) / 60,
+                        0
+                    )
+                ),
+                0
+            ) AS maintenance_minutes
+        FROM equipment_maintenance AS em
+        WHERE em.started_at < %s
+          AND em.ended_at > %s;
+        """,
+        (date_to, date_from, date_to, date_from),
+    )
+    row = cursor.fetchone()
+    return to_decimal(row["maintenance_minutes"])
+
+
 @router.get("/monthly-output", response_model=MonthlyOutputAnalyticsResponse)
 def get_monthly_output_analytics(
     month: str = Query(...),
@@ -441,6 +472,7 @@ def get_monthly_output_analytics(
             connection.close()
 
 
+@router.get("/capacity-monthly", response_model=EquipmentMonthlyAnalyticsResponse)
 @router.get("/equipment-monthly", response_model=EquipmentMonthlyAnalyticsResponse)
 def get_equipment_monthly_analytics(month: str = Query(...)):
     month_start = parse_month_value(month)
@@ -517,7 +549,6 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
             load_percents: list[Decimal] = []
             overloaded_equipment_count = 0
             high_load_equipment_count = 0
-            maintenance_minutes_total = 0
 
             for record in sorted(
                 equipment_totals.values(),
@@ -540,7 +571,6 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
                 if load_percent_decimal is not None:
                     load_percents.append(load_percent_decimal)
 
-                maintenance_minutes_total += int(record.get("maintenance_minutes") or 0)
                 planned_load_hours = None if has_capacity_gap else to_hours_float(planned_load_minutes)
                 planned_maintenance_hours = to_hours_float(record.get("maintenance_minutes"))
                 remaining_minutes = Decimal(available_minutes) - planned_load_minutes
@@ -588,6 +618,11 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
                 (month_end_at, month_start_at),
             )
             downtime_rows = cursor.fetchall()
+            planned_maintenance_minutes_total = fetch_planned_maintenance_minutes_for_period(
+                cursor=cursor,
+                date_from=month_start_at,
+                date_to=month_end_at,
+            )
 
         downtime_aggregates: dict[tuple[int, int], dict[str, Any]] = {}
         downtime_category_aggregates: dict[str, dict[str, Any]] = {}
@@ -681,15 +716,15 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
         )
 
         summary = build_empty_equipment_summary()
-        if equipment_load or downtimes:
-            maintenance_hours_total = to_hours_float(maintenance_minutes_total)
-            unplanned_hours_total = unplanned_downtime_hours_total
-            total_downtime_hours = round(maintenance_hours_total + unplanned_hours_total, 1)
-            unplanned_share_percent = (
-                round((unplanned_hours_total / total_downtime_hours) * 100, 1)
-                if total_downtime_hours > 0
-                else 0.0
-            )
+        maintenance_hours_total = to_hours_float(planned_maintenance_minutes_total)
+        unplanned_hours_total = unplanned_downtime_hours_total
+        total_downtime_hours = round(maintenance_hours_total + unplanned_hours_total, 1)
+        unplanned_share_percent = (
+            round((unplanned_hours_total / total_downtime_hours) * 100, 1)
+            if total_downtime_hours > 0
+            else 0.0
+        )
+        if equipment_load or downtimes or planned_maintenance_minutes_total > 0:
             summary = EquipmentMonthlyAnalyticsSummary(
                 equipment_in_plan_count=len(equipment_load),
                 average_load_percent=to_percent_float(average_load_percent) or 0.0,
