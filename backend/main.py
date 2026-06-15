@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import get_connection
+from routers.auth import router as auth_router
 from routers.demand import router as demand_router
 from routers.downtime_reasons import router as downtime_reasons_router
 from routers.equipment_downtimes import router as equipment_downtimes_router
@@ -54,6 +55,7 @@ app.include_router(production_plans_router)
 app.include_router(production_week_plans_router)
 app.include_router(production_actuals_router)
 app.include_router(production_analytics_router)
+app.include_router(auth_router)
 
 
 @app.get("/")
