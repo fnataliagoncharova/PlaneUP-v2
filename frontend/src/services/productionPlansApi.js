@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, apiRequestBlob } from "./apiClient";
 
 export function getProductionPlans() {
   return apiRequest("/production-plans");
@@ -87,6 +87,10 @@ export function createProductionPlanWeek(productionPlanId, payload) {
 
 export function getProductionWeekPlan(weekId) {
   return apiRequest(`/production-week-plans/${weekId}`);
+}
+
+export function printProductionWeekPlan(weekId) {
+  return apiRequestBlob(`/production-week-plans/${weekId}/print`);
 }
 
 export function updateProductionWeekPlan(weekId, payload) {

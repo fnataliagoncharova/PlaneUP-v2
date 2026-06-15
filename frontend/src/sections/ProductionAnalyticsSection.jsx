@@ -3,10 +3,13 @@ import {
   BarChart3,
   CheckCircle2,
   ChevronRight,
-  Clock3,
+  Clock,
   Cog,
   Gauge,
   LineChart,
+  PieChart,
+  Printer,
+  RefreshCw,
   Target,
   TriangleAlert,
 } from "lucide-react";
@@ -15,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getEquipmentMonthlyAnalytics,
   getMonthlyOutputAnalytics,
+  printProductionAnalytics,
 } from "../services/productionAnalyticsApi";
 
 const TAB_PLAN_COMPLETION = "plan_completion";
@@ -38,6 +42,21 @@ function toErrorMessage(error, fallbackText) {
     return error.message;
   }
   return fallbackText;
+}
+
+function buildProductionAnalyticsFileName(month) {
+  return `Анализ_выпуска_${month || getCurrentMonthValue()}.xlsx`;
+}
+
+function downloadBlob(blob, fileName) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function formatQty(value) {
@@ -257,6 +276,7 @@ function ProductionAnalyticsSection() {
   );
   const [isEquipmentLoading, setIsEquipmentLoading] = useState(false);
   const [equipmentLoadError, setEquipmentLoadError] = useState("");
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const loadOutputAnalytics = useCallback(async () => {
     setIsOutputLoading(true);
@@ -293,6 +313,26 @@ function ProductionAnalyticsSection() {
     }
   }, [monthValue]);
 
+  const handlePrintAnalytics = useCallback(async () => {
+    setIsPrinting(true);
+    setOutputLoadError("");
+    setEquipmentLoadError("");
+
+    try {
+      const blob = await printProductionAnalytics(monthValue);
+      downloadBlob(blob, buildProductionAnalyticsFileName(monthValue));
+    } catch (error) {
+      const message = toErrorMessage(error, "Не удалось сформировать печатную форму анализа выпуска.");
+      if (activeTab === TAB_EQUIPMENT_DOWNTIME) {
+        setEquipmentLoadError(message);
+      } else {
+        setOutputLoadError(message);
+      }
+    } finally {
+      setIsPrinting(false);
+    }
+  }, [activeTab, monthValue]);
+
   useEffect(() => {
     if (activeTab !== TAB_PLAN_COMPLETION) {
       return;
@@ -310,6 +350,30 @@ function ProductionAnalyticsSection() {
   const outputSummary = outputAnalyticsData.summary ?? buildEmptyOutputAnalytics(monthValue).summary;
   const topProblemItems = outputAnalyticsData.top_problem_items ?? [];
   const outputItems = outputAnalyticsData.items ?? [];
+  const sortedOutputItems = useMemo(
+    () =>
+      [...outputItems].sort((leftItem, rightItem) => {
+        const leftPercent = Number(leftItem?.completion_percent);
+        const rightPercent = Number(rightItem?.completion_percent);
+        const leftSortValue = Number.isFinite(leftPercent) ? leftPercent : Number.POSITIVE_INFINITY;
+        const rightSortValue = Number.isFinite(rightPercent) ? rightPercent : Number.POSITIVE_INFINITY;
+
+        if (leftSortValue !== rightSortValue) {
+          return leftSortValue - rightSortValue;
+        }
+
+        const codeCompare = String(leftItem?.item_code || "").localeCompare(
+          String(rightItem?.item_code || ""),
+          "ru",
+        );
+        if (codeCompare !== 0) {
+          return codeCompare;
+        }
+
+        return String(leftItem?.item_name || "").localeCompare(String(rightItem?.item_name || ""), "ru");
+      }),
+    [outputItems],
+  );
   const outputSummaryByUnit = Array.isArray(outputAnalyticsData.summary_by_unit)
     ? outputAnalyticsData.summary_by_unit
     : [];
@@ -393,89 +457,77 @@ function ProductionAnalyticsSection() {
   );
 
   const equipmentKpiCards = useMemo(
-    () => [
-      {
-        label: "Оборудование в плане",
-        value: String(equipmentSummary.equipment_in_plan_count ?? 0),
-        icon: Cog,
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(15,34,49,0.98),rgba(9,23,36,0.98))]",
-          iconBox: "bg-cyan-400/[0.10] text-cyan-100",
-          value: "text-slate-50",
+    () => {
+      const overloadedCount = Number(equipmentSummary.overloaded_equipment_count ?? 0);
+      const hasOverload = Number.isFinite(overloadedCount) && overloadedCount > 0;
+
+      return [
+        {
+          label: "Оборудование в плане",
+          value: String(equipmentSummary.equipment_in_plan_count ?? 0),
+          icon: Cog,
+          tone: {
+            card: "bg-[linear-gradient(180deg,rgba(15,34,49,0.98),rgba(9,23,36,0.98))]",
+            iconBox: "bg-cyan-400/[0.10] text-cyan-100",
+            value: "text-slate-50",
+          },
         },
-      },
-      {
-        label: "Средняя загрузка",
-        value: formatPercent(equipmentSummary.average_load_percent),
-        icon: Gauge,
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(16,34,41,0.98),rgba(10,24,31,0.98))]",
-          iconBox: "bg-emerald-400/[0.10] text-emerald-100",
-          value: "text-emerald-50",
+        {
+          label: "Средняя загрузка",
+          value: formatPercent(equipmentSummary.average_load_percent),
+          icon: Gauge,
+          tone: {
+            card: "bg-[linear-gradient(180deg,rgba(16,34,41,0.98),rgba(10,24,31,0.98))]",
+            iconBox: "bg-emerald-400/[0.10] text-emerald-100",
+            value: "text-emerald-50",
+          },
         },
-      },
-      {
-        label: "Перегружено",
-        value: String(equipmentSummary.overloaded_equipment_count ?? 0),
-        icon: TriangleAlert,
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(38,28,17,0.98),rgba(24,19,12,0.98))]",
-          iconBox: "bg-amber-400/[0.10] text-amber-100",
-          value: "text-amber-50",
+        {
+          label: "Перегружено",
+          value: String(equipmentSummary.overloaded_equipment_count ?? 0),
+          icon: TriangleAlert,
+          tone: hasOverload
+            ? {
+                card: "bg-[linear-gradient(180deg,rgba(38,28,17,0.98),rgba(24,19,12,0.98))]",
+                iconBox: "bg-amber-400/[0.10] text-amber-100",
+                value: "text-amber-50",
+              }
+            : {
+                card: "bg-[linear-gradient(180deg,rgba(18,31,43,0.98),rgba(10,22,34,0.98))]",
+                iconBox: "bg-slate-400/[0.10] text-slate-200",
+                value: "text-slate-50",
+              },
         },
-      },
-      {
-        label: "Всего простоев, ч",
-        value: formatHours(equipmentSummary.total_downtime_hours),
-        icon: Clock3,
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(22,27,45,0.98),rgba(12,18,33,0.98))]",
-          iconBox: "bg-indigo-400/[0.10] text-indigo-100",
-          value: "text-slate-50",
+        {
+          label: "Простои, ч",
+          icon: Clock,
+          value: formatHours(equipmentSummary.total_downtime_hours),
+          downtimeDetails: [
+            ["Плановое ТО", formatHours(equipmentSummary.planned_maintenance_hours)],
+            ["Внеплановые", formatHours(equipmentSummary.unplanned_downtime_hours)],
+          ],
+          tone: {
+            card: "bg-[linear-gradient(180deg,rgba(22,27,45,0.98),rgba(12,18,33,0.98))]",
+            iconBox: "bg-indigo-400/[0.10] text-indigo-100",
+            value: "text-slate-50",
+          },
         },
-      },
-    ],
+        {
+          label: "Доля внеплановых, %",
+          value: formatPercent(equipmentSummary.unplanned_share_percent),
+          icon: PieChart,
+          tone: {
+            card: "bg-[linear-gradient(180deg,rgba(24,26,49,0.98),rgba(14,18,37,0.98))]",
+            iconBox: "bg-indigo-400/[0.10] text-indigo-100",
+            value: "text-slate-50",
+          },
+        },
+      ];
+    },
     [
       equipmentSummary.average_load_percent,
       equipmentSummary.equipment_in_plan_count,
       equipmentSummary.overloaded_equipment_count,
-      equipmentSummary.total_downtime_hours,
-    ],
-  );
-
-  const downtimeSummaryCards = useMemo(
-    () => [
-      {
-        label: "Всего простоев, ч",
-        value: formatHours(equipmentSummary.total_downtime_hours),
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(22,27,45,0.98),rgba(12,18,33,0.98))]",
-        },
-      },
-      {
-        label: "Плановое ТО, ч",
-        value: formatHours(equipmentSummary.planned_maintenance_hours),
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(15,34,49,0.98),rgba(9,23,36,0.98))]",
-        },
-      },
-      {
-        label: "Внеплановые простои, ч",
-        value: formatHours(equipmentSummary.unplanned_downtime_hours),
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(38,28,17,0.98),rgba(24,19,12,0.98))]",
-        },
-      },
-      {
-        label: "Доля внеплановых, %",
-        value: formatPercent(equipmentSummary.unplanned_share_percent),
-        caption: "от всех простоев",
-        tone: {
-          card: "bg-[linear-gradient(180deg,rgba(43,29,18,0.98),rgba(28,19,12,0.98))]",
-        },
-      },
-    ],
-    [
       equipmentSummary.planned_maintenance_hours,
       equipmentSummary.total_downtime_hours,
       equipmentSummary.unplanned_downtime_hours,
@@ -592,13 +644,27 @@ function ProductionAnalyticsSection() {
                 </label>
               </div>
 
-              <button
-                type="button"
-                onClick={loadOutputAnalytics}
-                className="h-10 rounded-none border border-cyan-900/50 bg-cyan-400/[0.10] px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.14]"
-              >
-                Обновить
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  title="Печать отчёта анализа выпуска"
+                  onClick={handlePrintAnalytics}
+                  disabled={isPrinting}
+                  className="inline-flex h-10 items-center gap-2 rounded-none border border-white/15 px-4 text-sm font-medium text-slate-100 transition hover:border-cyan-300/35 disabled:opacity-60"
+                >
+                  <Printer className="h-4 w-4" />
+                  {isPrinting ? "Формируем..." : "Печать"}
+                </button>
+                <button
+                  type="button"
+                  onClick={loadOutputAnalytics}
+                  disabled={isOutputLoading}
+                  className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-900/50 bg-cyan-400/[0.10] px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.14] disabled:opacity-60"
+                >
+                  <RefreshCw className={["h-4 w-4", isOutputLoading ? "animate-spin" : ""].join(" ")} />
+                  Обновить
+                </button>
+              </div>
             </div>
           </div>
 
@@ -773,7 +839,7 @@ function ProductionAnalyticsSection() {
                           </tr>
                         </thead>
                         <tbody>
-                          {outputItems.map((item) => (
+                          {sortedOutputItems.map((item) => (
                             <tr
                               key={`${item.nomenclature_id}-${item.item_code}`}
                               className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]"
@@ -878,17 +944,31 @@ function ProductionAnalyticsSection() {
                 />
               </label>
 
-              <button
-                type="button"
-                onClick={loadEquipmentAnalytics}
-                className="h-10 rounded-none border border-cyan-900/50 bg-cyan-400/[0.10] px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.14]"
-              >
-                Обновить
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  title="Печать отчёта анализа выпуска"
+                  onClick={handlePrintAnalytics}
+                  disabled={isPrinting}
+                  className="inline-flex h-10 items-center gap-2 rounded-none border border-white/15 px-4 text-sm font-medium text-slate-100 transition hover:border-cyan-300/35 disabled:opacity-60"
+                >
+                  <Printer className="h-4 w-4" />
+                  {isPrinting ? "Формируем..." : "Печать"}
+                </button>
+                <button
+                  type="button"
+                  onClick={loadEquipmentAnalytics}
+                  disabled={isEquipmentLoading}
+                  className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-900/50 bg-cyan-400/[0.10] px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.14] disabled:opacity-60"
+                >
+                  <RefreshCw className={["h-4 w-4", isEquipmentLoading ? "animate-spin" : ""].join(" ")} />
+                  Обновить
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-row gap-4">
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {equipmentKpiCards.map((card) => {
               const Icon = card.icon;
 
@@ -896,38 +976,75 @@ function ProductionAnalyticsSection() {
                 <div
                   key={card.label}
                   className={[
-                    "min-w-0 flex-1 rounded-none border border-slate-800/70 px-5 py-5 transition",
+                    "flex h-[115px] min-w-0 rounded-none border border-slate-800/70 px-4 py-3 transition",
                     card.tone.card,
                   ].join(" ")}
                 >
-                  <div className="flex items-center gap-5">
-                    <div
-                      className={[
-                        "flex h-14 w-14 shrink-0 items-center justify-center rounded-none border border-slate-700/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
-                        card.tone.iconBox,
-                      ].join(" ")}
-                    >
-                      <Icon className="h-7 w-7" strokeWidth={1.9} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-400">{card.label}</div>
+                  {card.downtimeDetails ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
                       <div
                         className={[
-                          "mt-1.5 text-[2rem] font-semibold leading-none tracking-tight",
-                          card.tone.value,
+                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-none border border-slate-700/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+                          card.tone.iconBox,
                         ].join(" ")}
                       >
-                        {card.value}
+                        {Icon ? <Icon className="h-6 w-6" strokeWidth={1.9} /> : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium leading-tight text-slate-400">{card.label}</div>
+                        <div className="mt-1.5 flex min-w-0 items-end gap-3">
+                          <div
+                            className={[
+                              "shrink-0 text-[1.9rem] font-semibold leading-none tracking-tight tabular-nums",
+                              card.tone.value,
+                            ].join(" ")}
+                          >
+                            {card.value}
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-1 pb-0.5 text-[0.9rem] leading-none">
+                            {card.downtimeDetails.map(([label, value]) => (
+                              <div key={label} className="grid grid-cols-[minmax(0,auto)_2.2rem] items-center justify-end gap-1.5">
+                                <span className="truncate text-slate-500">{label}</span>
+                                <span className="text-right font-medium tabular-nums text-slate-200">{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div
+                        className={[
+                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-none border border-slate-700/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+                          card.tone.iconBox,
+                        ].join(" ")}
+                      >
+                        {Icon ? <Icon className="h-6 w-6" strokeWidth={1.9} /> : null}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium leading-tight text-slate-400">{card.label}</div>
+                        <div
+                          className={[
+                            "mt-1.5 text-[1.9rem] font-semibold leading-none tracking-tight",
+                            card.tone.value,
+                          ].join(" ")}
+                        >
+                          {card.value}
+                        </div>
+                        {card.caption ? (
+                          <div className="mt-2 text-xs leading-none text-slate-500">{card.caption}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
-            <section className="glass-panel flex h-full flex-col p-4 sm:p-5 xl:min-h-[560px]">
+          <div className="mt-4 grid grid-cols-1 items-stretch gap-4 xl:grid-cols-5">
+            <section className="glass-panel flex h-full flex-col p-4 sm:p-5 xl:col-span-3">
               <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
                 Расчётная загрузка оборудования по месячному плану
               </h2>
@@ -939,8 +1056,8 @@ function ProductionAnalyticsSection() {
                   За выбранный период нет данных по загрузке оборудования.
                 </div>
               ) : (
-                <div className="mt-4 flex-1 overflow-hidden rounded-none border border-cyan-300/10">
-                  <div className="max-h-[430px] overflow-auto">
+                  <div className="mt-4 flex-1 overflow-hidden rounded-none border border-cyan-300/10">
+                  <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
                         <tr>
@@ -1047,34 +1164,8 @@ function ProductionAnalyticsSection() {
               )}
             </section>
 
-            <div className="flex h-full flex-col gap-4 xl:min-h-[560px]">
-              <section className="glass-panel shrink-0 p-4 sm:p-5">
-                <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
-                  Сводка простоев за месяц
-                </h2>
-
-                <div className="mt-4 grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2">
-                  {downtimeSummaryCards.map((card) => (
-                    <div
-                      key={card.label}
-                      className={[
-                        "flex h-full min-h-[104px] flex-col justify-center rounded-none border border-slate-800/70 px-4 py-4",
-                        card.tone.card,
-                      ].join(" ")}
-                    >
-                      <div className="text-sm font-medium text-slate-400">{card.label}</div>
-                      <div className="mt-2 text-2xl font-semibold leading-none tracking-tight text-slate-50">
-                        {card.value}
-                      </div>
-                      {card.caption ? (
-                        <div className="mt-2 text-xs text-slate-500">{card.caption}</div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="glass-panel flex flex-1 flex-col p-4 sm:p-5">
+            <>
+              <section className="glass-panel flex h-full flex-col p-4 sm:p-5 xl:col-span-2">
                 <h2 className="text-[1.35rem] font-semibold tracking-tight text-slate-50">
                   Внеплановые простои по категориям
                 </h2>
@@ -1087,7 +1178,7 @@ function ProductionAnalyticsSection() {
                   </div>
                 ) : (
                   <div className="mt-4 flex-1 overflow-hidden rounded-none border border-cyan-300/10">
-                    <div className="max-h-[320px] overflow-auto xl:max-h-none">
+                    <div className="overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(19,39,56,0.95),rgba(14,28,40,0.96))] text-xs uppercase tracking-[0.08em] text-slate-500">
                           <tr>
@@ -1136,7 +1227,7 @@ function ProductionAnalyticsSection() {
                   </div>
                 )}
               </section>
-            </div>
+            </>
           </div>
 
           <section className="glass-panel mt-4 p-4 sm:p-5">

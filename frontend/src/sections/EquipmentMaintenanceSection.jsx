@@ -1,4 +1,4 @@
-import { AlertCircle, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
@@ -6,6 +6,7 @@ import {
   createEquipmentMaintenance,
   deleteEquipmentMaintenance,
   getEquipmentMaintenance,
+  printMaintenanceSchedule,
   updateEquipmentMaintenance,
 } from "../services/equipmentMaintenanceApi";
 import { getMachinesList } from "../services/machinesApi";
@@ -43,6 +44,46 @@ function buildApiDateTime(dateValue, timeValue) {
     return "";
   }
   return `${dateValue}T${timeValue}:00`;
+}
+
+function formatDateInputValue(dateValue) {
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthPeriod() {
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  return {
+    date_from: formatDateInputValue(monthStart),
+    date_to: formatDateInputValue(monthEnd),
+  };
+}
+
+function getPrintPeriod(filters) {
+  const defaultPeriod = getCurrentMonthPeriod();
+  return {
+    date_from: filters.date_from || defaultPeriod.date_from,
+    date_to: filters.date_to || defaultPeriod.date_to,
+  };
+}
+
+function buildMaintenanceScheduleFileName(dateFrom, dateTo) {
+  return `График_ТО_оборудования_${dateFrom}_${dateTo}.xlsx`;
+}
+
+function downloadBlob(blob, fileName) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function parseDateTime(dateValue, timeValue) {
@@ -128,6 +169,7 @@ function EquipmentMaintenanceSection() {
   const [isListLoading, setIsListLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const [loadError, setLoadError] = useState("");
   const [pageError, setPageError] = useState("");
@@ -358,6 +400,25 @@ function EquipmentMaintenanceSection() {
     }
   };
 
+  const handlePrintSchedule = async () => {
+    const printPeriod = getPrintPeriod(filters);
+    if (printPeriod.date_from > printPeriod.date_to) {
+      setPageError("Дата окончания периода печати не может быть раньше даты начала.");
+      return;
+    }
+
+    setIsPrinting(true);
+    setPageError("");
+    try {
+      const blob = await printMaintenanceSchedule(printPeriod.date_from, printPeriod.date_to);
+      downloadBlob(blob, buildMaintenanceScheduleFileName(printPeriod.date_from, printPeriod.date_to));
+    } catch (error) {
+      setPageError(toErrorMessage(error, "Не удалось сформировать печатную форму графика ТО."));
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteCandidate?.maintenance_id) {
       return;
@@ -392,6 +453,17 @@ function EquipmentMaintenanceSection() {
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            title="Печать графика ТО"
+            onClick={handlePrintSchedule}
+            disabled={isLoading || isPrinting}
+            className="inline-flex h-10 items-center gap-2 rounded-none border border-white/15 px-4 text-sm font-semibold text-slate-100 transition hover:border-cyan-300/35 disabled:opacity-60"
+          >
+            <Printer className="h-4 w-4" />
+            {isPrinting ? "Формируем..." : "Печать"}
+          </button>
           <button
             type="button"
             onClick={openCreateModal}
@@ -401,6 +473,7 @@ function EquipmentMaintenanceSection() {
             <Plus className="h-4 w-4" />
             Добавить ТО
           </button>
+          </div>
         </div>
 
         {loadError ? (

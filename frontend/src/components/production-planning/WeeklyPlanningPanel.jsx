@@ -1,4 +1,4 @@
-import { RefreshCw, Trash2 } from "lucide-react";
+import { Printer, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import V2ConfirmDialog from "../common/V2ConfirmDialog";
@@ -12,6 +12,7 @@ import {
   getProductionPlans,
   getProductionPlanWeeks,
   getProductionWeekPlan,
+  printProductionWeekPlan,
   updateProductionWeekLine,
 } from "../../services/productionPlansApi";
 import { getRouteStepEquipmentList } from "../../services/routeStepEquipmentApi";
@@ -38,6 +39,23 @@ function formatDate(value) {
     return "—";
   }
   return date.toLocaleDateString("ru-RU");
+}
+
+function buildWeekPlanPrintFileName(week) {
+  const weekStart = week?.week_start_date || "week_start";
+  const weekEnd = week?.week_end_date || "week_end";
+  return `План_выпуска_неделя_${weekStart}_${weekEnd}.xlsx`;
+}
+
+function downloadBlob(blob, fileName) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function formatWeekOption(week) {
@@ -207,6 +225,7 @@ function WeeklyPlanningPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
   const [weekDeleteCandidate, setWeekDeleteCandidate] = useState(null);
@@ -794,6 +813,26 @@ function WeeklyPlanningPanel() {
     }
   };
 
+  const handlePrintWeekPlan = async () => {
+    if (!selectedMergedWeek?.production_plan_week_id) {
+      setErrorText("Сначала сохраните план недели.");
+      return;
+    }
+
+    setIsPrinting(true);
+    setErrorText("");
+    setSuccessText("");
+    try {
+      const blob = await printProductionWeekPlan(selectedMergedWeek.production_plan_week_id);
+      downloadBlob(blob, buildWeekPlanPrintFileName(selectedMergedWeek));
+      setSuccessText("Печатная форма плана недели сформирована.");
+    } catch (error) {
+      setErrorText(toErrorMessage(error, "Не удалось сформировать печатную форму плана недели."));
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const handleDeleteWeek = async () => {
     if (!weekDeleteCandidate || !selectedPlanId) {
       return;
@@ -822,6 +861,7 @@ function WeeklyPlanningPanel() {
   };
 
   const isSaveDisabled = !selectedMergedWeek || !selectedPlan || isSaving || isLoading || hasDraftOverdistribution;
+  const isPrintDisabled = !isSelectedWeekPersisted || isPrinting || isSaving || isLoading || isDeleting;
 
   return (
     <div className="space-y-5">
@@ -865,6 +905,10 @@ function WeeklyPlanningPanel() {
 
             <button type="button" onClick={handleSaveWeekPlan} disabled={isSaveDisabled} className="h-11 rounded-none border border-cyan-300/35 bg-cyan-400/[0.18] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.28] disabled:opacity-50">
               {isSaving ? "Сохраняем..." : "Сохранить план недели"}
+            </button>
+            <button type="button" title="Печать плана недели" onClick={handlePrintWeekPlan} disabled={isPrintDisabled} className="inline-flex h-11 items-center gap-2 rounded-none border border-white/12 px-4 text-sm text-slate-200 transition hover:border-cyan-300/30 disabled:opacity-50">
+              <Printer className="h-4 w-4" />
+              {isPrinting ? "Формируем..." : "Печать"}
             </button>
             <button type="button" onClick={handleRefresh} disabled={isLoading || isSaving} className="inline-flex h-11 items-center gap-2 rounded-none border border-white/12 px-4 text-sm text-slate-200 transition hover:border-cyan-300/30 disabled:opacity-50">
               <RefreshCw className={["h-4 w-4", isLoading ? "animate-spin" : ""].join(" ")} />

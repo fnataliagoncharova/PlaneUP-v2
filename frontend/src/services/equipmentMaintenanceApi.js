@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, apiRequestBlob } from "./apiClient";
 
 function buildQuery(filters = {}) {
   const params = new URLSearchParams();
@@ -16,6 +16,10 @@ function buildQuery(filters = {}) {
 
 export function getEquipmentMaintenance(filters = {}) {
   return apiRequest(`/equipment-maintenance${buildQuery(filters)}`);
+}
+
+export function printMaintenanceSchedule(dateFrom, dateTo) {
+  return apiRequestBlob(`/equipment-maintenance/print${buildQuery({ date_from: dateFrom, date_to: dateTo })}`);
 }
 
 export function createEquipmentMaintenance(payload) {

@@ -1,10 +1,15 @@
 import re
 from datetime import date, datetime, time
 from decimal import Decimal
+from io import BytesIO
 from typing import Any
+from urllib.parse import quote
 
 import psycopg2
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
@@ -28,6 +33,7 @@ router = APIRouter(prefix="/production-analytics", tags=["production_analytics"]
 
 DECIMAL_ZERO = Decimal("0")
 MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 STATUS_NO_ACTUAL = "no_actual"
 STATUS_IN_PROGRESS = "in_progress"
@@ -265,6 +271,442 @@ def fetch_planned_maintenance_minutes_for_period(
     )
     row = cursor.fetchone()
     return to_decimal(row["maintenance_minutes"])
+
+
+def get_field(item: Any, field_name: str, default: Any = None) -> Any:
+    if isinstance(item, dict):
+        return item.get(field_name, default)
+    return getattr(item, field_name, default)
+
+
+def format_print_datetime(value: datetime) -> str:
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
+def format_ru_number(value: Any, minimum_fraction_digits: int = 0, maximum_fraction_digits: int = 1) -> str:
+    if value is None:
+        return "—"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    text = f"{number:,.{maximum_fraction_digits}f}"
+    if minimum_fraction_digits == 0 and "." in text:
+        text = text.rstrip("0").rstrip(".")
+    integer_part, _, fractional_part = text.partition(".")
+    integer_part = integer_part.replace(",", " ")
+    return f"{integer_part},{fractional_part}" if fractional_part else integer_part
+
+
+def format_qty_thousands_for_print(value: Any) -> str:
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        number = 0.0
+    return f"{format_ru_number(number / 1000, 1, 1)} тыс."
+
+
+def format_percent_for_print(value: Any) -> str:
+    return f"{format_ru_number(value or 0, 0, 1)}%"
+
+
+def format_qty_by_unit_for_print(summary_by_unit: list[Any], qty_field: str, fallback_value: Any) -> str:
+    rows = list(summary_by_unit or [])
+    if not rows:
+        return format_qty_thousands_for_print(fallback_value)
+
+    lines = []
+    for row in rows:
+        unit = str(get_field(row, "unit", "") or "").strip()
+        suffix = f" {unit}" if unit else ""
+        lines.append(f"{format_qty_thousands_for_print(get_field(row, qty_field, 0))}{suffix}")
+    return "\n".join(lines)
+
+
+def configure_print_sheet(worksheet, widths: list[float]) -> None:
+    worksheet.page_setup.orientation = worksheet.ORIENTATION_LANDSCAPE
+    worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
+    worksheet.sheet_properties.pageSetUpPr.fitToPage = True
+    worksheet.page_setup.fitToWidth = 1
+    worksheet.page_setup.fitToHeight = 0
+    worksheet.freeze_panes = "A7"
+    for index, width in enumerate(widths, start=1):
+        worksheet.column_dimensions[chr(64 + index)].width = width
+
+
+def write_report_header(worksheet, month: str, section_title: str, last_column: int) -> int:
+    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_column)
+    title_cell = worksheet.cell(row=1, column=1, value="Анализ выпуска")
+    title_cell.font = Font(size=16, bold=True, color="1E293B")
+    title_cell.alignment = Alignment(horizontal="center")
+    worksheet.cell(row=2, column=1, value=f"Период: {month}").font = Font(size=10, color="475569")
+    worksheet.cell(row=3, column=1, value=f"Дата формирования: {format_print_datetime(datetime.now())}").font = Font(size=10, color="475569")
+    worksheet.cell(row=4, column=1, value=f"Раздел: {section_title}").font = Font(size=10, bold=True, color="475569")
+    worksheet.row_dimensions[1].height = 24
+    return 6
+
+
+def write_section_title(worksheet, row_index: int, title: str, last_column: int) -> int:
+    worksheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=last_column)
+    cell = worksheet.cell(row=row_index, column=1, value=title)
+    cell.font = Font(size=12, bold=True, color="0F172A")
+    cell.fill = PatternFill("solid", fgColor="E8F1F5")
+    cell.alignment = Alignment(horizontal="left", vertical="center")
+    worksheet.row_dimensions[row_index].height = 22
+    return row_index + 1
+
+
+def write_kpi_block(worksheet, row_index: int, items: list[tuple[str, Any]], columns_per_row: int = 4) -> int:
+    header_fill = PatternFill("solid", fgColor="F1F5F9")
+    thin_side = Side(style="thin", color="B7C6CE")
+    border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    label_font = Font(size=9, bold=True, color="475569")
+    value_font = Font(size=11, bold=True, color="0F172A")
+
+    for index, (label, value) in enumerate(items):
+        column = (index % columns_per_row) * 2 + 1
+        if index and index % columns_per_row == 0:
+            row_index += 2
+        label_cell = worksheet.cell(row=row_index, column=column, value=label)
+        value_cell = worksheet.cell(row=row_index + 1, column=column, value=value)
+        worksheet.merge_cells(start_row=row_index, start_column=column, end_row=row_index, end_column=column + 1)
+        worksheet.merge_cells(start_row=row_index + 1, start_column=column, end_row=row_index + 1, end_column=column + 1)
+        for cell in (label_cell, value_cell):
+            cell.fill = header_fill
+            cell.border = border
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+        label_cell.font = label_font
+        value_cell.font = value_font
+    return row_index + 3
+
+
+def write_table(
+    worksheet,
+    row_index: int,
+    title: str,
+    headers: list[str],
+    rows: list[list[Any]],
+    numeric_columns: set[int] | None = None,
+    percent_columns: set[int] | None = None,
+    wrap_columns: set[int] | None = None,
+) -> int:
+    numeric_columns = numeric_columns or set()
+    percent_columns = percent_columns or set()
+    wrap_columns = wrap_columns or set()
+    last_column = len(headers)
+    row_index = write_section_title(worksheet, row_index, title, last_column)
+
+    header_fill = PatternFill("solid", fgColor="DDEBEE")
+    thin_side = Side(style="thin", color="B7C6CE")
+    border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    header_font = Font(size=10, bold=True, color="0F172A")
+
+    for column_index, header in enumerate(headers, start=1):
+        cell = worksheet.cell(row=row_index, column=column_index, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    if not rows:
+        row_index += 1
+        worksheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=last_column)
+        cell = worksheet.cell(row=row_index, column=1, value="Данные за выбранный период отсутствуют.")
+        cell.font = Font(size=10, color="475569")
+        cell.border = border
+        cell.alignment = Alignment(vertical="top", wrap_text=True)
+        return row_index + 3
+
+    for row_values in rows:
+        row_index += 1
+        for column_index, value in enumerate(row_values, start=1):
+            cell = worksheet.cell(row=row_index, column=column_index, value=value)
+            cell.border = border
+            cell.alignment = Alignment(vertical="top", wrap_text=column_index in wrap_columns)
+            if column_index == 1:
+                cell.alignment = Alignment(horizontal="center", vertical="top", wrap_text=column_index in wrap_columns)
+            if column_index in numeric_columns or column_index in percent_columns:
+                cell.alignment = Alignment(horizontal="right", vertical="top", wrap_text=column_index in wrap_columns)
+                cell.number_format = "0.0" if column_index in percent_columns else "#,##0.0"
+    return row_index + 3
+
+
+def get_completion_sort_value(item: Any) -> tuple[float, str, str]:
+    completion_percent = get_field(item, "completion_percent")
+    try:
+        percent_value = float(completion_percent)
+    except (TypeError, ValueError):
+        percent_value = float("inf")
+    if not (percent_value == percent_value):
+        percent_value = float("inf")
+    return (
+        percent_value,
+        str(get_field(item, "item_code", "") or ""),
+        str(get_field(item, "item_name", "") or ""),
+    )
+
+
+def write_summary_table(
+    worksheet,
+    row_index: int,
+    title: str,
+    rows: list[list[Any]],
+    last_column: int,
+) -> int:
+    value_start_column = max(2, last_column - 1)
+    row_index = write_section_title(worksheet, row_index, title, last_column)
+
+    header_fill = PatternFill("solid", fgColor="DDEBEE")
+    total_fill = PatternFill("solid", fgColor="F8FAFC")
+    thin_side = Side(style="thin", color="B7C6CE")
+    border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    header_font = Font(size=10, bold=True, color="0F172A")
+
+    worksheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=value_start_column - 1)
+    worksheet.merge_cells(start_row=row_index, start_column=value_start_column, end_row=row_index, end_column=last_column)
+    indicator_header_cell = worksheet.cell(row=row_index, column=1, value="Показатель")
+    value_header_cell = worksheet.cell(row=row_index, column=value_start_column, value="Значение")
+    for cell in (indicator_header_cell, value_header_cell):
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    if not rows:
+        row_index += 1
+        worksheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=last_column)
+        cell = worksheet.cell(row=row_index, column=1, value="Данные за выбранный период отсутствуют.")
+        cell.font = Font(size=10, color="475569")
+        cell.border = border
+        cell.alignment = Alignment(vertical="top", wrap_text=True)
+        return row_index + 3
+
+    for label, value in rows:
+        row_index += 1
+        worksheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=value_start_column - 1)
+        worksheet.merge_cells(start_row=row_index, start_column=value_start_column, end_row=row_index, end_column=last_column)
+        label_cell = worksheet.cell(row=row_index, column=1, value=label)
+        value_cell = worksheet.cell(row=row_index, column=value_start_column, value=value)
+        for cell in (label_cell, value_cell):
+            cell.fill = total_fill
+            cell.border = border
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+        value_cell.alignment = Alignment(horizontal="right", vertical="top")
+        value_cell.number_format = "#,##0.0"
+
+    return row_index + 3
+
+
+def create_production_analytics_print_workbook(
+    month: str,
+    output_data: MonthlyOutputAnalyticsResponse,
+    equipment_data: EquipmentMonthlyAnalyticsResponse,
+) -> bytes:
+    workbook = Workbook()
+    output_sheet = workbook.active
+    output_sheet.title = "Выполнение плана"
+    capacity_sheet = workbook.create_sheet("Обеспеченность мощностями")
+
+    render_output_analytics_sheet(output_sheet, month, output_data)
+    render_capacity_analytics_sheet(capacity_sheet, month, equipment_data)
+
+    workbook_stream = BytesIO()
+    workbook.save(workbook_stream)
+    return workbook_stream.getvalue()
+
+
+def render_output_analytics_sheet(worksheet, month: str, data: MonthlyOutputAnalyticsResponse) -> None:
+    configure_print_sheet(worksheet, [5, 18, 42, 14, 14, 14, 14, 22])
+    current_row = write_report_header(worksheet, month, "Выполнение плана", 8)
+    summary = data.summary
+    summary_by_unit = data.summary_by_unit or []
+    current_row = write_kpi_block(
+        worksheet,
+        current_row,
+        [
+            ("План на месяц", format_qty_by_unit_for_print(summary_by_unit, "planned_qty_total", summary.planned_qty_total)),
+            ("Выпущено", format_qty_by_unit_for_print(summary_by_unit, "actual_qty_total", summary.actual_qty_total)),
+            ("Остаток к выпуску", format_qty_by_unit_for_print(summary_by_unit, "remaining_qty_total", summary.remaining_qty_total)),
+            ("Выполнение, %", format_percent_for_print(summary.completion_percent)),
+        ],
+    )
+
+    def output_rows(items: list[Any]) -> list[list[Any]]:
+        return [
+            [
+                index,
+                item.item_code,
+                item.item_name,
+                item.planned_qty,
+                item.actual_qty,
+                item.remaining_qty,
+                item.completion_percent,
+                item.status_label,
+            ]
+            for index, item in enumerate(items or [], start=1)
+        ]
+
+    headers = ["№", "Код", "Номенклатура", "План", "Факт", "Остаток", "Выполнение, %", "Статус"]
+    current_row = write_table(
+        worksheet,
+        current_row,
+        "Проблемные позиции",
+        headers,
+        output_rows(data.top_problem_items),
+        numeric_columns={4, 5, 6},
+        percent_columns={7},
+        wrap_columns={3, 8},
+    )
+    current_row = write_table(
+        worksheet,
+        current_row,
+        "План-факт по номенклатуре",
+        headers,
+        output_rows(sorted(data.items or [], key=get_completion_sort_value)),
+        numeric_columns={4, 5, 6},
+        percent_columns={7},
+        wrap_columns={3, 8},
+    )
+
+    summary_rows = [
+        ["Позиций с недовыпуском", summary.underproduced_items_count],
+        ["Позиций без факта", summary.no_actual_items_count],
+        ["Позиций с перевыпуском", summary.overproduced_items_count],
+        ["Позиций без плана", summary.no_plan_items_count],
+    ]
+    write_summary_table(worksheet, current_row, "Сводка периода", summary_rows, last_column=8)
+
+
+def render_capacity_analytics_sheet(worksheet, month: str, data: EquipmentMonthlyAnalyticsResponse) -> None:
+    configure_print_sheet(worksheet, [5, 18, 30, 14, 18, 16, 18, 14, 22])
+    current_row = write_report_header(worksheet, month, "Обеспеченность мощностями", 9)
+    summary = data.summary
+    current_row = write_kpi_block(
+        worksheet,
+        current_row,
+        [
+            ("Оборудование в плане", summary.equipment_in_plan_count),
+            ("Средняя загрузка, %", format_percent_for_print(summary.average_load_percent)),
+            ("Перегружено", summary.overloaded_equipment_count),
+            ("Всего простоев, ч", format_ru_number(summary.total_downtime_hours, 0, 1)),
+        ],
+    )
+
+    load_rows = [
+        [
+            index,
+            item.equipment_code,
+            item.equipment_name,
+            item.available_hours,
+            item.planned_load_hours if item.planned_load_hours is not None else "—",
+            item.planned_maintenance_hours,
+            item.remaining_hours,
+            item.load_percent if item.load_percent is not None else "—",
+            item.status_label,
+        ]
+        for index, item in enumerate(data.equipment_load or [], start=1)
+    ]
+    current_row = write_table(
+        worksheet,
+        current_row,
+        "Расчётная загрузка оборудования по месячному плану",
+        ["№", "Код оборудования", "Оборудование", "Доступно, ч", "Плановая загрузка, ч", "Плановое ТО, ч", "Резерв / перегруз, ч", "Загрузка, %", "Статус"],
+        load_rows,
+        numeric_columns={4, 5, 6, 7},
+        percent_columns={8},
+        wrap_columns={3, 9},
+    )
+
+    downtime_summary_rows = [
+        ["Всего простоев, ч", summary.total_downtime_hours],
+        ["Плановое ТО, ч", summary.planned_maintenance_hours],
+        ["Внеплановые простои, ч", summary.unplanned_downtime_hours],
+        ["Доля внеплановых, %", summary.unplanned_share_percent],
+    ]
+    current_row = write_summary_table(
+        worksheet,
+        current_row,
+        "Сводка простоев за месяц",
+        downtime_summary_rows,
+        last_column=9,
+    )
+
+    category_rows = [
+        [index, item.category, item.downtime_count, item.downtime_hours, item.share_percent]
+        for index, item in enumerate(data.downtime_by_category or [], start=1)
+    ]
+    current_row = write_table(
+        worksheet,
+        current_row,
+        "Внеплановые простои по категориям",
+        ["№", "Категория", "Кол-во простоев", "Время, ч", "Доля, %"],
+        category_rows,
+        numeric_columns={3, 4},
+        percent_columns={5},
+        wrap_columns={2},
+    )
+
+    downtime_rows = [
+        [
+            index,
+            item.equipment_code,
+            item.equipment_name,
+            item.reason_name,
+            item.reason_category,
+            item.downtime_count,
+            item.downtime_hours,
+        ]
+        for index, item in enumerate(data.downtimes or [], start=1)
+    ]
+    current_row = write_table(
+        worksheet,
+        current_row,
+        "Детализация внеплановых простоев",
+        ["№", "Код оборудования", "Оборудование", "Причина", "Категория", "Кол-во", "Время, ч"],
+        downtime_rows,
+        numeric_columns={6, 7},
+        wrap_columns={3, 4, 5},
+    )
+
+    worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=9)
+    note_cell = worksheet.cell(
+        row=current_row,
+        column=1,
+        value="Плановое ТО учтено в доступности оборудования. Внеплановые простои показаны отдельно как факт периода и не изменяют плановую доступность.",
+    )
+    note_cell.font = Font(size=10, italic=True, color="475569")
+    note_cell.alignment = Alignment(wrap_text=True)
+
+
+@router.get("/print")
+def print_production_analytics(month: str = Query(...)):
+    month_start = parse_month_value(month)
+    month_label = month_start.strftime("%Y-%m")
+
+    try:
+        output_data = get_monthly_output_analytics(month=month_label, only_with_deviations=False)
+        equipment_data = get_equipment_monthly_analytics(month=month_label)
+        workbook_bytes = create_production_analytics_print_workbook(
+            month=month_label,
+            output_data=output_data,
+            equipment_data=equipment_data,
+        )
+        filename = f"Анализ_выпуска_{month_label}.xlsx"
+        encoded_filename = quote(filename)
+        return StreamingResponse(
+            BytesIO(workbook_bytes),
+            media_type=XLSX_MEDIA_TYPE,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            },
+        )
+    except HTTPException:
+        raise
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось сформировать печатную форму анализа выпуска.",
+        ) from exc
 
 
 @router.get("/monthly-output", response_model=MonthlyOutputAnalyticsResponse)

@@ -1,9 +1,14 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from io import BytesIO
 from typing import Any
+from urllib.parse import quote
 
 import psycopg2
 from fastapi import APIRouter, HTTPException, Path, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from psycopg2.errors import CheckViolation, ForeignKeyViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
@@ -40,6 +45,7 @@ WEEK_COLUMNS = """
 DECIMAL_ZERO = Decimal("0")
 QTY_SCALE = Decimal("0.001")
 HOURS_WARNING_SCALE = Decimal("0.01")
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def to_decimal(value: Any) -> Decimal:
@@ -1086,6 +1092,253 @@ def require_week_exists(connection, production_plan_week_id: int) -> dict[str, A
     return week
 
 
+def format_print_date(value: date | datetime | None) -> str:
+    if value is None:
+        return "—"
+    return value.strftime("%d.%m.%Y")
+
+
+def format_print_datetime(value: datetime) -> str:
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
+def normalize_decimal_for_excel(value: Any) -> float | int | None:
+    if value is None:
+        return None
+    decimal_value = to_decimal(value).quantize(QTY_SCALE)
+    if decimal_value == decimal_value.to_integral_value():
+        return int(decimal_value)
+    return float(decimal_value)
+
+
+def build_print_equipment_label(line: dict[str, Any]) -> str:
+    machine_code = str(line.get("machine_code") or "").strip()
+    machine_name = str(line.get("machine_name") or "").strip()
+    if machine_code and machine_name:
+        return f"{machine_code} — {machine_name}"
+    return machine_code or machine_name or "—"
+
+
+def calculate_print_planned_hours(line: dict[str, Any]) -> Decimal | None:
+    nominal_rate = to_decimal(line.get("nominal_rate"))
+    planned_qty = to_decimal(line.get("planned_qty"))
+    if planned_qty <= DECIMAL_ZERO or nominal_rate <= DECIMAL_ZERO:
+        return None
+    return (planned_qty / nominal_rate / Decimal("60")).quantize(Decimal("0.1"))
+
+
+def get_print_plan_month(connection, production_plan_id: int) -> date | None:
+    with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute(
+            """
+            SELECT plan_month
+            FROM production_plans
+            WHERE production_plan_id = %s;
+            """,
+            (production_plan_id,),
+        )
+        row = cursor.fetchone()
+    return row["plan_month"] if row else None
+
+
+def create_week_plan_print_workbook(week: dict[str, Any], plan_month: date | None) -> bytes:
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "План недели"
+
+    worksheet.page_setup.orientation = worksheet.ORIENTATION_LANDSCAPE
+    worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
+    worksheet.sheet_properties.pageSetUpPr.fitToPage = True
+    worksheet.page_setup.fitToWidth = 1
+    worksheet.page_setup.fitToHeight = 0
+    worksheet.freeze_panes = "A8"
+    worksheet.print_title_rows = "$1:$4"
+
+    columns = [
+        ("№", 5),
+        ("Очередность запуска", 18),
+        ("Код номенклатуры", 18),
+        ("Номенклатура", 48),
+        ("Требуемый объём", 18),
+        ("Ед.", 10),
+        ("Расчётное время выпуска, ч", 24),
+    ]
+    for index, (_, width) in enumerate(columns, start=1):
+        worksheet.column_dimensions[chr(64 + index)].width = width
+
+    title_font = Font(size=16, bold=True, color="1E293B")
+    header_font = Font(size=10, bold=True, color="0F172A")
+    muted_font = Font(size=10, color="475569")
+    table_header_fill = PatternFill("solid", fgColor="DDEBEE")
+    group_header_fill = PatternFill("solid", fgColor="E8F1F5")
+    total_fill = PatternFill("solid", fgColor="F1F5F9")
+    thin_side = Side(style="thin", color="B7C6CE")
+    table_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    total_border = Border(top=Side(style="medium", color="8AA3AF"), bottom=thin_side)
+
+    worksheet.merge_cells("A1:G1")
+    worksheet["A1"] = "План выпуска на неделю"
+    worksheet["A1"].font = title_font
+    worksheet["A1"].alignment = Alignment(horizontal="center")
+
+    week_start = week.get("week_start_date")
+    week_end = week.get("week_end_date")
+    worksheet["A2"] = f"Неделя планирования: {format_print_date(week_start)} — {format_print_date(week_end)}"
+    worksheet["A3"] = f"Месячный план: {plan_month.strftime('%Y-%m') if plan_month else '—'}"
+    worksheet["A4"] = f"Дата печати: {format_print_datetime(datetime.now())}"
+    for row in range(2, 5):
+        worksheet[f"A{row}"].font = muted_font
+
+    def render_table_header(row_index: int) -> None:
+        for column_index, (title, _) in enumerate(columns, start=1):
+            cell = worksheet.cell(row=row_index, column=column_index, value=title)
+            cell.font = header_font
+            cell.fill = table_header_fill
+            cell.border = table_border
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        worksheet.row_dimensions[row_index].height = 32
+
+    def get_sequence_sort_value(line: dict[str, Any], fallback: int) -> Decimal:
+        if line.get("sequence_no") is None:
+            return Decimal(fallback)
+        try:
+            return to_decimal(line.get("sequence_no"))
+        except Exception:
+            return Decimal(fallback)
+
+    lines = list(week.get("lines") or [])
+    current_row = 6
+    if lines:
+        grouped_lines: dict[tuple[int, str, str, str], dict[str, Any]] = {}
+        for original_index, line in enumerate(lines, start=1):
+            machine_code = str(line.get("machine_code") or "").strip()
+            machine_name = str(line.get("machine_name") or "").strip()
+            machine_id = line.get("machine_id")
+            has_equipment = machine_id is not None or bool(machine_code or machine_name)
+            if has_equipment:
+                group_key = (0, machine_code.casefold(), machine_name.casefold(), str(machine_id or ""))
+                group_label = f"Оборудование: {build_print_equipment_label(line)}"
+            else:
+                group_key = (1, "", "", "")
+                group_label = "Оборудование не назначено"
+            grouped_lines.setdefault(group_key, {"label": group_label, "items": []})["items"].append(
+                {
+                    "line": line,
+                    "original_index": original_index,
+                }
+            )
+
+        for group_index, group in enumerate(grouped_lines[key] for key in sorted(grouped_lines)):
+            if group_index > 0:
+                current_row += 1
+
+            worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=7)
+            group_cell = worksheet.cell(row=current_row, column=1, value=group["label"])
+            group_cell.font = Font(size=11, bold=True, color="0F172A")
+            group_cell.fill = group_header_fill
+            group_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+            for column_index in range(1, 8):
+                cell = worksheet.cell(row=current_row, column=column_index)
+                cell.fill = group_header_fill
+            worksheet.row_dimensions[current_row].height = 24
+
+            current_row += 1
+            render_table_header(current_row)
+
+            sorted_items = sorted(
+                group["items"],
+                key=lambda item: (
+                    get_sequence_sort_value(item["line"], item["original_index"]),
+                    str(item["line"].get("nomenclature_code") or "").casefold(),
+                    str(item["line"].get("nomenclature_name") or "").casefold(),
+                    item["original_index"],
+                ),
+            )
+
+            group_hours_total = DECIMAL_ZERO
+            has_group_hours = False
+            for local_index, item in enumerate(sorted_items, start=1):
+                current_row += 1
+                line = item["line"]
+                planned_qty_value = normalize_decimal_for_excel(line.get("planned_qty"))
+                sequence_value = line.get("sequence_no") or local_index
+                planned_hours = calculate_print_planned_hours(line)
+                if planned_hours is not None:
+                    group_hours_total += planned_hours
+                    has_group_hours = True
+
+                row_values = [
+                    local_index,
+                    sequence_value,
+                    line.get("nomenclature_code") or "—",
+                    line.get("nomenclature_name") or "—",
+                    planned_qty_value if planned_qty_value is not None else "—",
+                    line.get("unit_of_measure") or "—",
+                    float(planned_hours) if planned_hours is not None else "—",
+                ]
+                for column_index, value in enumerate(row_values, start=1):
+                    cell = worksheet.cell(row=current_row, column=column_index, value=value)
+                    cell.border = table_border
+                    cell.alignment = Alignment(vertical="top", wrap_text=True)
+                    if column_index in {1, 2}:
+                        cell.alignment = Alignment(horizontal="center", vertical="top", wrap_text=True)
+                    elif column_index in {5, 7}:
+                        cell.alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
+                    elif column_index == 6:
+                        cell.alignment = Alignment(horizontal="center", vertical="top", wrap_text=True)
+                    if column_index == 5 and planned_qty_value is not None:
+                        cell.number_format = "#,##0.###"
+                    if column_index == 7 and planned_hours is not None:
+                        cell.number_format = "0.0"
+
+            current_row += 1
+            worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=6)
+            total_label_cell = worksheet.cell(row=current_row, column=1, value="Итого по оборудованию:")
+            total_label_cell.font = Font(size=10, bold=True, color="0F172A")
+            total_label_cell.alignment = Alignment(horizontal="right", vertical="center")
+            total_value_cell = worksheet.cell(
+                row=current_row,
+                column=7,
+                value=float(group_hours_total.quantize(Decimal("0.1"))) if has_group_hours else "—",
+            )
+            total_value_cell.font = Font(size=10, bold=True, color="0F172A")
+            total_value_cell.alignment = Alignment(horizontal="right", vertical="center")
+            if has_group_hours:
+                total_value_cell.number_format = "0.0"
+            for column_index in range(1, 8):
+                cell = worksheet.cell(row=current_row, column=column_index)
+                cell.fill = total_fill
+                cell.border = total_border
+    else:
+        empty_cell = worksheet.cell(row=current_row, column=1, value="Строки плана отсутствуют.")
+        empty_cell.font = muted_font
+        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=7)
+        for column_index in range(1, 8):
+            cell = worksheet.cell(row=current_row, column=column_index)
+            cell.border = table_border
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    footer_row = current_row + 4
+    worksheet[f"A{footer_row}"] = "Кем сформирован план: ______________________________"
+    worksheet[f"A{footer_row + 2}"] = "Подпись: ______________________________"
+    worksheet[f"A{footer_row}"].font = muted_font
+    worksheet[f"A{footer_row + 2}"].font = muted_font
+
+    worksheet.row_dimensions[1].height = 24
+
+    workbook_stream = BytesIO()
+    workbook.save(workbook_stream)
+    return workbook_stream.getvalue()
+
+
+def build_week_plan_print_filename(week: dict[str, Any]) -> str:
+    week_start = week.get("week_start_date")
+    week_end = week.get("week_end_date")
+    start_text = week_start.isoformat() if isinstance(week_start, date) else str(week_start or "week_start")
+    end_text = week_end.isoformat() if isinstance(week_end, date) else str(week_end or "week_end")
+    return f"План_выпуска_неделя_{start_text}_{end_text}.xlsx"
+
+
 @plans_router.get("/{production_plan_id}/weeks", response_model=list[ProductionWeekSummary])
 def list_production_plan_weeks(production_plan_id: int = Path(..., gt=0)):
     connection = None
@@ -1186,6 +1439,35 @@ def create_production_plan_week(
         if connection is not None:
             connection.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Не удалось создать недельный план.") from exc
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+@weeks_router.get("/{production_plan_week_id}/print")
+def print_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
+    connection = None
+    try:
+        connection = get_connection()
+        week = require_week_exists(connection, production_plan_week_id)
+        plan_month = get_print_plan_month(connection, int(week["production_plan_id"]))
+        workbook_bytes = create_week_plan_print_workbook(week, plan_month)
+        filename = build_week_plan_print_filename(week)
+        encoded_filename = quote(filename)
+        return StreamingResponse(
+            BytesIO(workbook_bytes),
+            media_type=XLSX_MEDIA_TYPE,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            },
+        )
+    except HTTPException:
+        raise
+    except psycopg2.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось сформировать печатную форму недельного плана.",
+        ) from exc
     finally:
         if connection is not None:
             connection.close()

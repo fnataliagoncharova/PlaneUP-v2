@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, apiRequestBlob } from "./apiClient";
 
 function buildQuery(filters = {}) {
   const params = new URLSearchParams();
@@ -21,4 +21,8 @@ export function getMonthlyOutputAnalytics(filters = {}) {
 
 export function getEquipmentMonthlyAnalytics(filters = {}) {
   return apiRequest(`/production-analytics/equipment-monthly${buildQuery(filters)}`);
+}
+
+export function printProductionAnalytics(month) {
+  return apiRequestBlob(`/production-analytics/print${buildQuery({ month })}`);
 }
