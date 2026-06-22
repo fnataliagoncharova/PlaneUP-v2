@@ -2,9 +2,10 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.equipment_downtime import (
     EquipmentDowntimeClose,
@@ -15,6 +16,9 @@ from schemas.equipment_downtime import (
 
 
 router = APIRouter(prefix="/equipment-downtimes", tags=["equipment_downtimes"])
+
+DOWNTIME_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+DOWNTIME_WRITE_ROLES = ("master",)
 
 STATUS_OPEN = "open"
 STATUS_CLOSED = "closed"
@@ -188,7 +192,11 @@ def require_equipment_downtime_exists(connection, downtime_id: int) -> dict[str,
     return normalize_row(row, now_value=now_value)
 
 
-@router.get("", response_model=list[EquipmentDowntimeRead])
+@router.get(
+    "",
+    response_model=list[EquipmentDowntimeRead],
+    dependencies=[Depends(require_roles(*DOWNTIME_READ_ROLES))],
+)
 def list_equipment_downtimes(
     machine_id: int | None = Query(default=None, gt=0),
     downtime_reason_id: int | None = Query(default=None, gt=0),
@@ -280,7 +288,12 @@ def list_equipment_downtimes(
             connection.close()
 
 
-@router.post("", response_model=EquipmentDowntimeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=EquipmentDowntimeRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
+)
 def create_equipment_downtime(payload: EquipmentDowntimeCreate):
     connection = None
 
@@ -337,7 +350,11 @@ def create_equipment_downtime(payload: EquipmentDowntimeCreate):
             connection.close()
 
 
-@router.put("/{downtime_id}", response_model=EquipmentDowntimeRead)
+@router.put(
+    "/{downtime_id}",
+    response_model=EquipmentDowntimeRead,
+    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
+)
 def update_equipment_downtime(
     payload: EquipmentDowntimeUpdate,
     downtime_id: int = Path(..., gt=0),
@@ -427,7 +444,11 @@ def update_equipment_downtime(
             connection.close()
 
 
-@router.patch("/{downtime_id}/close", response_model=EquipmentDowntimeRead)
+@router.patch(
+    "/{downtime_id}/close",
+    response_model=EquipmentDowntimeRead,
+    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
+)
 def close_equipment_downtime(
     payload: EquipmentDowntimeClose,
     downtime_id: int = Path(..., gt=0),
@@ -502,7 +523,10 @@ def close_equipment_downtime(
             connection.close()
 
 
-@router.delete("/{downtime_id}")
+@router.delete(
+    "/{downtime_id}",
+    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
+)
 def delete_equipment_downtime(downtime_id: int = Path(..., gt=0)):
     connection = None
 

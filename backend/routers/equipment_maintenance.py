@@ -4,12 +4,13 @@ from typing import Any
 from urllib.parse import quote
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.equipment_maintenance import (
     EquipmentMaintenanceCreate,
@@ -20,6 +21,9 @@ from schemas.equipment_maintenance import (
 
 router = APIRouter(prefix="/equipment-maintenance", tags=["equipment_maintenance"])
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+MAINTENANCE_READ_ROLES = ("planner", "maintenance", "viewer")
+MAINTENANCE_WRITE_ROLES = ("maintenance",)
 
 SELECT_COLUMNS = """
     em.maintenance_id,
@@ -253,7 +257,11 @@ def require_maintenance_exists(connection, maintenance_id: int) -> dict[str, Any
     return row
 
 
-@router.get("", response_model=list[EquipmentMaintenanceRead])
+@router.get(
+    "",
+    response_model=list[EquipmentMaintenanceRead],
+    dependencies=[Depends(require_roles(*MAINTENANCE_READ_ROLES))],
+)
 def list_equipment_maintenance(
     machine_id: int | None = Query(default=None, gt=0),
     date_from: date | None = Query(default=None),
@@ -319,7 +327,10 @@ def list_equipment_maintenance(
             connection.close()
 
 
-@router.get("/print")
+@router.get(
+    "/print",
+    dependencies=[Depends(require_roles(*MAINTENANCE_READ_ROLES))],
+)
 def print_equipment_maintenance_schedule(
     date_from: date = Query(...),
     date_to: date = Query(...),
@@ -379,7 +390,12 @@ def print_equipment_maintenance_schedule(
             connection.close()
 
 
-@router.post("", response_model=EquipmentMaintenanceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=EquipmentMaintenanceRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*MAINTENANCE_WRITE_ROLES))],
+)
 def create_equipment_maintenance(payload: EquipmentMaintenanceCreate):
     connection = None
 
@@ -432,7 +448,11 @@ def create_equipment_maintenance(payload: EquipmentMaintenanceCreate):
             connection.close()
 
 
-@router.put("/{maintenance_id}", response_model=EquipmentMaintenanceRead)
+@router.put(
+    "/{maintenance_id}",
+    response_model=EquipmentMaintenanceRead,
+    dependencies=[Depends(require_roles(*MAINTENANCE_WRITE_ROLES))],
+)
 def update_equipment_maintenance(
     payload: EquipmentMaintenanceUpdate,
     maintenance_id: int = Path(..., gt=0),
@@ -501,7 +521,10 @@ def update_equipment_maintenance(
             connection.close()
 
 
-@router.delete("/{maintenance_id}")
+@router.delete(
+    "/{maintenance_id}",
+    dependencies=[Depends(require_roles(*MAINTENANCE_WRITE_ROLES))],
+)
 def delete_equipment_maintenance(maintenance_id: int = Path(..., gt=0)):
     connection = None
 

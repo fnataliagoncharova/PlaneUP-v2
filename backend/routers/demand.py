@@ -7,9 +7,10 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.demand import (
     DemandCalculateRequest,
@@ -22,6 +23,8 @@ from schemas.demand import (
 
 
 router = APIRouter(prefix="/demand", tags=["demand"])
+
+DEMAND_WRITE_ROLES = ("planner",)
 
 DECIMAL_ZERO = Decimal("0")
 QTY_SCALE = Decimal("0.001")
@@ -658,7 +661,11 @@ class DemandCalculator:
         return " -> ".join(labels)
 
 
-@router.post("/calculate", response_model=DemandCalculateResponse)
+@router.post(
+    "/calculate",
+    response_model=DemandCalculateResponse,
+    dependencies=[Depends(require_roles(*DEMAND_WRITE_ROLES))],
+)
 def calculate_demand(payload: DemandCalculateRequest):
     connection = None
 

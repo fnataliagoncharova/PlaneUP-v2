@@ -3,12 +3,13 @@ from io import BytesIO
 import re
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Path, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from psycopg2.errors import CheckViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.nomenclature import (
     ImportMode,
@@ -24,6 +25,9 @@ from schemas.nomenclature_route_chain import NomenclatureRouteChainResponse
 
 
 router = APIRouter(prefix="/nomenclature", tags=["nomenclature"])
+
+NOMENCLATURE_READ_ROLES = ("planner", "maintenance", "viewer")
+NOMENCLATURE_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """
     nomenclature_id,
@@ -854,7 +858,11 @@ def upsert_nomenclature_row(cursor: RealDictCursor, row: NomenclatureImportPrevi
     return bool(result and result["inserted"])
 
 
-@router.get("", response_model=List[NomenclatureRead])
+@router.get(
+    "",
+    response_model=List[NomenclatureRead],
+    dependencies=[Depends(require_roles(*NOMENCLATURE_READ_ROLES))],
+)
 def list_nomenclature():
     connection = None
 
@@ -882,7 +890,10 @@ def list_nomenclature():
             connection.close()
 
 
-@router.get("/import/template")
+@router.get(
+    "/import/template",
+    dependencies=[Depends(require_roles(*NOMENCLATURE_READ_ROLES))],
+)
 def download_nomenclature_import_template():
     template_content = create_template_workbook()
     return StreamingResponse(
@@ -894,7 +905,11 @@ def download_nomenclature_import_template():
     )
 
 
-@router.post("/import/preview", response_model=NomenclatureImportPreviewResponse)
+@router.post(
+    "/import/preview",
+    response_model=NomenclatureImportPreviewResponse,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_WRITE_ROLES))],
+)
 async def preview_nomenclature_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),
@@ -925,7 +940,11 @@ async def preview_nomenclature_import(
             connection.close()
 
 
-@router.post("/import/commit", response_model=NomenclatureImportCommitResponse)
+@router.post(
+    "/import/commit",
+    response_model=NomenclatureImportCommitResponse,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_WRITE_ROLES))],
+)
 async def commit_nomenclature_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),
@@ -1069,7 +1088,11 @@ async def commit_nomenclature_import(
             connection.close()
 
 
-@router.get("/{nomenclature_id}/route-chain", response_model=NomenclatureRouteChainResponse)
+@router.get(
+    "/{nomenclature_id}/route-chain",
+    response_model=NomenclatureRouteChainResponse,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_READ_ROLES))],
+)
 def get_nomenclature_route_chain(nomenclature_id: int = Path(..., gt=0)):
     connection = None
 
@@ -1121,7 +1144,11 @@ def get_nomenclature_route_chain(nomenclature_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/{nomenclature_id}", response_model=NomenclatureRead)
+@router.get(
+    "/{nomenclature_id}",
+    response_model=NomenclatureRead,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_READ_ROLES))],
+)
 def get_nomenclature(nomenclature_id: int = Path(..., gt=0)):
     connection = None
 
@@ -1156,7 +1183,12 @@ def get_nomenclature(nomenclature_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("", response_model=NomenclatureRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=NomenclatureRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_WRITE_ROLES))],
+)
 def create_nomenclature(payload: NomenclatureCreate):
     connection = None
 
@@ -1237,7 +1269,11 @@ def create_nomenclature(payload: NomenclatureCreate):
             connection.close()
 
 
-@router.put("/{nomenclature_id}", response_model=NomenclatureRead)
+@router.put(
+    "/{nomenclature_id}",
+    response_model=NomenclatureRead,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_WRITE_ROLES))],
+)
 def update_nomenclature(
     payload: NomenclatureUpdate,
     nomenclature_id: int = Path(..., gt=0),
@@ -1331,7 +1367,11 @@ def update_nomenclature(
             connection.close()
 
 
-@router.delete("/{nomenclature_id}", response_model=NomenclatureRead)
+@router.delete(
+    "/{nomenclature_id}",
+    response_model=NomenclatureRead,
+    dependencies=[Depends(require_roles(*NOMENCLATURE_WRITE_ROLES))],
+)
 def deactivate_nomenclature(nomenclature_id: int = Path(..., gt=0)):
     connection = None
 

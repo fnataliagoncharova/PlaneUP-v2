@@ -1,15 +1,19 @@
 from typing import List
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.machines import MachineCreate, MachineRead, MachineUpdate, MachineUsageRead
 
 
 router = APIRouter(prefix="/machines", tags=["machines"])
+
+EQUIPMENT_READ_ROLES = ("planner", "maintenance", "viewer")
+EQUIPMENT_WRITE_ROLES = ("maintenance",)
 
 SELECT_COLUMNS = """
     machine_id,
@@ -52,7 +56,7 @@ def ensure_machine_exists(cursor: RealDictCursor, machine_id: int) -> None:
         )
 
 
-@router.get("", response_model=List[MachineRead])
+@router.get("", response_model=List[MachineRead], dependencies=[Depends(require_roles(*EQUIPMENT_READ_ROLES))])
 def list_machines():
     connection = None
 
@@ -79,7 +83,11 @@ def list_machines():
             connection.close()
 
 
-@router.get("/{machine_id}", response_model=MachineRead)
+@router.get(
+    "/{machine_id}",
+    response_model=MachineRead,
+    dependencies=[Depends(require_roles(*EQUIPMENT_READ_ROLES))],
+)
 def get_machine(machine_id: int = Path(..., gt=0)):
     connection = None
 
@@ -113,7 +121,11 @@ def get_machine(machine_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/{machine_id}/usage", response_model=List[MachineUsageRead])
+@router.get(
+    "/{machine_id}/usage",
+    response_model=List[MachineUsageRead],
+    dependencies=[Depends(require_roles(*EQUIPMENT_READ_ROLES))],
+)
 def list_machine_usage(machine_id: int = Path(..., gt=0)):
     connection = None
 
@@ -146,7 +158,12 @@ def list_machine_usage(machine_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("", response_model=MachineRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=MachineRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*EQUIPMENT_WRITE_ROLES))],
+)
 def create_machine(payload: MachineCreate):
     connection = None
 
@@ -194,7 +211,11 @@ def create_machine(payload: MachineCreate):
             connection.close()
 
 
-@router.put("/{machine_id}", response_model=MachineRead)
+@router.put(
+    "/{machine_id}",
+    response_model=MachineRead,
+    dependencies=[Depends(require_roles(*EQUIPMENT_WRITE_ROLES))],
+)
 def update_machine(payload: MachineUpdate, machine_id: int = Path(..., gt=0)):
     connection = None
 
@@ -250,7 +271,11 @@ def update_machine(payload: MachineUpdate, machine_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.delete("/{machine_id}", response_model=MachineRead)
+@router.delete(
+    "/{machine_id}",
+    response_model=MachineRead,
+    dependencies=[Depends(require_roles(*EQUIPMENT_WRITE_ROLES))],
+)
 def deactivate_machine(machine_id: int = Path(..., gt=0)):
     connection = None
 

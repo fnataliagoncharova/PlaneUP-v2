@@ -5,13 +5,14 @@ from typing import Any
 from urllib.parse import quote
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from psycopg2.errors import CheckViolation, ForeignKeyViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.production_week_plan import (
     ProductionWeekCreate,
@@ -28,6 +29,9 @@ from schemas.production_week_plan import (
 router = APIRouter(tags=["production_week_plans"])
 plans_router = APIRouter(prefix="/production-plans", tags=["production_week_plans"])
 weeks_router = APIRouter(prefix="/production-week-plans", tags=["production_week_plans"])
+
+PLAN_READ_ROLES = ("planner", "viewer")
+PLAN_WRITE_ROLES = ("planner",)
 
 
 WEEK_COLUMNS = """
@@ -1339,7 +1343,11 @@ def build_week_plan_print_filename(week: dict[str, Any]) -> str:
     return f"План_выпуска_неделя_{start_text}_{end_text}.xlsx"
 
 
-@plans_router.get("/{production_plan_id}/weeks", response_model=list[ProductionWeekSummary])
+@plans_router.get(
+    "/{production_plan_id}/weeks",
+    response_model=list[ProductionWeekSummary],
+    dependencies=[Depends(require_roles(*PLAN_READ_ROLES))],
+)
 def list_production_plan_weeks(production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -1378,7 +1386,12 @@ def list_production_plan_weeks(production_plan_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@plans_router.post("/{production_plan_id}/weeks", response_model=ProductionWeekRead, status_code=status.HTTP_201_CREATED)
+@plans_router.post(
+    "/{production_plan_id}/weeks",
+    response_model=ProductionWeekRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def create_production_plan_week(
     payload: ProductionWeekCreate,
     production_plan_id: int = Path(..., gt=0),
@@ -1444,7 +1457,10 @@ def create_production_plan_week(
             connection.close()
 
 
-@weeks_router.get("/{production_plan_week_id}/print")
+@weeks_router.get(
+    "/{production_plan_week_id}/print",
+    dependencies=[Depends(require_roles(*PLAN_READ_ROLES))],
+)
 def print_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -1473,7 +1489,11 @@ def print_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@weeks_router.get("/{production_plan_week_id}", response_model=ProductionWeekRead)
+@weeks_router.get(
+    "/{production_plan_week_id}",
+    response_model=ProductionWeekRead,
+    dependencies=[Depends(require_roles(*PLAN_READ_ROLES))],
+)
 def get_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -1488,7 +1508,11 @@ def get_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@weeks_router.put("/{production_plan_week_id}", response_model=ProductionWeekRead)
+@weeks_router.put(
+    "/{production_plan_week_id}",
+    response_model=ProductionWeekRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def update_production_plan_week(
     payload: ProductionWeekUpdate,
     production_plan_week_id: int = Path(..., gt=0),
@@ -1536,7 +1560,11 @@ def update_production_plan_week(
             connection.close()
 
 
-@weeks_router.delete("/{production_plan_week_id}", response_model=ProductionWeekDeleteResponse)
+@weeks_router.delete(
+    "/{production_plan_week_id}",
+    response_model=ProductionWeekDeleteResponse,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -1591,7 +1619,12 @@ def delete_production_plan_week(production_plan_week_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@weeks_router.post("/{production_plan_week_id}/lines", response_model=ProductionWeekRead, status_code=status.HTTP_201_CREATED)
+@weeks_router.post(
+    "/{production_plan_week_id}/lines",
+    response_model=ProductionWeekRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def create_production_week_line(
     payload: ProductionWeekLineCreate,
     production_plan_week_id: int = Path(..., gt=0),
@@ -1665,7 +1698,11 @@ def create_production_week_line(
             connection.close()
 
 
-@weeks_router.put("/lines/{production_week_line_id}", response_model=ProductionWeekRead)
+@weeks_router.put(
+    "/lines/{production_week_line_id}",
+    response_model=ProductionWeekRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def update_production_week_line(
     payload: ProductionWeekLineUpdate,
     production_week_line_id: int = Path(..., gt=0),
@@ -1727,7 +1764,11 @@ def update_production_week_line(
             connection.close()
 
 
-@weeks_router.delete("/lines/{production_week_line_id}", response_model=ProductionWeekLineDeleteResponse)
+@weeks_router.delete(
+    "/lines/{production_week_line_id}",
+    response_model=ProductionWeekLineDeleteResponse,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def delete_production_week_line(production_week_line_id: int = Path(..., gt=0)):
     connection = None
     try:

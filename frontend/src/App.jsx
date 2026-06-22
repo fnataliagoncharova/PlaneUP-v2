@@ -4,15 +4,19 @@ import {
   Boxes,
   Cog,
   LineChart,
+  LogOut,
   OctagonPause,
   ScrollText,
   Wrench,
   Workflow,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import { useAuth } from "./auth/AuthContext";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
+import LoginPage from "./pages/LoginPage";
 import DemandSection from "./sections/DemandSection";
 import DowntimeReasonsSection from "./sections/DowntimeReasonsSection";
 import EquipmentDowntimesSection from "./sections/EquipmentDowntimesSection";
@@ -21,8 +25,8 @@ import MachinesSection from "./sections/MachinesSection";
 import MasterWorkspaceSection from "./sections/MasterWorkspaceSection";
 import NomenclatureSection from "./sections/NomenclatureSection";
 import ProcessesSection from "./sections/ProcessesSection";
-import ProductionPlanningSection from "./sections/ProductionPlanningSection";
 import ProductionAnalyticsSection from "./sections/ProductionAnalyticsSection";
+import ProductionPlanningSection from "./sections/ProductionPlanningSection";
 import RoutesSection from "./sections/RoutesSection";
 
 function ProductionPlanningIcon({ className }) {
@@ -35,15 +39,11 @@ function ProductionPlanningIcon({ className }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
-      aria-hidden="true"
     >
       <path d="M3 20h18" />
       <path d="M5 20V7" />
       <path d="M12 20V5" />
       <path d="M19 20V3.5" />
-      <path d="M5 7l4 1.9L5 10.8V7z" />
-      <path d="M12 5l4.2 2L12 9V5z" />
-      <path d="M19 3.5l3 1.5L19 6.5v-3z" />
     </svg>
   );
 }
@@ -58,13 +58,10 @@ function MasterWorkspaceIcon({ className }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
-      aria-hidden="true"
     >
       <path d="M3 20h18" />
       <path d="M6 20V8h12v12" />
       <path d="M9 8V5h6v3" />
-      <path d="M9 12h6" />
-      <path d="M9 15h3" />
     </svg>
   );
 }
@@ -72,137 +69,218 @@ function MasterWorkspaceIcon({ className }) {
 const navigationGroups = [
   {
     label: "ОБЗОР",
-    items: [{ id: "production_analytics", label: "Анализ выпуска", icon: LineChart }],
+    items: [
+      {
+        id: "production_analytics",
+        label: "Анализ выпуска",
+        icon: LineChart,
+        roles: ["planner", "master", "maintenance", "viewer"],
+      },
+    ],
   },
   {
     label: "ВХОДНЫЕ ДАННЫЕ",
-    items: [{ id: "demand", label: "Потребность", icon: BarChart3 }],
+    items: [
+      {
+        id: "demand",
+        label: "Потребность",
+        icon: BarChart3,
+        roles: ["planner", "viewer"],
+      },
+    ],
   },
   {
     label: "ПЛАНИРОВАНИЕ",
-    items: [{ id: "production_planning", label: "Планирование выпуска", icon: ProductionPlanningIcon }],
+    items: [
+      {
+        id: "production_planning",
+        label: "Планирование выпуска",
+        icon: ProductionPlanningIcon,
+        roles: ["planner", "viewer"],
+      },
+    ],
   },
   {
     label: "ИСПОЛНЕНИЕ",
     items: [
-      { id: "master_workspace", label: "Рабочий стол мастера", icon: MasterWorkspaceIcon },
+      {
+        id: "master_workspace",
+        label: "Рабочий стол мастера",
+        icon: MasterWorkspaceIcon,
+        roles: ["planner", "master"],
+      },
       {
         id: "equipment_downtimes",
         label: "Внеплановые простои",
         icon: OctagonPause,
+        roles: ["planner", "master", "maintenance", "viewer"],
       },
     ],
   },
   {
     label: "ОГРАНИЧЕНИЯ",
     items: [
-      { id: "machines", label: "Оборудование", icon: Cog },
-      { id: "equipment_maintenance", label: "Плановое ТО", icon: Wrench },
+      {
+        id: "machines",
+        label: "Оборудование",
+        icon: Cog,
+        roles: ["planner", "maintenance", "viewer"],
+      },
+      {
+        id: "equipment_maintenance",
+        label: "Плановое ТО",
+        icon: Wrench,
+        roles: ["planner", "maintenance", "viewer"],
+      },
     ],
   },
   {
     label: "СПРАВОЧНИКИ",
-    collapsible: true,
     items: [
-      { id: "nomenclature", label: "Номенклатура", icon: Boxes },
-      { id: "processes", label: "Технологические операции", icon: Workflow },
-      { id: "routes", label: "Маршруты", icon: ScrollText },
-      { id: "downtime_reasons", label: "Причины простоев", icon: AlertTriangle },
+      {
+        id: "nomenclature",
+        label: "Номенклатура",
+        icon: Boxes,
+        roles: ["planner", "maintenance", "viewer"],
+      },
+      {
+        id: "processes",
+        label: "Технологические операции",
+        icon: Workflow,
+        roles: ["planner", "viewer"],
+      },
+      {
+        id: "routes",
+        label: "Маршруты",
+        icon: ScrollText,
+        roles: ["planner", "viewer"],
+      },
+      {
+        id: "downtime_reasons",
+        label: "Причины простоев",
+        icon: AlertTriangle,
+        roles: ["planner", "maintenance", "viewer"],
+      },
     ],
   },
 ];
 
-const navigationItems = navigationGroups.flatMap((group) => group.items);
-
 const sectionDescriptions = {
-  nomenclature:
-    "Единый справочник позиций для маршрутов, входов шагов и результатов производства.",
-  processes:
-    "Операционная модель V2: подготовка, ламинация, резка и другие технологические операции маршрутов.",
-  routes:
-    "Маршруты связывают номенклатуру, шаги, входы и оборудование в производственную цепочку V2.",
-  machines:
-    "Справочник оборудования с ролями, производительностью и привязкой к шагам маршрутов.",
-  equipment_maintenance:
-    "Плановые интервалы недоступности оборудования для расчета доступности в недельном плане.",
-  downtime_reasons:
-    "Справочник причин для будущего журнала внеплановых простоев оборудования и чистой аналитики.",
-  equipment_downtimes:
-    "Журнал фактических внеплановых остановок оборудования с открытыми и закрытыми простоями.",
-  demand:
-    "Подготовка исходных данных, запуск расчета потребности и проверка результатов.",
-  production_planning:
-    "Месячный план выпуска по производимой номенклатуре с приоритетами и комментариями.",
-  production_analytics:
-    "Контроль выполнения месячного плана выпуска и анализ производственных отклонений.",
-  master_workspace:
-    "Фиксация факта выпуска за смену по строкам недельного плана для оперативного контроля выполнения.",
+  nomenclature: "Справочник номенклатуры",
+  processes: "Технологические операции",
+  routes: "Маршруты производства",
+  machines: "Оборудование",
+  equipment_maintenance: "Плановое ТО",
+  downtime_reasons: "Причины простоев",
+  equipment_downtimes: "Внеплановые простои",
+  demand: "Потребность",
+  production_planning: "План выпуска",
+  production_analytics: "Анализ выпуска",
+  master_workspace: "Рабочий стол мастера",
 };
 
 function App() {
+  const { user, loading, logout } = useAuth();
+
   const [activeSection, setActiveSection] = useState("demand");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [routeOpenRequest, setRouteOpenRequest] = useState({
-    routeId: null,
-    version: 0,
-  });
 
-  const handleOpenRouteFromNomenclature = useCallback((routeId) => {
-    if (!routeId) {
+  const filteredNavigationGroups = useMemo(() => {
+    const isAdmin = user?.role === "admin";
+    const canSeeItem = (item) => isAdmin || item.roles?.includes(user?.role);
+
+    if (isAdmin) {
+      return navigationGroups;
+    }
+
+    return navigationGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(canSeeItem),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [user?.role]);
+
+  const visibleNavigationItems = useMemo(
+    () => filteredNavigationGroups.flatMap((group) => group.items),
+    [filteredNavigationGroups],
+  );
+
+  useEffect(() => {
+    if (visibleNavigationItems.length === 0) {
       return;
     }
 
-    setRouteOpenRequest((previousRequest) => ({
-      routeId,
-      version: previousRequest.version + 1,
-    }));
-    setActiveSection("routes");
-  }, []);
+    if (!visibleNavigationItems.some((item) => item.id === activeSection)) {
+      setActiveSection(visibleNavigationItems[0].id);
+    }
+  }, [activeSection, visibleNavigationItems]);
 
   const activeItem =
-    navigationItems.find((item) => item.id === activeSection) ?? navigationItems[0];
+    visibleNavigationItems.find((item) => item.id === activeSection) ?? visibleNavigationItems[0];
+  const renderedSection = activeItem?.id;
+
+  if (loading) {
+    return <div className="p-6 text-white">Загрузка...</div>;
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="min-h-screen text-slate-100">
-      <div className="glass-shell flex min-h-screen w-full overflow-hidden rounded-none">
-        <Sidebar
-          items={navigationGroups}
-          activeSection={activeSection}
-          onSelect={setActiveSection}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed((currentValue) => !currentValue)}
-        />
+      <div className="glass-shell flex min-h-screen w-full overflow-hidden">
+        {visibleNavigationItems.length > 0 ? (
+          <Sidebar
+            items={filteredNavigationGroups}
+            activeSection={activeSection}
+            onSelect={setActiveSection}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
+          />
+        ) : null}
 
-        <main className="relative flex-1 overflow-hidden bg-[linear-gradient(180deg,rgba(8,19,30,0.45),rgba(6,13,22,0.72))]">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(48,170,212,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%)]" />
-          <div className="relative h-full overflow-y-auto p-4 sm:p-6 xl:p-8">
-            {activeSection === "nomenclature" ? (
-              <NomenclatureSection onOpenRoute={handleOpenRouteFromNomenclature} />
-            ) : activeSection === "processes" ? (
+        <main className="flex-1 overflow-hidden">
+          <div className="relative h-full overflow-y-auto p-6">
+            <div className="mb-4 flex justify-end">
+              <div className="flex items-center gap-3 text-sm">
+                <span>{user.full_name || user.username}</span>
+                <button onClick={logout} className="text-red-400">
+                  <LogOut size={16} />
+                </button>
+              </div>
+            </div>
+
+            {visibleNavigationItems.length === 0 ? (
+              <div className="glass-panel p-5 text-sm text-slate-300">Нет доступных разделов.</div>
+            ) : renderedSection === "nomenclature" ? (
+              <NomenclatureSection />
+            ) : renderedSection === "processes" ? (
               <ProcessesSection />
-            ) : activeSection === "routes" ? (
-              <RoutesSection routeOpenRequest={routeOpenRequest} />
-            ) : activeSection === "machines" ? (
+            ) : renderedSection === "routes" ? (
+              <RoutesSection />
+            ) : renderedSection === "machines" ? (
               <MachinesSection />
-            ) : activeSection === "equipment_maintenance" ? (
+            ) : renderedSection === "equipment_maintenance" ? (
               <EquipmentMaintenanceSection />
-            ) : activeSection === "downtime_reasons" ? (
+            ) : renderedSection === "downtime_reasons" ? (
               <DowntimeReasonsSection />
-            ) : activeSection === "equipment_downtimes" ? (
+            ) : renderedSection === "equipment_downtimes" ? (
               <EquipmentDowntimesSection />
-            ) : activeSection === "demand" ? (
+            ) : renderedSection === "demand" ? (
               <DemandSection />
-            ) : activeSection === "production_planning" ? (
+            ) : renderedSection === "production_planning" ? (
               <ProductionPlanningSection />
-            ) : activeSection === "production_analytics" ? (
+            ) : renderedSection === "production_analytics" ? (
               <ProductionAnalyticsSection />
-            ) : activeSection === "master_workspace" ? (
+            ) : renderedSection === "master_workspace" ? (
               <MasterWorkspaceSection />
             ) : (
               <SectionPlaceholder
-                title={activeItem.label}
-                description={sectionDescriptions[activeSection]}
-                icon={activeItem.icon}
+                title={activeItem?.label ?? "Нет доступных разделов"}
+                description={sectionDescriptions[renderedSection]}
+                icon={activeItem?.icon}
               />
             )}
           </div>

@@ -3,9 +3,10 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.production_actual import (
     ProductionActualCreate,
@@ -16,6 +17,9 @@ from schemas.production_actual import (
 
 
 router = APIRouter(prefix="/production-actuals", tags=["production_actuals"])
+
+MASTER_WORKSPACE_READ_ROLES = ("master", "planner", "viewer")
+MASTER_WORKSPACE_WRITE_ROLES = ("master",)
 
 DECIMAL_ZERO = Decimal("0")
 SHIFT_TYPES = {"day", "night"}
@@ -169,7 +173,11 @@ def require_production_actual_exists(connection, production_actual_id: int) -> d
     return row
 
 
-@router.get("", response_model=list[ProductionActualRead])
+@router.get(
+    "",
+    response_model=list[ProductionActualRead],
+    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_READ_ROLES))],
+)
 def list_production_actuals(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
@@ -250,7 +258,11 @@ def list_production_actuals(
             connection.close()
 
 
-@router.get("/{production_actual_id}", response_model=ProductionActualRead)
+@router.get(
+    "/{production_actual_id}",
+    response_model=ProductionActualRead,
+    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_READ_ROLES))],
+)
 def get_production_actual(production_actual_id: int = Path(..., gt=0)):
     connection = None
 
@@ -269,7 +281,12 @@ def get_production_actual(production_actual_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("", response_model=ProductionActualRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ProductionActualRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_WRITE_ROLES))],
+)
 def create_production_actual(payload: ProductionActualCreate):
     connection = None
 
@@ -333,7 +350,11 @@ def create_production_actual(payload: ProductionActualCreate):
             connection.close()
 
 
-@router.put("/{production_actual_id}", response_model=ProductionActualRead)
+@router.put(
+    "/{production_actual_id}",
+    response_model=ProductionActualRead,
+    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_WRITE_ROLES))],
+)
 def update_production_actual(
     payload: ProductionActualUpdate,
     production_actual_id: int = Path(..., gt=0),
@@ -407,7 +428,11 @@ def update_production_actual(
             connection.close()
 
 
-@router.delete("/{production_actual_id}", response_model=ProductionActualDeleteResponse)
+@router.delete(
+    "/{production_actual_id}",
+    response_model=ProductionActualDeleteResponse,
+    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_WRITE_ROLES))],
+)
 def delete_production_actual(production_actual_id: int = Path(..., gt=0)):
     connection = None
 

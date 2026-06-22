@@ -3,10 +3,11 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import CheckViolation, ForeignKeyViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.production_plan import (
     ProductionPlanCreate,
@@ -23,6 +24,9 @@ from schemas.production_plan import (
 
 
 router = APIRouter(prefix="/production-plans", tags=["production_plans"])
+
+PLAN_READ_ROLES = ("planner", "viewer")
+PLAN_WRITE_ROLES = ("planner",)
 
 PLAN_COLUMNS = """
     pp.production_plan_id,
@@ -236,7 +240,7 @@ def ensure_no_actuals_for_production_plan_line(cursor: RealDictCursor, productio
         )
 
 
-@router.get("", response_model=list[ProductionPlanSummary])
+@router.get("", response_model=list[ProductionPlanSummary], dependencies=[Depends(require_roles(*PLAN_READ_ROLES))])
 def list_production_plans():
     connection = None
     try:
@@ -271,7 +275,11 @@ def list_production_plans():
             connection.close()
 
 
-@router.get("/{production_plan_id}", response_model=ProductionPlanRead)
+@router.get(
+    "/{production_plan_id}",
+    response_model=ProductionPlanRead,
+    dependencies=[Depends(require_roles(*PLAN_READ_ROLES))],
+)
 def get_production_plan(production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -286,7 +294,12 @@ def get_production_plan(production_plan_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("", response_model=ProductionPlanRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ProductionPlanRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def create_production_plan(payload: ProductionPlanCreate):
     connection = None
     try:
@@ -330,7 +343,12 @@ def create_production_plan(payload: ProductionPlanCreate):
             connection.close()
 
 
-@router.post("/from-demand", response_model=ProductionPlanRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/from-demand",
+    response_model=ProductionPlanRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def create_production_plan_from_demand(payload: ProductionPlanFromDemandCreate):
     connection = None
     try:
@@ -412,7 +430,11 @@ def create_production_plan_from_demand(payload: ProductionPlanFromDemandCreate):
             connection.close()
 
 
-@router.post("/{production_plan_id}/refresh-from-demand", response_model=ProductionPlanRead)
+@router.post(
+    "/{production_plan_id}/refresh-from-demand",
+    response_model=ProductionPlanRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def refresh_production_plan_from_demand(
     payload: ProductionPlanRefreshFromDemandRequest,
     production_plan_id: int = Path(..., gt=0),
@@ -529,7 +551,11 @@ def refresh_production_plan_from_demand(
             connection.close()
 
 
-@router.post("/{production_plan_id}/approve", response_model=ProductionPlanRead)
+@router.post(
+    "/{production_plan_id}/approve",
+    response_model=ProductionPlanRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def approve_production_plan(production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -561,7 +587,11 @@ def approve_production_plan(production_plan_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("/{production_plan_id}/return-to-draft", response_model=ProductionPlanRead)
+@router.post(
+    "/{production_plan_id}/return-to-draft",
+    response_model=ProductionPlanRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def return_production_plan_to_draft(production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -593,7 +623,11 @@ def return_production_plan_to_draft(production_plan_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.put("/{production_plan_id}", response_model=ProductionPlanRead)
+@router.put(
+    "/{production_plan_id}",
+    response_model=ProductionPlanRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def update_production_plan(payload: ProductionPlanUpdate, production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -630,7 +664,11 @@ def update_production_plan(payload: ProductionPlanUpdate, production_plan_id: in
             connection.close()
 
 
-@router.delete("/{production_plan_id}", response_model=ProductionPlanDeleteResponse)
+@router.delete(
+    "/{production_plan_id}",
+    response_model=ProductionPlanDeleteResponse,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def delete_production_plan(production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -664,7 +702,12 @@ def delete_production_plan(production_plan_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("/{production_plan_id}/lines", response_model=ProductionPlanRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{production_plan_id}/lines",
+    response_model=ProductionPlanRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def create_production_plan_line(payload: ProductionPlanLineCreate, production_plan_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -713,7 +756,11 @@ def create_production_plan_line(payload: ProductionPlanLineCreate, production_pl
             connection.close()
 
 
-@router.put("/lines/{production_plan_line_id}", response_model=ProductionPlanRead)
+@router.put(
+    "/lines/{production_plan_line_id}",
+    response_model=ProductionPlanRead,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def update_production_plan_line(payload: ProductionPlanLineUpdate, production_plan_line_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -750,7 +797,11 @@ def update_production_plan_line(payload: ProductionPlanLineUpdate, production_pl
             connection.close()
 
 
-@router.delete("/lines/{production_plan_line_id}", response_model=ProductionPlanLineDeleteResponse)
+@router.delete(
+    "/lines/{production_plan_line_id}",
+    response_model=ProductionPlanLineDeleteResponse,
+    dependencies=[Depends(require_roles(*PLAN_WRITE_ROLES))],
+)
 def delete_production_plan_line(production_plan_line_id: int = Path(..., gt=0)):
     connection = None
     try:

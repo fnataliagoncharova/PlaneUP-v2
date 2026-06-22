@@ -1,3 +1,6 @@
+import { getStoredAuthToken } from "./authToken";
+
+
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001").replace(
   /\/$/,
   "",
@@ -55,14 +58,32 @@ async function parsePayload(response) {
   return textPayload || null;
 }
 
-export async function apiRequest(path, options = {}) {
+function hasHeader(headers, headerName) {
+  const normalizedHeaderName = headerName.toLowerCase();
+  return Object.keys(headers).some((key) => key.toLowerCase() === normalizedHeaderName);
+}
+
+
+function buildRequestHeaders(options = {}) {
   const headers = { ...(options.headers ?? {}) };
+  const token = getStoredAuthToken();
   const hasBody = options.body !== undefined;
   const isFormDataBody = hasBody && options.body instanceof FormData;
 
-  if (hasBody && !isFormDataBody && !headers["Content-Type"]) {
+  if (token && !hasHeader(headers, "Authorization")) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (hasBody && !isFormDataBody && !hasHeader(headers, "Content-Type")) {
     headers["Content-Type"] = "application/json";
   }
+
+  return headers;
+}
+
+
+export async function apiRequest(path, options = {}) {
+  const headers = buildRequestHeaders(options);
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -83,13 +104,7 @@ export async function apiRequest(path, options = {}) {
 }
 
 export async function apiRequestBlob(path, options = {}) {
-  const headers = { ...(options.headers ?? {}) };
-  const hasBody = options.body !== undefined;
-  const isFormDataBody = hasBody && options.body instanceof FormData;
-
-  if (hasBody && !isFormDataBody && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
+  const headers = buildRequestHeaders(options);
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
