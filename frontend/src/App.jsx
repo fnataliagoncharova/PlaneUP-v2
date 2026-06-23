@@ -159,7 +159,7 @@ const navigationGroups = [
         id: "downtime_reasons",
         label: "Причины простоев",
         icon: AlertTriangle,
-        roles: ["planner", "maintenance", "viewer"],
+        roles: ["planner", "master", "maintenance", "viewer"],
       },
     ],
   },

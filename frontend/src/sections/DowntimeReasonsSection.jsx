@@ -1,6 +1,7 @@
 import { AlertCircle, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useRole } from "../auth/useRole";
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
 import {
   createDowntimeReason,
@@ -27,6 +28,7 @@ function toErrorMessage(error, fallbackText) {
 }
 
 function DowntimeReasonsSection() {
+  const { user } = useRole();
   const [reasonItems, setReasonItems] = useState([]);
   const [filters, setFilters] = useState({
     search: "",
@@ -46,6 +48,8 @@ function DowntimeReasonsSection() {
   const [formMode, setFormMode] = useState("create");
   const [editingItem, setEditingItem] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const canEditDowntimeReasons =
+    user?.role === "admin" || user?.role === "planner" || user?.role === "maintenance";
 
   const [formState, setFormState] = useState({
     reason_code: "",
@@ -134,6 +138,11 @@ function DowntimeReasonsSection() {
   };
 
   const openCreateModal = () => {
+    if (!canEditDowntimeReasons) {
+      setPageError("Недостаточно прав для изменения причин простоев.");
+      return;
+    }
+
     setFormMode("create");
     setEditingItem(null);
     setFormError("");
@@ -147,6 +156,11 @@ function DowntimeReasonsSection() {
   };
 
   const openEditModal = (item) => {
+    if (!canEditDowntimeReasons) {
+      setPageError("Недостаточно прав для изменения причин простоев.");
+      return;
+    }
+
     setFormMode("edit");
     setEditingItem(item);
     setFormError("");
@@ -208,7 +222,11 @@ function DowntimeReasonsSection() {
       setIsFormOpen(false);
       await loadDowntimeReasons(filters);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось сохранить причину простоя."));
+      setFormError(
+        error?.status === 403 || error?.message === "Forbidden"
+          ? "Недостаточно прав для изменения причин простоев."
+          : toErrorMessage(error, "Не удалось сохранить причину простоя."),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -228,7 +246,11 @@ function DowntimeReasonsSection() {
       await loadDowntimeReasons(filters);
     } catch (error) {
       setDeleteCandidate(null);
-      setPageError(toErrorMessage(error, "Не удалось удалить причину простоя."));
+      setPageError(
+        error?.status === 403 || error?.message === "Forbidden"
+          ? "Недостаточно прав для изменения причин простоев."
+          : toErrorMessage(error, "Не удалось удалить причину простоя."),
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -247,15 +269,17 @@ function DowntimeReasonsSection() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={openCreateModal}
-            disabled={isLoading}
-            className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
-          >
-            <Plus className="h-4 w-4" />
-            Добавить причину
-          </button>
+          {canEditDowntimeReasons ? (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              disabled={isLoading}
+              className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
+            >
+              <Plus className="h-4 w-4" />
+              Добавить причину
+            </button>
+          ) : null}
         </div>
 
         {loadError ? (
@@ -341,7 +365,9 @@ function DowntimeReasonsSection() {
                     <th className="px-3 py-2 text-left font-medium">Наименование</th>
                     <th className="px-3 py-2 text-left font-medium">Категория</th>
                     <th className="px-3 py-2 text-left font-medium">Комментарий</th>
-                    <th className="px-3 py-2 text-right font-medium">Действия</th>
+                    {canEditDowntimeReasons ? (
+                      <th className="px-3 py-2 text-right font-medium">Действия</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -354,28 +380,30 @@ function DowntimeReasonsSection() {
                       <td className="px-3 py-2.5 text-slate-300">{item.reason_name}</td>
                       <td className="px-3 py-2.5 text-slate-300">{item.reason_category}</td>
                       <td className="px-3 py-2.5 text-slate-300">{item.comment || "—"}</td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(item)}
-                            title="Изменить"
-                            aria-label="Изменить"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteCandidate(item)}
-                            title="Удалить"
-                            aria-label="Удалить"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/28 bg-rose-500/[0.08] text-rose-100 transition hover:border-rose-300/42 hover:bg-rose-500/[0.16]"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
+                      {canEditDowntimeReasons ? (
+                        <td className="px-3 py-2.5">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(item)}
+                              title="Изменить"
+                              aria-label="Изменить"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteCandidate(item)}
+                              title="Удалить"
+                              aria-label="Удалить"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/28 bg-rose-500/[0.08] text-rose-100 transition hover:border-rose-300/42 hover:bg-rose-500/[0.16]"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -403,6 +431,8 @@ function DowntimeReasonsSection() {
                 <input
                   type="text"
                   value={formState.reason_code}
+                  readOnly={!canEditDowntimeReasons}
+                  disabled={!canEditDowntimeReasons}
                   onChange={(event) =>
                     setFormState((currentValue) => ({
                       ...currentValue,
@@ -417,6 +447,7 @@ function DowntimeReasonsSection() {
                 <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">Категория</div>
                 <select
                   value={formState.reason_category}
+                  disabled={!canEditDowntimeReasons}
                   onChange={(event) =>
                     setFormState((currentValue) => ({
                       ...currentValue,
@@ -438,6 +469,8 @@ function DowntimeReasonsSection() {
                 <input
                   type="text"
                   value={formState.reason_name}
+                  readOnly={!canEditDowntimeReasons}
+                  disabled={!canEditDowntimeReasons}
                   onChange={(event) =>
                     setFormState((currentValue) => ({
                       ...currentValue,
@@ -453,6 +486,8 @@ function DowntimeReasonsSection() {
                 <textarea
                   rows={4}
                   value={formState.comment}
+                  readOnly={!canEditDowntimeReasons}
+                  disabled={!canEditDowntimeReasons}
                   onChange={(event) =>
                     setFormState((currentValue) => ({
                       ...currentValue,
@@ -483,7 +518,7 @@ function DowntimeReasonsSection() {
               <button
                 type="button"
                 onClick={handleSaveReason}
-                disabled={isSaving}
+                disabled={isSaving || !canEditDowntimeReasons}
                 className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}

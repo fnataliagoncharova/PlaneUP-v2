@@ -1,11 +1,12 @@
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from psycopg2 import sql
 from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.downtime_reason import (
     DowntimeReasonCreate,
@@ -16,6 +17,9 @@ from schemas.downtime_reason import (
 
 
 router = APIRouter(prefix="/downtime-reasons", tags=["downtime_reasons"])
+
+DTIME_REASON_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+DTIME_REASON_WRITE_ROLES = ("planner", "maintenance")
 
 SELECT_COLUMNS = """
     downtime_reason_id,
@@ -168,7 +172,11 @@ def ensure_reason_is_not_used(cursor: RealDictCursor, downtime_reason_id: int) -
             )
 
 
-@router.get("", response_model=list[DowntimeReasonRead])
+@router.get(
+    "",
+    response_model=list[DowntimeReasonRead],
+    dependencies=[Depends(require_roles(*DTIME_REASON_READ_ROLES))],
+)
 def list_downtime_reasons(
     search: str | None = Query(default=None),
     reason_category: str | None = Query(default=None),
@@ -218,7 +226,12 @@ def list_downtime_reasons(
             connection.close()
 
 
-@router.post("", response_model=DowntimeReasonRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=DowntimeReasonRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*DTIME_REASON_WRITE_ROLES))],
+)
 def create_downtime_reason(payload: DowntimeReasonCreate):
     connection = None
 
@@ -273,7 +286,11 @@ def create_downtime_reason(payload: DowntimeReasonCreate):
             connection.close()
 
 
-@router.put("/{downtime_reason_id}", response_model=DowntimeReasonRead)
+@router.put(
+    "/{downtime_reason_id}",
+    response_model=DowntimeReasonRead,
+    dependencies=[Depends(require_roles(*DTIME_REASON_WRITE_ROLES))],
+)
 def update_downtime_reason(
     payload: DowntimeReasonUpdate,
     downtime_reason_id: int = Path(..., gt=0),
@@ -351,7 +368,11 @@ def update_downtime_reason(
             connection.close()
 
 
-@router.delete("/{downtime_reason_id}", response_model=DowntimeReasonDeleteResponse)
+@router.delete(
+    "/{downtime_reason_id}",
+    response_model=DowntimeReasonDeleteResponse,
+    dependencies=[Depends(require_roles(*DTIME_REASON_WRITE_ROLES))],
+)
 def delete_downtime_reason(downtime_reason_id: int = Path(..., gt=0)):
     connection = None
 
