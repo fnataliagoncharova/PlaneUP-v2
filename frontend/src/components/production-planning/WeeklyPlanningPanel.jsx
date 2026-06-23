@@ -26,6 +26,14 @@ function toErrorMessage(error, fallbackText) {
   return fallbackText;
 }
 
+function toProductionPlanWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения плана выпуска.";
+  }
+
+  return toErrorMessage(error, fallbackText);
+}
+
 function formatPlanMonth(value) {
   return value ? String(value).slice(0, 7) : "—";
 }
@@ -210,7 +218,7 @@ function buildSystemWeeks(planMonthValue) {
   ];
 }
 
-function WeeklyPlanningPanel() {
+function WeeklyPlanningPanel({ canViewProductionPlans = true, canEditProductionPlans = true }) {
   const [approvedPlans, setApprovedPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -563,6 +571,10 @@ function WeeklyPlanningPanel() {
   };
 
   const handleEditRow = (rowKey, field, value) => {
+    if (!canEditProductionPlans) {
+      setErrorText("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     setRowEdits((prev) => ({
       ...prev,
       [rowKey]: {
@@ -573,6 +585,10 @@ function WeeklyPlanningPanel() {
   };
 
   const openCommentModal = (rowKey) => {
+    if (!canEditProductionPlans) {
+      setErrorText("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     const currentComment = rowEdits[rowKey]?.comment || "";
     setCommentModalState({
       isOpen: true,
@@ -590,6 +606,11 @@ function WeeklyPlanningPanel() {
   };
 
   const applyCommentModal = () => {
+    if (!canEditProductionPlans) {
+      setErrorText("Недостаточно прав для изменения плана выпуска.");
+      closeCommentModal();
+      return;
+    }
     if (commentModalState.rowKey) {
       handleEditRow(commentModalState.rowKey, "comment", commentModalState.value);
     }
@@ -720,6 +741,9 @@ function WeeklyPlanningPanel() {
   const canToggleEquipmentAvailability = equipmentAvailabilityItems.length > 3;
 
   const ensureSelectedWeekExists = async () => {
+    if (!canEditProductionPlans) {
+      throw new Error("Недостаточно прав для изменения плана выпуска.");
+    }
     if (!selectedPlanId || !selectedMergedWeek) {
       throw new Error("Выберите месяц и неделю.");
     }
@@ -748,6 +772,10 @@ function WeeklyPlanningPanel() {
   };
 
   const handleSaveWeekPlan = async () => {
+    if (!canEditProductionPlans) {
+      setErrorText("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!selectedPlanId || !selectedMergedWeek) {
       setErrorText("Выберите месяц и неделю для сохранения.");
       return;
@@ -798,7 +826,7 @@ function WeeklyPlanningPanel() {
       await loadWeekDetails(weekId);
       setSuccessText("План недели сохранён.");
     } catch (error) {
-      setErrorText(toErrorMessage(error, "Не удалось сохранить план недели."));
+      setErrorText(toProductionPlanWriteErrorMessage(error, "Не удалось сохранить план недели."));
       try {
         if (selectedPlanId) {
           const planId = Number(selectedPlanId);
@@ -834,6 +862,11 @@ function WeeklyPlanningPanel() {
   };
 
   const handleDeleteWeek = async () => {
+    if (!canEditProductionPlans) {
+      setErrorText("Недостаточно прав для изменения плана выпуска.");
+      setWeekDeleteCandidate(null);
+      return;
+    }
     if (!weekDeleteCandidate || !selectedPlanId) {
       return;
     }
@@ -847,7 +880,7 @@ function WeeklyPlanningPanel() {
       await syncSelectedWeekDetails();
       setSuccessText("Недельный план удалён.");
     } catch (error) {
-      setErrorText(toErrorMessage(error, "Не удалось удалить неделю."));
+      setErrorText(toProductionPlanWriteErrorMessage(error, "Не удалось удалить неделю."));
       try {
         await loadWeeks(currentPlanId);
         await syncSelectedWeekDetails();
@@ -860,8 +893,12 @@ function WeeklyPlanningPanel() {
     }
   };
 
-  const isSaveDisabled = !selectedMergedWeek || !selectedPlan || isSaving || isLoading || hasDraftOverdistribution;
+  const isSaveDisabled = !canEditProductionPlans || !selectedMergedWeek || !selectedPlan || isSaving || isLoading || hasDraftOverdistribution;
   const isPrintDisabled = !isSelectedWeekPersisted || isPrinting || isSaving || isLoading || isDeleting;
+
+  if (!canViewProductionPlans) {
+    return <section className="glass-panel p-5 text-sm text-rose-100">Недостаточно прав для просмотра плана выпуска.</section>;
+  }
 
   return (
     <div className="space-y-5">
@@ -918,7 +955,7 @@ function WeeklyPlanningPanel() {
               <button
                 type="button"
                 onClick={() => setWeekDeleteCandidate(selectedMergedWeek)}
-                disabled={isDeleting || isLoading || isSaving}
+                disabled={!canEditProductionPlans || isDeleting || isLoading || isSaving}
                 className="inline-flex h-11 items-center gap-2 rounded-none border border-rose-300/30 bg-rose-500/[0.1] px-4 text-sm text-rose-100 transition hover:bg-rose-500/[0.15] disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
@@ -1126,6 +1163,7 @@ function WeeklyPlanningPanel() {
               value={edit.planned_qty || ""}
               onChange={(event) => handleEditRow(row.row_key, "planned_qty", normalizeIntegerInput(event.target.value))}
               onBlur={() => handleWeekQtyBlur(row.row_key)}
+              disabled={!canEditProductionPlans}
               className="h-9 w-[92px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             />
           </td>
@@ -1140,10 +1178,10 @@ function WeeklyPlanningPanel() {
             )}
           </td>
           <td className="border-l border-cyan-300/10 px-3 py-2.5">
-            <input type="number" min="1" step="1" value={edit.sequence_no || ""} onChange={(event) => handleEditRow(row.row_key, "sequence_no", event.target.value)} className="h-9 w-[68px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40" />
+            <input type="number" min="1" step="1" value={edit.sequence_no || ""} onChange={(event) => handleEditRow(row.row_key, "sequence_no", event.target.value)} disabled={!canEditProductionPlans} className="h-9 w-[68px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm text-slate-100 outline-none focus:border-cyan-300/40 disabled:opacity-60" />
           </td>
           <td className="px-3 py-2.5">
-            <select value={edit.route_step_equipment_id || ""} onChange={(event) => handleEditRow(row.row_key, "route_step_equipment_id", event.target.value)} className="h-9 w-[130px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40">
+            <select value={edit.route_step_equipment_id || ""} onChange={(event) => handleEditRow(row.row_key, "route_step_equipment_id", event.target.value)} disabled={!canEditProductionPlans} className="h-9 w-[130px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40 disabled:opacity-60">
               <option value="">Не выбрано</option>
               {(equipmentByPlanLine[row.row_key] || []).map((option) => (
                 <option key={option.step_equipment_id} value={option.step_equipment_id}>
@@ -1157,6 +1195,7 @@ function WeeklyPlanningPanel() {
               type="button"
               onClick={() => openCommentModal(row.row_key)}
               aria-label="Комментарий"
+              disabled={!canEditProductionPlans}
               className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.72)] text-sm text-slate-100 transition hover:border-cyan-300/40 hover:text-cyan-100"
             >
               {String(edit.comment || "").trim() ? "💬" : "+"}
@@ -1250,6 +1289,7 @@ function WeeklyPlanningPanel() {
                 }))
               }
               rows={6}
+              disabled={!canEditProductionPlans}
               className="mt-4 w-full rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.82)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
             />
             <div className="mt-4 flex justify-end gap-2">
@@ -1263,6 +1303,7 @@ function WeeklyPlanningPanel() {
               <button
                 type="button"
                 onClick={applyCommentModal}
+                disabled={!canEditProductionPlans}
                 className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24]"
               >
                 Применить

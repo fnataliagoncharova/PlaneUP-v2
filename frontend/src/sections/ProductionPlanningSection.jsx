@@ -1,6 +1,8 @@
 ﻿import { AlertCircle, CheckCircle2, Lock, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useRole } from "../auth/useRole";
+
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
 import WeeklyPlanningPanel from "../components/production-planning/WeeklyPlanningPanel";
 import NomenclatureSearchSelect from "../components/shared/NomenclatureSearchSelect";
@@ -110,7 +112,16 @@ function toErrorMessage(error, fallbackText) {
   return fallbackText;
 }
 
+function toProductionPlanWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения плана выпуска.";
+  }
+
+  return toErrorMessage(error, fallbackText);
+}
+
 function ProductionPlanningSection() {
+  const { user } = useRole();
   const [activeTab, setActiveTab] = useState("monthly");
   const [plans, setPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -159,6 +170,13 @@ function ProductionPlanningSection() {
   );
 
   const isApproved = selectedPlan?.status === "approved";
+  const canViewProductionPlans =
+    user?.role === "admin" ||
+    user?.role === "planner" ||
+    user?.role === "master" ||
+    user?.role === "maintenance" ||
+    user?.role === "viewer";
+  const canEditProductionPlans = user?.role === "admin" || user?.role === "planner";
 
   const loadPlanDetails = useCallback(async (planId) => {
     if (!planId) {
@@ -243,6 +261,10 @@ function ProductionPlanningSection() {
   };
 
   const openCreatePlanForm = () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     setPanelMode(PANEL_MODE_CREATE_PLAN);
     setFormError("");
     setStatusSuccess("");
@@ -252,6 +274,10 @@ function ProductionPlanningSection() {
   };
 
   const openEditPlanForm = () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!selectedPlan || isApproved) {
       return;
     }
@@ -263,6 +289,10 @@ function ProductionPlanningSection() {
   };
 
   const openCreateLineForm = () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!selectedPlan || isApproved) {
       return;
     }
@@ -278,6 +308,10 @@ function ProductionPlanningSection() {
   };
 
   const openEditLineForm = (line) => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (isApproved) {
       return;
     }
@@ -293,6 +327,10 @@ function ProductionPlanningSection() {
 
   const handleCreatePlan = async (event) => {
     event.preventDefault();
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!createMonth) {
       setFormError("Выберите месяц планирования.");
       return;
@@ -313,7 +351,7 @@ function ProductionPlanningSection() {
       await loadPlans(created.production_plan_id);
       setPanelMode(PANEL_MODE_CONTEXT);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось создать план выпуска."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось создать план выпуска."));
     } finally {
       setIsSaving(false);
     }
@@ -321,6 +359,10 @@ function ProductionPlanningSection() {
 
   const handleUpdatePlan = async (event) => {
     event.preventDefault();
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!selectedPlan || isApproved) {
       return;
     }
@@ -334,7 +376,7 @@ function ProductionPlanningSection() {
       await loadPlans(selectedPlan.production_plan_id);
       setPanelMode(PANEL_MODE_CONTEXT);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось обновить план выпуска."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось обновить план выпуска."));
     } finally {
       setIsSaving(false);
     }
@@ -342,6 +384,10 @@ function ProductionPlanningSection() {
 
   const handleCreateLine = async (event) => {
     event.preventDefault();
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!selectedPlan || isApproved) {
       return;
     }
@@ -367,7 +413,7 @@ function ProductionPlanningSection() {
       await loadPlanDetails(selectedPlan.production_plan_id);
       setPanelMode(PANEL_MODE_CONTEXT);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось добавить строку плана."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось добавить строку плана."));
     } finally {
       setIsSaving(false);
     }
@@ -375,6 +421,10 @@ function ProductionPlanningSection() {
 
   const handleUpdateLine = async (event) => {
     event.preventDefault();
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      return;
+    }
     if (!lineEditItem || !selectedPlan || isApproved) {
       return;
     }
@@ -395,13 +445,18 @@ function ProductionPlanningSection() {
       await loadPlanDetails(selectedPlan.production_plan_id);
       setPanelMode(PANEL_MODE_CONTEXT);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось обновить строку плана."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось обновить строку плана."));
     } finally {
       setIsSaving(false);
     }
   };
 
   const confirmDeletePlan = async () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      setPlanDeleteCandidate(null);
+      return;
+    }
     if (!planDeleteCandidate) {
       return;
     }
@@ -412,7 +467,7 @@ function ProductionPlanningSection() {
       await loadPlans();
     } catch (error) {
       setPlanDeleteCandidate(null);
-      setFormError(toErrorMessage(error, "Не удалось удалить план выпуска."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось удалить план выпуска."));
       try {
         await loadPlans(deleteCandidate.production_plan_id);
       } catch {
@@ -425,6 +480,11 @@ function ProductionPlanningSection() {
   };
 
   const confirmDeleteLine = async () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      setLineDeleteCandidate(null);
+      return;
+    }
     if (!lineDeleteCandidate || !selectedPlan) {
       return;
     }
@@ -436,7 +496,7 @@ function ProductionPlanningSection() {
       await loadPlanDetails(currentPlanId);
     } catch (error) {
       setLineDeleteCandidate(null);
-      setFormError(toErrorMessage(error, "Не удалось удалить строку плана."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось удалить строку плана."));
       try {
         await loadPlanDetails(currentPlanId);
       } catch {
@@ -449,6 +509,11 @@ function ProductionPlanningSection() {
   };
 
   const handleApprovePlan = async () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      setApproveCandidate(null);
+      return;
+    }
     if (!approveCandidate) {
       return;
     }
@@ -462,13 +527,18 @@ function ProductionPlanningSection() {
       setApproveCandidate(null);
       setPanelMode(PANEL_MODE_CONTEXT);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось утвердить план выпуска."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось утвердить план выпуска."));
     } finally {
       setIsStatusChanging(false);
     }
   };
 
   const handleReturnToDraft = async () => {
+    if (!canEditProductionPlans) {
+      setFormError("Недостаточно прав для изменения плана выпуска.");
+      setReturnDraftCandidate(null);
+      return;
+    }
     if (!returnDraftCandidate) {
       return;
     }
@@ -482,7 +552,7 @@ function ProductionPlanningSection() {
       setReturnDraftCandidate(null);
       setPanelMode(PANEL_MODE_CONTEXT);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось вернуть план в черновик."));
+      setFormError(toProductionPlanWriteErrorMessage(error, "Не удалось вернуть план в черновик."));
     } finally {
       setIsStatusChanging(false);
     }
@@ -543,6 +613,7 @@ function ProductionPlanningSection() {
                 type="month"
                 value={createMonth}
                 onChange={(event) => setCreateMonth(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -552,6 +623,7 @@ function ProductionPlanningSection() {
                 type="text"
                 value={createPlanName}
                 onChange={(event) => setCreatePlanName(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 placeholder="Необязательно"
               />
@@ -562,6 +634,7 @@ function ProductionPlanningSection() {
                 value={createComment}
                 onChange={(event) => setCreateComment(event.target.value)}
                 rows={3}
+                disabled={!canEditProductionPlans || isSaving}
                 className="w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -569,7 +642,7 @@ function ProductionPlanningSection() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-10 flex-1 rounded-none border border-cyan-300/35 bg-cyan-400/[0.15] px-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Создать"}
@@ -600,6 +673,7 @@ function ProductionPlanningSection() {
                 type="text"
                 value={editPlanName}
                 onChange={(event) => setEditPlanName(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -609,6 +683,7 @@ function ProductionPlanningSection() {
                 value={editPlanComment}
                 onChange={(event) => setEditPlanComment(event.target.value)}
                 rows={3}
+                disabled={!canEditProductionPlans || isSaving}
                 className="w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -616,7 +691,7 @@ function ProductionPlanningSection() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-10 flex-1 rounded-none border border-cyan-300/35 bg-cyan-400/[0.15] px-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}
@@ -646,7 +721,7 @@ function ProductionPlanningSection() {
               items={manufacturedNomenclature}
               value={lineNomenclatureId ? Number(lineNomenclatureId) : null}
               onChange={(value) => setLineNomenclatureId(String(value))}
-              disabled={isNomenclatureLoading || isSaving}
+              disabled={!canEditProductionPlans || isNomenclatureLoading || isSaving}
             />
             <div>
               <div className="mb-2 text-xs tracking-[0.08em] text-slate-500">План выпуска</div>
@@ -656,6 +731,7 @@ function ProductionPlanningSection() {
                 step="0.001"
                 value={lineQty}
                 onChange={(event) => setLineQty(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -664,6 +740,7 @@ function ProductionPlanningSection() {
                 type="checkbox"
                 checked={linePriority}
                 onChange={(event) => setLinePriority(event.target.checked)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-4 w-4 rounded-none border-white/20 bg-transparent"
               />
               Приоритетная позиция
@@ -675,6 +752,7 @@ function ProductionPlanningSection() {
                   type="text"
                   value={linePriorityNote}
                   onChange={(event) => setLinePriorityNote(event.target.value)}
+                  disabled={!canEditProductionPlans || isSaving}
                   className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
               </div>
@@ -685,6 +763,7 @@ function ProductionPlanningSection() {
                 rows={3}
                 value={lineComment}
                 onChange={(event) => setLineComment(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -692,7 +771,7 @@ function ProductionPlanningSection() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-10 flex-1 rounded-none border border-cyan-300/35 bg-cyan-400/[0.15] px-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Добавить"}
@@ -730,6 +809,7 @@ function ProductionPlanningSection() {
                 step="0.001"
                 value={lineQty}
                 onChange={(event) => setLineQty(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -738,6 +818,7 @@ function ProductionPlanningSection() {
                 type="checkbox"
                 checked={linePriority}
                 onChange={(event) => setLinePriority(event.target.checked)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-4 w-4 rounded-none border-white/20 bg-transparent"
               />
               Приоритетная позиция
@@ -749,6 +830,7 @@ function ProductionPlanningSection() {
                   type="text"
                   value={linePriorityNote}
                   onChange={(event) => setLinePriorityNote(event.target.value)}
+                  disabled={!canEditProductionPlans || isSaving}
                   className="h-11 w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
               </div>
@@ -759,6 +841,7 @@ function ProductionPlanningSection() {
                 rows={3}
                 value={lineComment}
                 onChange={(event) => setLineComment(event.target.value)}
+                disabled={!canEditProductionPlans || isSaving}
                 className="w-full rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.75)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
               />
             </div>
@@ -766,7 +849,7 @@ function ProductionPlanningSection() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={!canEditProductionPlans || isSaving}
                 className="h-10 flex-1 rounded-none border border-cyan-300/35 bg-cyan-400/[0.15] px-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}
@@ -825,6 +908,10 @@ function ProductionPlanningSection() {
       </aside>
     );
   };
+
+  if (!canViewProductionPlans) {
+    return <section className="glass-panel p-5 text-sm text-rose-100">Недостаточно прав для просмотра плана выпуска.</section>;
+  }
 
   return (
     <section className="space-y-6">
@@ -899,6 +986,7 @@ function ProductionPlanningSection() {
               <button
                 type="button"
                 onClick={openCreatePlanForm}
+                disabled={!canEditProductionPlans}
                 className="h-11 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22]"
               >
                 Создать план
@@ -916,6 +1004,7 @@ function ProductionPlanningSection() {
                 <button
                   type="button"
                   onClick={() => setReturnDraftCandidate(selectedPlan)}
+                  disabled={!canEditProductionPlans}
                   className="h-11 rounded-none border border-cyan-300/30 bg-cyan-400/[0.12] px-4 text-sm text-cyan-50 transition hover:bg-cyan-400/[0.2]"
                 >
                   Вернуть в черновик
@@ -934,6 +1023,7 @@ function ProductionPlanningSection() {
                       <button
                         type="button"
                         onClick={openEditPlanForm}
+                        disabled={!canEditProductionPlans}
                         className="h-10 rounded-none border border-white/15 px-3 text-sm text-slate-200 transition hover:border-cyan-300/30"
                       >
                         Редактировать план
@@ -941,6 +1031,7 @@ function ProductionPlanningSection() {
                       <button
                         type="button"
                         onClick={() => setApproveCandidate(selectedPlan)}
+                        disabled={!canEditProductionPlans}
                         className="h-10 rounded-none border border-emerald-300/30 bg-emerald-400/[0.1] px-3 text-sm text-emerald-100 transition hover:bg-emerald-400/[0.16]"
                       >
                         Утвердить план
@@ -948,6 +1039,7 @@ function ProductionPlanningSection() {
                       <button
                         type="button"
                         onClick={() => setPlanDeleteCandidate(selectedPlan)}
+                        disabled={!canEditProductionPlans}
                         className="h-10 rounded-none border border-rose-300/30 bg-rose-400/[0.08] px-3 text-sm text-rose-100 transition hover:bg-rose-400/[0.16]"
                       >
                         Удалить план
@@ -958,11 +1050,11 @@ function ProductionPlanningSection() {
                 <button
                   type="button"
                   onClick={openCreateLineForm}
-                  disabled={isApproved}
-                  title={isApproved ? "Утверждённый план нельзя изменять." : ""}
+                  disabled={isApproved || !canEditProductionPlans}
+                  title={!canEditProductionPlans ? "Раздел доступен только для просмотра." : isApproved ? "Утверждённый план нельзя изменять." : ""}
                   className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.12] px-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isApproved ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {isApproved || !canEditProductionPlans ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   Добавить позицию
                 </button>
               </div>
@@ -1049,7 +1141,7 @@ function ProductionPlanningSection() {
                                   <button
                                     type="button"
                                     onClick={() => openEditLineForm(line)}
-                                    disabled={isApproved}
+                                    disabled={isApproved || !canEditProductionPlans}
                                     title="Изменить"
                                     aria-label="Изменить"
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16] disabled:cursor-not-allowed disabled:opacity-45"
@@ -1059,7 +1151,7 @@ function ProductionPlanningSection() {
                                   <button
                                     type="button"
                                     onClick={() => setLineDeleteCandidate(line)}
-                                    disabled={isApproved}
+                                    disabled={isApproved || !canEditProductionPlans}
                                     title="Удалить"
                                     aria-label="Удалить"
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/30 bg-rose-500/[0.1] text-rose-100 transition hover:border-rose-300/45 hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-45"
@@ -1084,6 +1176,7 @@ function ProductionPlanningSection() {
               <button
                 type="button"
                 onClick={openCreatePlanForm}
+                disabled={!canEditProductionPlans}
                 className="mt-3 inline-flex h-10 items-center rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22]"
               >
                 Создать план
@@ -1240,7 +1333,7 @@ function ProductionPlanningSection() {
       />
         </>
       ) : (
-        <WeeklyPlanningPanel />
+        <WeeklyPlanningPanel canViewProductionPlans={canViewProductionPlans} canEditProductionPlans={canEditProductionPlans} />
       )}
     </section>
   );
