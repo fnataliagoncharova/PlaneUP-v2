@@ -107,7 +107,7 @@ const navigationGroups = [
         id: "master_workspace",
         label: "Рабочий стол мастера",
         icon: MasterWorkspaceIcon,
-        roles: ["planner", "master"],
+        roles: ["planner", "master", "viewer"],
       },
       {
         id: "equipment_downtimes",

@@ -33,6 +33,14 @@ function toErrorMessage(error, fallbackText) {
   return fallbackText;
 }
 
+function toProductionActualWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения факта выпуска.";
+  }
+
+  return toErrorMessage(error, fallbackText);
+}
+
 function formatPlanMonth(value) {
   return value ? String(value).slice(0, 7) : "—";
 }
@@ -177,7 +185,11 @@ function buildRowInputs(lines, weekStartDate, previousInputs = {}) {
   return nextInputs;
 }
 
-function ShiftFactPanel() {
+function ShiftFactPanel({
+  canCreateProductionActual = true,
+  canEditProductionActual = true,
+  canDeleteProductionActual = true,
+}) {
   const [approvedPlans, setApprovedPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [weekOptions, setWeekOptions] = useState([]);
@@ -612,6 +624,10 @@ function ShiftFactPanel() {
   };
 
   const handleRowInputChange = (lineId, field, value) => {
+    if (!canCreateProductionActual) {
+      return;
+    }
+
     const lineKey = String(lineId);
     setRowInputs((currentValue) => {
       const currentLineInput =
@@ -627,6 +643,10 @@ function ShiftFactPanel() {
   };
 
   const openFactCommentEditorModal = (lineId) => {
+    if (!canCreateProductionActual) {
+      return;
+    }
+
     const lineKey = String(lineId);
     const currentInput =
       rowInputs[lineKey] || buildDefaultRowInput(selectedWeek?.week_start_date);
@@ -657,6 +677,11 @@ function ShiftFactPanel() {
   };
 
   const applyFactCommentModal = () => {
+    if (factCommentModalState.mode === "edit" && !canCreateProductionActual) {
+      closeFactCommentModal();
+      return;
+    }
+
     if (factCommentModalState.mode === "edit" && factCommentModalState.lineKey) {
       handleRowInputChange(factCommentModalState.lineKey, "comment", factCommentModalState.value);
     }
@@ -678,6 +703,10 @@ function ShiftFactPanel() {
   };
 
   const handleExpandClosedRow = (lineId) => {
+    if (!canCreateProductionActual) {
+      return;
+    }
+
     const lineKey = String(lineId);
     setExpandedClosedRows((currentValue) => ({
       ...currentValue,
@@ -686,6 +715,11 @@ function ShiftFactPanel() {
   };
 
   const handleSaveRowFact = async (line) => {
+    if (!canCreateProductionActual) {
+      setErrorText("Недостаточно прав для изменения факта выпуска.");
+      return;
+    }
+
     if (!selectedWeek) {
       setErrorText("Выберите недельный план.");
       return;
@@ -787,13 +821,18 @@ function ShiftFactPanel() {
         loadEquipmentOptionsForWeek(weekPayload),
       ]);
     } catch (error) {
-      setErrorText(toErrorMessage(error, "Не удалось сохранить факт выпуска."));
+      setErrorText(toProductionActualWriteErrorMessage(error, "Не удалось сохранить факт выпуска."));
     } finally {
       setSavingLineId(null);
     }
   };
 
   const handleDeleteActual = async (actualRow) => {
+    if (!canDeleteProductionActual) {
+      setErrorText("Недостаточно прав для изменения факта выпуска.");
+      return;
+    }
+
     setDeletingActualId(Number(actualRow.production_actual_id));
     setErrorText("");
     setSuccessText("");
@@ -807,13 +846,18 @@ function ShiftFactPanel() {
         loadEquipmentOptionsForWeek(weekPayload),
       ]);
     } catch (error) {
-      setErrorText(toErrorMessage(error, "Не удалось удалить запись факта."));
+      setErrorText(toProductionActualWriteErrorMessage(error, "Не удалось удалить запись факта."));
     } finally {
       setDeletingActualId(null);
     }
   };
 
   const openFactEditModal = (actualRow) => {
+    if (!canEditProductionActual) {
+      setErrorText("Недостаточно прав для изменения факта выпуска.");
+      return;
+    }
+
     const lineKey = String(actualRow.production_week_line_id || "");
     const equipmentOptions = equipmentOptionsByLine[lineKey] || [];
     const machineId = Number(actualRow.machine_id);
@@ -854,6 +898,10 @@ function ShiftFactPanel() {
   };
 
   const handleFactEditFieldChange = (field, value) => {
+    if (!canEditProductionActual) {
+      return;
+    }
+
     setFactEditModalState((currentValue) => ({
       ...currentValue,
       [field]: value,
@@ -861,6 +909,11 @@ function ShiftFactPanel() {
   };
 
   const handleSaveEditedActual = async () => {
+    if (!canEditProductionActual) {
+      setErrorText("Недостаточно прав для изменения факта выпуска.");
+      return;
+    }
+
     if (!selectedWeek) {
       setErrorText("Выберите недельный план.");
       return;
@@ -942,7 +995,7 @@ function ShiftFactPanel() {
         loadEquipmentOptionsForWeek(weekPayload),
       ]);
     } catch (error) {
-      setErrorText(toErrorMessage(error, "Не удалось обновить факт выпуска."));
+      setErrorText(toProductionActualWriteErrorMessage(error, "Не удалось обновить факт выпуска."));
     } finally {
       setEditingActualId(null);
     }
@@ -1128,6 +1181,7 @@ function ShiftFactPanel() {
                                     event.target.value,
                                   )
                                 }
+                                disabled={!canCreateProductionActual}
                                 className="h-9 w-[230px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm font-medium text-slate-100 outline-none focus:border-cyan-300/40"
                               >
                                 {equipmentOptions.map((option) => (
@@ -1182,6 +1236,8 @@ function ShiftFactPanel() {
                                     event.target.value,
                                   )
                                 }
+                                readOnly={!canCreateProductionActual}
+                                disabled={!canCreateProductionActual}
                                 className="h-9 w-[150px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm font-medium text-slate-100 outline-none focus:border-cyan-300/40"
                               />
                             </td>
@@ -1195,6 +1251,7 @@ function ShiftFactPanel() {
                                     event.target.value,
                                   )
                                 }
+                                disabled={!canCreateProductionActual}
                                 className="h-9 w-[108px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm font-medium text-slate-100 outline-none focus:border-cyan-300/40"
                               >
                                 <option value="">{"\u2014"}</option>
@@ -1215,6 +1272,7 @@ function ShiftFactPanel() {
                                     event.target.value,
                                   )
                                 }
+                                disabled={!canCreateProductionActual}
                                 className="h-9 w-[78px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-sm font-medium text-slate-100 outline-none focus:border-cyan-300/40"
                               >
                                 <option value="">{"\u2014"}</option>
@@ -1237,6 +1295,8 @@ function ShiftFactPanel() {
                                     event.target.value,
                                   )
                                 }
+                                readOnly={!canCreateProductionActual}
+                                disabled={!canCreateProductionActual}
                                 placeholder="0"
                                 className="h-9 w-[104px] rounded-none border border-white/[0.08] bg-[rgba(8,22,34,0.7)] px-2 text-right tabular-nums text-sm font-medium text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/40"
                               />
@@ -1246,7 +1306,8 @@ function ShiftFactPanel() {
                                 type="button"
                                 onClick={() => openFactCommentEditorModal(line.production_week_line_id)}
                                 aria-label="Комментарий к факту"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.72)] text-sm text-slate-100 transition hover:border-cyan-300/40 hover:text-cyan-100"
+                                disabled={!canCreateProductionActual}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.72)] text-sm text-slate-100 transition hover:border-cyan-300/40 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-45"
                               >
                                 {String(input.comment || "").trim() ? "💬" : "+"}
                               </button>
@@ -1255,7 +1316,7 @@ function ShiftFactPanel() {
                               <button
                                 type="button"
                                 onClick={() => handleSaveRowFact(line)}
-                                disabled={isRowSaving}
+                                disabled={isRowSaving || !canCreateProductionActual}
                                 className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-3 text-xs font-semibold uppercase tracking-[0.08em] text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-50"
                               >
                                 {isRowSaving ? "Сохраняем..." : "Сохранить"}
@@ -1273,7 +1334,8 @@ function ShiftFactPanel() {
                               <button
                                 type="button"
                                 onClick={() => handleExpandClosedRow(line.production_week_line_id)}
-                                className="h-9 rounded-none border border-cyan-300/30 bg-cyan-400/[0.1] px-3 text-xs font-semibold uppercase tracking-[0.08em] text-cyan-100 transition hover:bg-cyan-400/[0.2]"
+                                disabled={!canCreateProductionActual}
+                                className="h-9 rounded-none border border-cyan-300/30 bg-cyan-400/[0.1] px-3 text-xs font-semibold uppercase tracking-[0.08em] text-cyan-100 transition hover:bg-cyan-400/[0.2] disabled:cursor-not-allowed disabled:opacity-45"
                               >
                                 Добавить факт
                               </button>
@@ -1371,7 +1433,7 @@ function ShiftFactPanel() {
                             <button
                               type="button"
                               onClick={() => openFactEditModal(actualRow)}
-                              disabled={isDeleting || isEditing}
+                              disabled={isDeleting || isEditing || !canEditProductionActual}
                               title="Изменить"
                               aria-label="Изменить"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
@@ -1381,7 +1443,7 @@ function ShiftFactPanel() {
                             <button
                               type="button"
                               onClick={() => handleDeleteActual(actualRow)}
-                              disabled={isDeleting || isEditing}
+                              disabled={isDeleting || isEditing || !canDeleteProductionActual}
                               title="Удалить"
                               aria-label="Удалить"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/30 bg-rose-500/[0.1] text-rose-100 transition hover:border-rose-300/45 hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-50"
@@ -1413,6 +1475,8 @@ function ShiftFactPanel() {
                   min={selectedWeek?.week_start_date || undefined}
                   max={selectedWeek?.week_end_date || undefined}
                   onChange={(event) => handleFactEditFieldChange("actual_date", event.target.value)}
+                  readOnly={!canEditProductionActual}
+                  disabled={!canEditProductionActual}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
               </div>
@@ -1421,6 +1485,7 @@ function ShiftFactPanel() {
                 <select
                   value={factEditModalState.shift_type}
                   onChange={(event) => handleFactEditFieldChange("shift_type", event.target.value)}
+                  disabled={!canEditProductionActual}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 >
                   <option value="">{"—"}</option>
@@ -1436,6 +1501,7 @@ function ShiftFactPanel() {
                 <select
                   value={factEditModalState.shift_team_no}
                   onChange={(event) => handleFactEditFieldChange("shift_team_no", event.target.value)}
+                  disabled={!canEditProductionActual}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 >
                   <option value="">{"—"}</option>
@@ -1462,6 +1528,7 @@ function ShiftFactPanel() {
                     <select
                       value={factEditModalState.route_step_equipment_id}
                       onChange={(event) => handleFactEditFieldChange("route_step_equipment_id", event.target.value)}
+                      disabled={!canEditProductionActual}
                       className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                     >
                       <option value="">Не выбрано</option>
@@ -1481,6 +1548,8 @@ function ShiftFactPanel() {
                   inputMode="decimal"
                   value={factEditModalState.actual_qty ?? ""}
                   onChange={(event) => handleFactEditFieldChange("actual_qty", event.target.value)}
+                  readOnly={!canEditProductionActual}
+                  disabled={!canEditProductionActual}
                   placeholder="0"
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-right tabular-nums text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-300/40"
                 />
@@ -1490,6 +1559,8 @@ function ShiftFactPanel() {
                 <textarea
                   value={factEditModalState.comment}
                   onChange={(event) => handleFactEditFieldChange("comment", event.target.value)}
+                  readOnly={!canEditProductionActual}
+                  disabled={!canEditProductionActual}
                   rows={4}
                   className="w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
@@ -1507,7 +1578,10 @@ function ShiftFactPanel() {
               <button
                 type="button"
                 onClick={handleSaveEditedActual}
-                disabled={Number(editingActualId) === Number(factEditModalState.production_actual_id)}
+                disabled={
+                  Number(editingActualId) === Number(factEditModalState.production_actual_id) ||
+                  !canEditProductionActual
+                }
                 className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24] disabled:opacity-50"
               >
                 {Number(editingActualId) === Number(factEditModalState.production_actual_id)
@@ -1532,10 +1606,10 @@ function ShiftFactPanel() {
                 }))
               }
               rows={6}
-              readOnly={factCommentModalState.mode === "view"}
+              readOnly={factCommentModalState.mode === "view" || !canCreateProductionActual}
               className={[
                 "mt-4 w-full rounded-none border border-white/[0.12] bg-[rgba(8,22,34,0.82)] px-3 py-2 text-sm text-slate-100 outline-none",
-                factCommentModalState.mode === "view"
+                factCommentModalState.mode === "view" || !canCreateProductionActual
                   ? "cursor-default"
                   : "focus:border-cyan-300/40",
               ].join(" ")}
@@ -1552,7 +1626,8 @@ function ShiftFactPanel() {
                 <button
                   type="button"
                   onClick={applyFactCommentModal}
-                  className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24]"
+                  disabled={!canCreateProductionActual}
+                  className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Применить
                 </button>
