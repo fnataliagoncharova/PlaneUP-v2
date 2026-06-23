@@ -5,12 +5,13 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, HTTPException, Path, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.inventory_balance_degassing import (
     InventoryBalanceDegassingCreate,
@@ -25,6 +26,9 @@ from schemas.inventory_balance_degassing import (
 
 
 router = APIRouter(prefix="/inventory-balance-degassing", tags=["inventory_balance_degassing"])
+
+INVENTORY_BALANCE_DEGASSING_READ_ROLES = ("planner", "viewer")
+INVENTORY_BALANCE_DEGASSING_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """
     ibd.balance_degassing_id,
@@ -743,7 +747,7 @@ def require_inventory_balance_degassing_exists(connection, balance_degassing_id:
     return row
 
 
-@router.get("", response_model=list[InventoryBalanceDegassingRead])
+@router.get("", response_model=list[InventoryBalanceDegassingRead], dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_READ_ROLES))])
 def list_inventory_balance_degassing(
     as_of_date: date | None = Query(default=None),
     nomenclature_id: int | None = Query(default=None, gt=0),
@@ -789,7 +793,7 @@ def list_inventory_balance_degassing(
             connection.close()
 
 
-@router.get("/suggestion-report", response_model=InventoryBalanceDegassingSuggestionReportResponse)
+@router.get("/suggestion-report", response_model=InventoryBalanceDegassingSuggestionReportResponse, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_READ_ROLES))])
 def get_inventory_balance_degassing_suggestion_report(
     as_of_date: date = Query(...),
     lookback_days: int = Query(default=7, ge=1),
@@ -818,7 +822,7 @@ def get_inventory_balance_degassing_suggestion_report(
             connection.close()
 
 
-@router.get("/suggestion-report/export")
+@router.get("/suggestion-report/export", dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_READ_ROLES))])
 def export_inventory_balance_degassing_suggestion_report(
     as_of_date: date = Query(...),
     lookback_days: int = Query(default=7, ge=1),
@@ -852,7 +856,7 @@ def export_inventory_balance_degassing_suggestion_report(
             connection.close()
 
 
-@router.get("/template")
+@router.get("/template", dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_READ_ROLES))])
 def download_inventory_balance_degassing_template():
     template_content = create_template_workbook()
     return StreamingResponse(
@@ -864,7 +868,7 @@ def download_inventory_balance_degassing_template():
     )
 
 
-@router.post("/import", response_model=InventoryBalanceDegassingImportResponse)
+@router.post("/import", response_model=InventoryBalanceDegassingImportResponse, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_WRITE_ROLES))])
 async def import_inventory_balance_degassing(file: UploadFile = File(...)):
     file_bytes = await file.read()
     validate_import_file(file, file_bytes)
@@ -1008,7 +1012,7 @@ async def import_inventory_balance_degassing(file: UploadFile = File(...)):
             connection.close()
 
 
-@router.post("", response_model=InventoryBalanceDegassingRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InventoryBalanceDegassingRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_WRITE_ROLES))])
 def create_inventory_balance_degassing(payload: InventoryBalanceDegassingCreate):
     connection = None
 
@@ -1066,7 +1070,7 @@ def create_inventory_balance_degassing(payload: InventoryBalanceDegassingCreate)
             connection.close()
 
 
-@router.put("/{balance_degassing_id}", response_model=InventoryBalanceDegassingRead)
+@router.put("/{balance_degassing_id}", response_model=InventoryBalanceDegassingRead, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_WRITE_ROLES))])
 def update_inventory_balance_degassing(
     payload: InventoryBalanceDegassingUpdate,
     balance_degassing_id: int = Path(..., gt=0),
@@ -1140,7 +1144,7 @@ def update_inventory_balance_degassing(
             connection.close()
 
 
-@router.delete("/{balance_degassing_id}", response_model=InventoryBalanceDegassingDeleteResponse)
+@router.delete("/{balance_degassing_id}", response_model=InventoryBalanceDegassingDeleteResponse, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_DEGASSING_WRITE_ROLES))])
 def delete_inventory_balance_degassing(balance_degassing_id: int = Path(..., gt=0)):
     connection = None
 

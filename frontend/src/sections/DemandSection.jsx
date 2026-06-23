@@ -65,6 +65,7 @@ import {
   getProductionPlans,
   refreshProductionPlanFromDemand,
 } from "../services/productionPlansApi";
+import { useRole } from "../auth/useRole";
 
 const MODULE_TAB_SOURCE_DATA = "source_data";
 const MODULE_TAB_CALCULATE = "demand_calculate";
@@ -238,6 +239,18 @@ function resolveErrorMessages(error, fallbackMessage) {
   return [fallbackMessage];
 }
 
+function getDemandPermissionErrorMessage(error, actionType = "edit") {
+  if (!(error?.status === 403 || error?.message === "Forbidden")) {
+    return null;
+  }
+
+  if (actionType === "view") {
+    return "Недостаточно прав для просмотра потребности.";
+  }
+
+  return "Недостаточно прав для изменения данных потребности.";
+}
+
 function normalizeLookbackDays(value, fallbackValue = 7) {
   const parsedValue = Number.parseInt(String(value ?? "").trim(), 10);
   if (!Number.isFinite(parsedValue) || parsedValue < 1) {
@@ -279,6 +292,12 @@ function IconActionButton({ label, onClick, disabled = false, tone = "edit", chi
 }
 
 function DemandSection() {
+  const { user } = useRole();
+  const canViewDemand = user?.role === "admin" || user?.role === "planner" || user?.role === "viewer";
+  const canCalculateDemand = user?.role === "admin" || user?.role === "planner";
+  const canCreateProductionPlanFromDemand = user?.role === "admin" || user?.role === "planner";
+  const canEditDemandInputs = user?.role === "admin" || user?.role === "planner";
+
   const [activeModuleTab, setActiveModuleTab] = useState(MODULE_TAB_SOURCE_DATA);
   const [activeSourceTab, setActiveSourceTab] = useState(IMPORT_CONTEXT_SALES_PLAN);
 
@@ -391,6 +410,13 @@ function DemandSection() {
   const [isRefreshProductionPlanConfirmOpen, setIsRefreshProductionPlanConfirmOpen] = useState(false);
 
   const reloadSalesPlan = useCallback(async () => {
+    if (!canViewDemand) {
+      setSalesPlanItems([]);
+      setSalesPlanError("");
+      setIsSalesPlanLoading(false);
+      return;
+    }
+
     setIsSalesPlanLoading(true);
     setSalesPlanError("");
 
@@ -399,13 +425,22 @@ function DemandSection() {
       setSalesPlanItems(Array.isArray(response) ? response : []);
     } catch (error) {
       setSalesPlanItems([]);
-      setSalesPlanError(error.message || "Не удалось загрузить план продаж.");
+      setSalesPlanError(
+        getDemandPermissionErrorMessage(error, "view") || error.message || "Не удалось загрузить план продаж.",
+      );
     } finally {
       setIsSalesPlanLoading(false);
     }
-  }, [planMonth]);
+  }, [canViewDemand, planMonth]);
 
   const reloadInventoryBalance = useCallback(async () => {
+    if (!canViewDemand) {
+      setInventoryItems([]);
+      setInventoryError("");
+      setIsInventoryLoading(false);
+      return;
+    }
+
     if (!balanceDate) {
       setInventoryItems([]);
       setInventoryError("");
@@ -421,13 +456,22 @@ function DemandSection() {
       setInventoryItems(Array.isArray(response) ? response : []);
     } catch (error) {
       setInventoryItems([]);
-      setInventoryError(error.message || "Не удалось загрузить остатки.");
+      setInventoryError(
+        getDemandPermissionErrorMessage(error, "view") || error.message || "Не удалось загрузить остатки.",
+      );
     } finally {
       setIsInventoryLoading(false);
     }
-  }, [balanceDate]);
+  }, [balanceDate, canViewDemand]);
 
   const reloadInventoryDegassing = useCallback(async () => {
+    if (!canViewDemand) {
+      setInventoryDegassingItems([]);
+      setInventoryDegassingError("");
+      setIsInventoryDegassingLoading(false);
+      return;
+    }
+
     if (!balanceDate) {
       setInventoryDegassingItems([]);
       setInventoryDegassingError("");
@@ -448,13 +492,22 @@ function DemandSection() {
       setInventoryDegassingItems(Array.isArray(response) ? response : []);
     } catch (error) {
       setInventoryDegassingItems([]);
-      setInventoryDegassingError(error.message || "Не удалось загрузить остатки в дегазации.");
+      setInventoryDegassingError(
+        getDemandPermissionErrorMessage(error, "view") || error.message || "Не удалось загрузить остатки в дегазации.",
+      );
     } finally {
       setIsInventoryDegassingLoading(false);
     }
-  }, [balanceDate, inventoryDegassingNomenclatureId]);
+  }, [balanceDate, canViewDemand, inventoryDegassingNomenclatureId]);
 
   const reloadInventoryBalanceDates = useCallback(async () => {
+    if (!canViewDemand) {
+      setInventoryBalanceDates([]);
+      setInventoryDatesError("");
+      setIsInventoryDatesLoading(false);
+      return;
+    }
+
     setIsInventoryDatesLoading(true);
     setInventoryDatesError("");
 
@@ -470,13 +523,24 @@ function DemandSection() {
       }
     } catch (error) {
       setInventoryBalanceDates([]);
-      setInventoryDatesError(error.message || "Не удалось загрузить список дат остатков.");
+      setInventoryDatesError(
+        getDemandPermissionErrorMessage(error, "view") ||
+          error.message ||
+          "Не удалось загрузить список дат остатков.",
+      );
     } finally {
       setIsInventoryDatesLoading(false);
     }
-  }, [balanceDate]);
+  }, [balanceDate, canViewDemand]);
 
   const reloadSafetyStock = useCallback(async () => {
+    if (!canViewDemand) {
+      setSafetyStockItems([]);
+      setSafetyStockError("");
+      setIsSafetyStockLoading(false);
+      return;
+    }
+
     setIsSafetyStockLoading(true);
     setSafetyStockError("");
 
@@ -485,31 +549,48 @@ function DemandSection() {
       setSafetyStockItems(Array.isArray(response) ? response : []);
     } catch (error) {
       setSafetyStockItems([]);
-      setSafetyStockError(error.message || "Не удалось загрузить страховой запас.");
+      setSafetyStockError(
+        getDemandPermissionErrorMessage(error, "view") || error.message || "Не удалось загрузить страховой запас.",
+      );
     } finally {
       setIsSafetyStockLoading(false);
     }
-  }, []);
+  }, [canViewDemand]);
 
   useEffect(() => {
+    if (!canViewDemand) {
+      return;
+    }
     reloadSalesPlan();
-  }, [reloadSalesPlan]);
+  }, [canViewDemand, reloadSalesPlan]);
 
   useEffect(() => {
+    if (!canViewDemand) {
+      return;
+    }
     reloadInventoryBalanceDates();
-  }, [reloadInventoryBalanceDates]);
+  }, [canViewDemand, reloadInventoryBalanceDates]);
 
   useEffect(() => {
+    if (!canViewDemand) {
+      return;
+    }
     reloadInventoryBalance();
-  }, [reloadInventoryBalance]);
+  }, [canViewDemand, reloadInventoryBalance]);
 
   useEffect(() => {
+    if (!canViewDemand) {
+      return;
+    }
     reloadInventoryDegassing();
-  }, [reloadInventoryDegassing]);
+  }, [canViewDemand, reloadInventoryDegassing]);
 
   useEffect(() => {
+    if (!canViewDemand) {
+      return;
+    }
     reloadSafetyStock();
-  }, [reloadSafetyStock]);
+  }, [canViewDemand, reloadSafetyStock]);
 
   useEffect(() => {
     if (activeSourceTab !== IMPORT_CONTEXT_SALES_PLAN) {
@@ -557,6 +638,10 @@ function DemandSection() {
   }, [activeSourceTab]);
 
   const loadNomenclatureItems = useCallback(async () => {
+    if (!canViewDemand) {
+      return;
+    }
+
     if (isNomenclatureLoading || nomenclatureItems.length > 0) {
       return;
     }
@@ -576,13 +661,17 @@ function DemandSection() {
     } finally {
       setIsNomenclatureLoading(false);
     }
-  }, [activeSourceTab, isNomenclatureLoading, nomenclatureItems.length]);
+  }, [activeSourceTab, canViewDemand, isNomenclatureLoading, nomenclatureItems.length]);
 
   useEffect(() => {
+    if (!canViewDemand) {
+      return;
+    }
+
     if (activeSourceTab === IMPORT_CONTEXT_INVENTORY_BALANCE && nomenclatureItems.length === 0) {
       loadNomenclatureItems();
     }
-  }, [activeSourceTab, loadNomenclatureItems, nomenclatureItems.length]);
+  }, [activeSourceTab, canViewDemand, loadNomenclatureItems, nomenclatureItems.length]);
 
   const filteredSalesPlanItems = useMemo(
     () => filterItemsBySearch(salesPlanItems, salesPlanSearch),
@@ -620,7 +709,7 @@ function DemandSection() {
     () => (Array.isArray(demandResult?.problems) ? demandResult.problems : []),
     [demandResult],
   );
-  const canCreateProductionPlan = demandResult && demandInternalItems.length > 0;
+  const canCreateProductionPlan = canCreateProductionPlanFromDemand && demandResult && demandInternalItems.length > 0;
   const selectedInventoryDegassingFormNomenclature = sortedNomenclatureItems.find(
     (item) => String(item.nomenclature_id) === String(inventoryDegassingFormNomenclatureId || ""),
   );
@@ -707,6 +796,11 @@ function DemandSection() {
   }, [activeSourceTab, importContext, isImportOpen, resetImportState]);
 
   const handleOpenImportPanel = (context) => {
+    if (!canEditDemandInputs) {
+      setImportError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setImportContext(context);
     setImportErrorContext(context);
     resetImportState();
@@ -723,6 +817,11 @@ function DemandSection() {
   };
 
   const handleDownloadTemplate = async (context = importContext) => {
+    if (!canEditDemandInputs) {
+      setImportError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     const resolvedContext = context || activeSourceTab;
     if (!resolvedContext) {
       return;
@@ -760,7 +859,9 @@ function DemandSection() {
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      setImportError(error.message || "Не удалось скачать шаблон Excel.");
+      setImportError(
+        getDemandPermissionErrorMessage(error) || error.message || "Не удалось скачать шаблон Excel.",
+      );
     } finally {
       setIsTemplateDownloading(false);
     }
@@ -774,6 +875,11 @@ function DemandSection() {
   };
 
   const handlePreviewImport = async () => {
+    if (!canEditDemandInputs) {
+      setImportError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     if (!importFile) {
       setImportError("Выберите Excel-файл для предпросмотра.");
       return;
@@ -799,13 +905,22 @@ function DemandSection() {
       setPreviewData(response);
     } catch (error) {
       setPreviewData(null);
-      setImportError(error.message || "Не удалось подготовить предпросмотр импорта.");
+      setImportError(
+        getDemandPermissionErrorMessage(error) ||
+          error.message ||
+          "Не удалось подготовить предпросмотр импорта.",
+      );
     } finally {
       setIsPreviewLoading(false);
     }
   };
 
   const handleCommitImport = async () => {
+    if (!canEditDemandInputs) {
+      setImportError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     if (!importFile) {
       setImportError("Выберите Excel-файл для импорта.");
       return;
@@ -843,14 +958,16 @@ function DemandSection() {
         await reloadSafetyStock();
       }
     } catch (error) {
-      setImportError(error.message || "Не удалось выполнить импорт.");
+      setImportError(
+        getDemandPermissionErrorMessage(error) || error.message || "Не удалось выполнить импорт.",
+      );
     } finally {
       setIsCommitLoading(false);
     }
   };
 
   const renderImportPanel = () => {
-    if (!isImportOpen) {
+    if (!isImportOpen || !canEditDemandInputs) {
       return null;
     }
 
@@ -919,6 +1036,11 @@ function DemandSection() {
     setProductionPlanRefreshCandidate(null);
     setIsRefreshProductionPlanConfirmOpen(false);
 
+    if (!canCalculateDemand) {
+      setDemandCalculateError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     if (!planMonth) {
       setDemandCalculateError("Для расчёта потребности выберите период планирования.");
       return;
@@ -942,7 +1064,9 @@ function DemandSection() {
       setLastCalculationParams(payload);
       setLastCalculatedAt(new Date().toISOString());
     } catch (error) {
-      setDemandCalculateError(error.message || "Не удалось выполнить расчёт потребности.");
+      setDemandCalculateError(
+        getDemandPermissionErrorMessage(error) || error.message || "Не удалось выполнить расчёт потребности.",
+      );
     } finally {
       setIsDemandCalculating(false);
     }
@@ -953,6 +1077,11 @@ function DemandSection() {
     setProductionPlanCreateSuccess("");
     setProductionPlanRefreshCandidate(null);
     setIsRefreshProductionPlanConfirmOpen(false);
+
+    if (!canCreateProductionPlanFromDemand) {
+      setProductionPlanCreateError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
 
     if (!demandResult) {
       setProductionPlanCreateError("Сначала выполните расчёт потребности.");
@@ -1002,7 +1131,7 @@ function DemandSection() {
       setProductionPlanRefreshCandidate(null);
       setIsRefreshProductionPlanConfirmOpen(false);
     } catch (error) {
-      const message = error?.message || "Не удалось сформировать план выпуска.";
+      const message = getDemandPermissionErrorMessage(error) || error?.message || "Не удалось сформировать план выпуска.";
       if (message.includes("План выпуска за выбранный месяц уже существует")) {
         setProductionPlanCreateError(
           "План выпуска за этот месяц уже существует.",
@@ -1056,6 +1185,11 @@ function DemandSection() {
       return;
     }
 
+    if (!canCreateProductionPlanFromDemand) {
+      setProductionPlanCreateError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setProductionPlanCreateError("");
     setProductionPlanCreateSuccess("");
     setIsRefreshingProductionPlan(true);
@@ -1074,7 +1208,10 @@ function DemandSection() {
       setProductionPlanRefreshCandidate(null);
       setIsRefreshProductionPlanConfirmOpen(false);
     } catch (error) {
-      const message = error?.message || "Не удалось обновить существующий план из расчёта.";
+      const message =
+        getDemandPermissionErrorMessage(error) ||
+        error?.message ||
+        "Не удалось обновить существующий план из расчёта.";
       if (message.includes("Утверждённый план выпуска нельзя обновить из расчёта")) {
         setProductionPlanRefreshCandidate(null);
         setIsRefreshProductionPlanConfirmOpen(false);
@@ -1090,6 +1227,11 @@ function DemandSection() {
   };
 
   const handleOpenCreateSalesPlanForm = async () => {
+    if (!canEditDemandInputs) {
+      setSalesPlanFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setSalesPlanFormMode("create");
     setSalesPlanFormItem(null);
     setSalesPlanFormError("");
@@ -1100,6 +1242,11 @@ function DemandSection() {
   };
 
   const handleOpenEditSalesPlanForm = (item) => {
+    if (!canEditDemandInputs) {
+      setSalesPlanFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setSalesPlanFormMode("edit");
     setSalesPlanFormItem(item);
     setSalesPlanFormError("");
@@ -1154,7 +1301,9 @@ function DemandSection() {
       if (error?.status === 409) {
         setSalesPlanFormError("Позиция уже есть в плане продаж за выбранный период.");
       } else {
-        setSalesPlanFormError(error.message || "Не удалось сохранить строку плана продаж.");
+        setSalesPlanFormError(
+          getDemandPermissionErrorMessage(error) || error.message || "Не удалось сохранить строку плана продаж.",
+        );
       }
     } finally {
       setIsSalesPlanSaving(false);
@@ -1179,13 +1328,20 @@ function DemandSection() {
       await reloadSalesPlan();
       setSalesPlanDeleteCandidate(null);
     } catch (error) {
-      setSalesPlanDeleteError(error.message || "Не удалось удалить строку плана продаж.");
+      setSalesPlanDeleteError(
+        getDemandPermissionErrorMessage(error) || error.message || "Не удалось удалить строку плана продаж.",
+      );
     } finally {
       setDeletingSalesPlanId(null);
     }
   };
 
   const handleOpenCreateInventoryForm = async () => {
+    if (!canEditDemandInputs) {
+      setInventoryFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     if (!balanceDate) {
       setInventoryFormError("Сначала загрузите или выберите дату остатков.");
       return;
@@ -1201,6 +1357,11 @@ function DemandSection() {
   };
 
   const handleOpenEditInventoryForm = (item) => {
+    if (!canEditDemandInputs) {
+      setInventoryFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setInventoryFormMode("edit");
     setInventoryFormItem(item);
     setInventoryFormError("");
@@ -1261,7 +1422,9 @@ function DemandSection() {
       if (error?.status === 409) {
         setInventoryFormError("Позиция уже есть в остатках на выбранную дату.");
       } else {
-        setInventoryFormError(error.message || "Не удалось сохранить строку остатков.");
+        setInventoryFormError(
+          getDemandPermissionErrorMessage(error) || error.message || "Не удалось сохранить строку остатков.",
+        );
       }
     } finally {
       setIsInventorySaving(false);
@@ -1287,13 +1450,20 @@ function DemandSection() {
       await reloadInventoryBalance();
       setInventoryDeleteCandidate(null);
     } catch (error) {
-      setInventoryDeleteError(error.message || "Не удалось удалить строку остатков.");
+      setInventoryDeleteError(
+        getDemandPermissionErrorMessage(error) || error.message || "Не удалось удалить строку остатков.",
+      );
     } finally {
       setDeletingInventoryId(null);
     }
   };
 
   const handleOpenCreateInventoryDegassingForm = async () => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     if (!balanceDate) {
       setInventoryDegassingFormError("Сначала загрузите общие остатки. После этого можно указать часть остатков в дегазации.");
       return;
@@ -1313,6 +1483,11 @@ function DemandSection() {
   };
 
   const handleOpenEditInventoryDegassingForm = async (item) => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     const { date: availableDate, time: availableTime } = splitDateTimeParts(item?.available_at);
     setInventoryDegassingFormMode("edit");
     setInventoryDegassingFormItem(item);
@@ -1398,7 +1573,11 @@ function DemandSection() {
       setInventoryDegassingFormItem(null);
       setInventoryDegassingFormError("");
     } catch (error) {
-      setInventoryDegassingFormError(error.message || "Не удалось сохранить запись остатков в дегазации.");
+      setInventoryDegassingFormError(
+        getDemandPermissionErrorMessage(error) ||
+          error.message ||
+          "Не удалось сохранить запись остатков в дегазации.",
+      );
     } finally {
       setIsInventoryDegassingSaving(false);
     }
@@ -1423,7 +1602,11 @@ function DemandSection() {
       setInventoryDegassingDeleteCandidate(null);
     } catch (error) {
       setInventoryDegassingDeleteCandidate(null);
-      setInventoryDegassingDeleteError(error.message || "Не удалось удалить запись остатков в дегазации.");
+      setInventoryDegassingDeleteError(
+        getDemandPermissionErrorMessage(error) ||
+          error.message ||
+          "Не удалось удалить запись остатков в дегазации.",
+      );
     } finally {
       setDeletingInventoryDegassingId(null);
     }
@@ -1449,14 +1632,21 @@ function DemandSection() {
         error,
         "Не удалось скачать шаблон остатков в дегазации.",
       );
-      setInventoryDegassingImportError(messages[0] || "Не удалось скачать шаблон остатков в дегазации.");
-      setInventoryDegassingImportErrors(messages);
+      const permissionMessage = getDemandPermissionErrorMessage(error);
+      const resolvedMessage = permissionMessage || messages[0] || "Не удалось скачать шаблон остатков в дегазации.";
+      setInventoryDegassingImportError(resolvedMessage);
+      setInventoryDegassingImportErrors(permissionMessage ? [permissionMessage] : messages);
     } finally {
       setIsInventoryDegassingTemplateDownloading(false);
     }
   };
 
   const handleOpenInventoryDegassingImport = () => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingImportError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     if (inventoryBalanceDates.length === 0 || isInventoryDegassingImporting) {
       return;
     }
@@ -1489,6 +1679,12 @@ function DemandSection() {
   };
 
   const handleInventoryDegassingFileChange = (event) => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingImportError("Недостаточно прав для изменения данных потребности.");
+      event.target.value = "";
+      return;
+    }
+
     const file = event.target.files?.[0];
     event.target.value = "";
 
@@ -1501,6 +1697,13 @@ function DemandSection() {
   };
 
   const handleConfirmInventoryDegassingImport = async () => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingImportError("Недостаточно прав для изменения данных потребности.");
+      setInventoryDegassingImportErrors(["Недостаточно прав для изменения данных потребности."]);
+      resetInventoryDegassingImportSelection();
+      return;
+    }
+
     if (!pendingInventoryDegassingImportFile) {
       return;
     }
@@ -1543,6 +1746,12 @@ function DemandSection() {
   };
 
   const handleLoadInventoryDegassingSuggestion = async (nextLookbackDays) => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingSuggestionError("Недостаточно прав для изменения данных потребности.");
+      setInventoryDegassingSuggestionErrors(["Недостаточно прав для изменения данных потребности."]);
+      return;
+    }
+
     if (!balanceDate) {
       setInventoryDegassingSuggestionError("Сначала выберите дату остатков.");
       setInventoryDegassingSuggestionErrors(["Сначала выберите дату остатков."]);
@@ -1575,8 +1784,10 @@ function DemandSection() {
         error,
         "Не удалось сформировать отчёт по ПФ в дегазации.",
       );
-      setInventoryDegassingSuggestionError(messages[0] || "Не удалось сформировать отчёт по ПФ в дегазации.");
-      setInventoryDegassingSuggestionErrors(messages);
+      const permissionMessage = getDemandPermissionErrorMessage(error);
+      const resolvedMessage = permissionMessage || messages[0] || "Не удалось сформировать отчёт по ПФ в дегазации.";
+      setInventoryDegassingSuggestionError(resolvedMessage);
+      setInventoryDegassingSuggestionErrors(permissionMessage ? [permissionMessage] : messages);
       setInventoryDegassingSuggestionItems([]);
       setInventoryDegassingSuggestionMeta({
         as_of_date: balanceDate,
@@ -1589,10 +1800,22 @@ function DemandSection() {
   };
 
   const handleOpenInventoryDegassingSuggestion = async () => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingSuggestionError("Недостаточно прав для изменения данных потребности.");
+      setInventoryDegassingSuggestionErrors(["Недостаточно прав для изменения данных потребности."]);
+      return;
+    }
+
     await handleLoadInventoryDegassingSuggestion(inventoryDegassingSuggestionLookbackDays);
   };
 
   const handleDownloadInventoryDegassingSuggestion = async (lookbackDays = inventoryDegassingSuggestionLookbackDays) => {
+    if (!canEditDemandInputs) {
+      setInventoryDegassingSuggestionError("Недостаточно прав для изменения данных потребности.");
+      setInventoryDegassingSuggestionErrors(["Недостаточно прав для изменения данных потребности."]);
+      return;
+    }
+
     if (!balanceDate) {
       setInventoryDegassingSuggestionError("Сначала выберите дату остатков.");
       setInventoryDegassingSuggestionErrors(["Сначала выберите дату остатков."]);
@@ -1624,8 +1847,10 @@ function DemandSection() {
         error,
         "Не удалось скачать отчёт по ПФ в дегазации.",
       );
-      setInventoryDegassingSuggestionError(messages[0] || "Не удалось скачать отчёт по ПФ в дегазации.");
-      setInventoryDegassingSuggestionErrors(messages);
+      const permissionMessage = getDemandPermissionErrorMessage(error);
+      const resolvedMessage = permissionMessage || messages[0] || "Не удалось скачать отчёт по ПФ в дегазации.";
+      setInventoryDegassingSuggestionError(resolvedMessage);
+      setInventoryDegassingSuggestionErrors(permissionMessage ? [permissionMessage] : messages);
       setIsInventoryDegassingSuggestionOpen(true);
     } finally {
       setIsInventoryDegassingSuggestionDownloading(false);
@@ -1633,6 +1858,11 @@ function DemandSection() {
   };
 
   const handleOpenCreateSafetyStockForm = async () => {
+    if (!canEditDemandInputs) {
+      setSafetyStockFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setSafetyStockFormMode("create");
     setSafetyStockFormItem(null);
     setSafetyStockFormError("");
@@ -1643,6 +1873,11 @@ function DemandSection() {
   };
 
   const handleOpenEditSafetyStockForm = (item) => {
+    if (!canEditDemandInputs) {
+      setSafetyStockFormError("Недостаточно прав для изменения данных потребности.");
+      return;
+    }
+
     setSafetyStockFormMode("edit");
     setSafetyStockFormItem(item);
     setSafetyStockFormError("");
@@ -1696,7 +1931,9 @@ function DemandSection() {
       if (error?.status === 409) {
         setSafetyStockFormError("Позиция уже есть в страховом запасе.");
       } else {
-        setSafetyStockFormError(error.message || "Не удалось сохранить строку страхового запаса.");
+        setSafetyStockFormError(
+          getDemandPermissionErrorMessage(error) || error.message || "Не удалось сохранить строку страхового запаса.",
+        );
       }
     } finally {
       setIsSafetyStockSaving(false);
@@ -1721,7 +1958,9 @@ function DemandSection() {
       await reloadSafetyStock();
       setSafetyStockDeleteCandidate(null);
     } catch (error) {
-      setSafetyStockDeleteError(error.message || "Не удалось удалить строку страхового запаса.");
+      setSafetyStockDeleteError(
+        getDemandPermissionErrorMessage(error) || error.message || "Не удалось удалить строку страхового запаса.",
+      );
     } finally {
       setDeletingSafetyStockId(null);
     }
@@ -1956,7 +2195,7 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={handleOpenCreateInventoryForm}
-                  disabled={!balanceDate || isInventorySaving || deletingInventoryId !== null}
+                  disabled={!canEditDemandInputs || !balanceDate || isInventorySaving || deletingInventoryId !== null}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Plus className="h-4 w-4" />
@@ -2024,14 +2263,14 @@ function DemandSection() {
                               <IconActionButton
                                 label="Редактировать"
                                 onClick={() => handleOpenEditInventoryForm(item)}
-                                disabled={isInventorySaving || deletingInventoryId === item.balance_id}
+                                disabled={!canEditDemandInputs || isInventorySaving || deletingInventoryId === item.balance_id}
                               >
                                 <PencilLine className="h-3.5 w-3.5" />
                               </IconActionButton>
                               <IconActionButton
                                 label="Удалить"
                                 onClick={() => handleAskDeleteInventory(item)}
-                                disabled={isInventorySaving || deletingInventoryId === item.balance_id}
+                                disabled={!canEditDemandInputs || isInventorySaving || deletingInventoryId === item.balance_id}
                                 tone="danger"
                               >
                                 {deletingInventoryId === item.balance_id ? (
@@ -2132,6 +2371,7 @@ function DemandSection() {
                 type="button"
                 onClick={handleOpenInventoryDegassingSuggestion}
                 disabled={
+                  !canEditDemandInputs ||
                   inventoryBalanceDates.length === 0 ||
                   !balanceDate ||
                   isInventoryDegassingSuggestionLoading ||
@@ -2146,6 +2386,7 @@ function DemandSection() {
                 type="button"
                 onClick={handleOpenInventoryDegassingImport}
                 disabled={
+                  !canEditDemandInputs ||
                   inventoryBalanceDates.length === 0 ||
                   isInventoryDegassingImporting ||
                   isInventoryDegassingImportConfirmOpen
@@ -2158,7 +2399,7 @@ function DemandSection() {
               <button
                 type="button"
                 onClick={handleDownloadInventoryDegassingTemplate}
-                disabled={isInventoryDegassingTemplateDownloading}
+                disabled={!canEditDemandInputs || isInventoryDegassingTemplateDownloading}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Download className="h-4 w-4" />
@@ -2168,6 +2409,7 @@ function DemandSection() {
                 type="button"
                 onClick={handleOpenCreateInventoryDegassingForm}
                 disabled={
+                  !canEditDemandInputs ||
                   inventoryBalanceDates.length === 0 ||
                   isInventoryDegassingSaving ||
                   deletingInventoryDegassingId !== null ||
@@ -2277,14 +2519,22 @@ function DemandSection() {
                               <IconActionButton
                                 label="Изменить"
                                 onClick={() => handleOpenEditInventoryDegassingForm(item)}
-                                disabled={isInventoryDegassingSaving || deletingInventoryDegassingId === item.balance_degassing_id}
+                                disabled={
+                                  !canEditDemandInputs ||
+                                  isInventoryDegassingSaving ||
+                                  deletingInventoryDegassingId === item.balance_degassing_id
+                                }
                               >
                                 <PencilLine className="h-3.5 w-3.5" />
                               </IconActionButton>
                               <IconActionButton
                                 label="Удалить"
                                 onClick={() => handleAskDeleteInventoryDegassing(item)}
-                                disabled={isInventoryDegassingSaving || deletingInventoryDegassingId === item.balance_degassing_id}
+                                disabled={
+                                  !canEditDemandInputs ||
+                                  isInventoryDegassingSaving ||
+                                  deletingInventoryDegassingId === item.balance_degassing_id
+                                }
                                 tone="danger"
                               >
                                 {deletingInventoryDegassingId === item.balance_degassing_id ? (
@@ -2482,7 +2732,7 @@ function DemandSection() {
                       <button
                         type="button"
                         onClick={handleOpenCreateSalesPlanForm}
-                        disabled={isSalesPlanSaving || deletingSalesPlanId !== null}
+                        disabled={!canEditDemandInputs || isSalesPlanSaving || deletingSalesPlanId !== null}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Plus className="h-4 w-4" />
@@ -2493,7 +2743,7 @@ function DemandSection() {
                       <button
                         type="button"
                         onClick={handleOpenCreateInventoryForm}
-                        disabled={!balanceDate || isInventorySaving || deletingInventoryId !== null}
+                        disabled={!canEditDemandInputs || !balanceDate || isInventorySaving || deletingInventoryId !== null}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Plus className="h-4 w-4" />
@@ -2504,7 +2754,7 @@ function DemandSection() {
                       <button
                         type="button"
                         onClick={handleOpenCreateSafetyStockForm}
-                        disabled={isSafetyStockSaving || deletingSafetyStockId !== null}
+                        disabled={!canEditDemandInputs || isSafetyStockSaving || deletingSafetyStockId !== null}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Plus className="h-4 w-4" />
@@ -2596,14 +2846,14 @@ function DemandSection() {
                                       <IconActionButton
                                         label="Редактировать"
                                         onClick={() => handleOpenEditSalesPlanForm(item)}
-                                        disabled={isSalesPlanSaving || deletingSalesPlanId === item.sales_plan_id}
+                                        disabled={!canEditDemandInputs || isSalesPlanSaving || deletingSalesPlanId === item.sales_plan_id}
                                       >
                                         <PencilLine className="h-3.5 w-3.5" />
                                       </IconActionButton>
                                       <IconActionButton
                                         label="Удалить"
                                         onClick={() => handleAskDeleteSalesPlan(item)}
-                                        disabled={isSalesPlanSaving || deletingSalesPlanId === item.sales_plan_id}
+                                        disabled={!canEditDemandInputs || isSalesPlanSaving || deletingSalesPlanId === item.sales_plan_id}
                                         tone="danger"
                                       >
                                         {deletingSalesPlanId === item.sales_plan_id ? (
@@ -2619,14 +2869,14 @@ function DemandSection() {
                                         <IconActionButton
                                           label="Редактировать"
                                           onClick={() => handleOpenEditInventoryForm(item)}
-                                          disabled={isInventorySaving || deletingInventoryId === item.balance_id}
+                                          disabled={!canEditDemandInputs || isInventorySaving || deletingInventoryId === item.balance_id}
                                         >
                                           <PencilLine className="h-3.5 w-3.5" />
                                         </IconActionButton>
                                         <IconActionButton
                                           label="Удалить"
                                           onClick={() => handleAskDeleteInventory(item)}
-                                          disabled={isInventorySaving || deletingInventoryId === item.balance_id}
+                                          disabled={!canEditDemandInputs || isInventorySaving || deletingInventoryId === item.balance_id}
                                           tone="danger"
                                         >
                                           {deletingInventoryId === item.balance_id ? (
@@ -2641,14 +2891,14 @@ function DemandSection() {
                                         <IconActionButton
                                           label="Редактировать"
                                           onClick={() => handleOpenEditSafetyStockForm(item)}
-                                          disabled={isSafetyStockSaving || deletingSafetyStockId === item.safety_stock_id}
+                                          disabled={!canEditDemandInputs || isSafetyStockSaving || deletingSafetyStockId === item.safety_stock_id}
                                         >
                                           <PencilLine className="h-3.5 w-3.5" />
                                         </IconActionButton>
                                         <IconActionButton
                                           label="Удалить"
                                           onClick={() => handleAskDeleteSafetyStock(item)}
-                                          disabled={isSafetyStockSaving || deletingSafetyStockId === item.safety_stock_id}
+                                          disabled={!canEditDemandInputs || isSafetyStockSaving || deletingSafetyStockId === item.safety_stock_id}
                                           tone="danger"
                                         >
                                           {deletingSafetyStockId === item.safety_stock_id ? (
@@ -2689,7 +2939,7 @@ function DemandSection() {
 
           {isImportOpen ? (
             renderImportPanel()
-          ) : activeSourceTab === IMPORT_CONTEXT_SALES_PLAN && isSalesPlanFormOpen ? (
+          ) : activeSourceTab === IMPORT_CONTEXT_SALES_PLAN && isSalesPlanFormOpen && canEditDemandInputs ? (
             <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
               <div className="panel-title">
                 {salesPlanFormMode === "create" ? "Добавление" : "Редактирование"}
@@ -2765,7 +3015,7 @@ function DemandSection() {
                   <button
                     type="button"
                     onClick={handleSaveSalesPlanForm}
-                    disabled={isSalesPlanSaving}
+                    disabled={!canEditDemandInputs || isSalesPlanSaving}
                     className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSalesPlanSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
@@ -2774,7 +3024,7 @@ function DemandSection() {
                 </div>
               </div>
             </aside>
-          ) : activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK && isSafetyStockFormOpen ? (
+          ) : activeSourceTab === IMPORT_CONTEXT_SAFETY_STOCK && isSafetyStockFormOpen && canEditDemandInputs ? (
             <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
               <div className="panel-title">
                 {safetyStockFormMode === "create" ? "Добавление" : "Редактирование"}
@@ -2838,7 +3088,7 @@ function DemandSection() {
                   <button
                     type="button"
                     onClick={handleSaveSafetyStockForm}
-                    disabled={isSafetyStockSaving}
+                    disabled={!canEditDemandInputs || isSafetyStockSaving}
                     className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSafetyStockSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
@@ -2863,7 +3113,8 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={() => handleOpenImportPanel(currentSourceDataset.context)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
+                  disabled={!canEditDemandInputs}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Upload className="h-4 w-4" />
                   Импорт Excel
@@ -2871,8 +3122,8 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={() => handleDownloadTemplate(currentSourceDataset.context)}
-                  disabled={isTemplateDownloading}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
+                  disabled={!canEditDemandInputs || isTemplateDownloading}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download className="h-4 w-4" />
                   {isTemplateDownloading ? "Скачиваем..." : "Скачать шаблон"}
@@ -2949,7 +3200,7 @@ function DemandSection() {
         </section>
       ) : null}
 
-      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryFormOpen ? (
+      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryFormOpen && canEditDemandInputs ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
           <div className="glass-panel w-full max-w-2xl p-5 sm:p-6">
             <div className="panel-title">
@@ -3029,7 +3280,7 @@ function DemandSection() {
               <button
                 type="button"
                 onClick={handleSaveInventoryForm}
-                disabled={isInventorySaving}
+                disabled={!canEditDemandInputs || isInventorySaving}
                 className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isInventorySaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
@@ -3040,7 +3291,7 @@ function DemandSection() {
         </div>
       ) : null}
 
-      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryDegassingFormOpen ? (
+      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryDegassingFormOpen && canEditDemandInputs ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
           <div className="glass-panel w-full max-w-3xl p-5 sm:p-6">
             <div className="panel-title">
@@ -3168,7 +3419,7 @@ function DemandSection() {
               <button
                 type="button"
                 onClick={handleSaveInventoryDegassingForm}
-                disabled={isInventoryDegassingSaving}
+                disabled={!canEditDemandInputs || isInventoryDegassingSaving}
                 className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isInventoryDegassingSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
@@ -3179,7 +3430,7 @@ function DemandSection() {
         </div>
       ) : null}
 
-      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryDegassingSuggestionOpen ? (
+      {activeModuleTab === MODULE_TAB_SOURCE_DATA && isInventorySourceTab && isInventoryDegassingSuggestionOpen && canEditDemandInputs ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
           <div className="glass-panel w-full max-w-6xl p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -3215,7 +3466,11 @@ function DemandSection() {
                   <button
                     type="button"
                     onClick={() => handleLoadInventoryDegassingSuggestion(inventoryDegassingSuggestionLookbackDays)}
-                    disabled={isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading}
+                    disabled={
+                      !canEditDemandInputs ||
+                      isInventoryDegassingSuggestionLoading ||
+                      isInventoryDegassingSuggestionDownloading
+                    }
                     className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <RefreshCw className={["h-4 w-4", isInventoryDegassingSuggestionLoading ? "animate-spin" : ""].join(" ")} />
@@ -3226,7 +3481,11 @@ function DemandSection() {
                   <button
                     type="button"
                     onClick={() => handleDownloadInventoryDegassingSuggestion(inventoryDegassingSuggestionLookbackDays)}
-                    disabled={isInventoryDegassingSuggestionLoading || isInventoryDegassingSuggestionDownloading}
+                    disabled={
+                      !canEditDemandInputs ||
+                      isInventoryDegassingSuggestionLoading ||
+                      isInventoryDegassingSuggestionDownloading
+                    }
                     className="inline-flex h-10 items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Download className="h-4 w-4" />
@@ -3402,7 +3661,7 @@ function DemandSection() {
       />
 
       <V2ConfirmDialog
-        isOpen={isInventoryDegassingImportConfirmOpen}
+        isOpen={isInventoryDegassingImportConfirmOpen && canEditDemandInputs}
         title="Загрузить файл остатков в дегазации?"
         message={
           <>
@@ -3499,7 +3758,7 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={handleCalculateDemand}
-                  disabled={isDemandCalculating}
+                  disabled={!canCalculateDemand || isDemandCalculating}
                   className="inline-flex h-11 items-center gap-2 rounded-none border border-cyan-300/38 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/[0.2] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <RefreshCw className={["h-4 w-4", isDemandCalculating ? "animate-spin" : ""].join(" ")} />
@@ -3508,14 +3767,19 @@ function DemandSection() {
                 <button
                   type="button"
                   onClick={handleCreateProductionPlan}
-                  disabled={!canCreateProductionPlan || isCreatingProductionPlan || isRefreshingProductionPlan}
+                  disabled={
+                    !canCreateProductionPlanFromDemand ||
+                    !canCreateProductionPlan ||
+                    isCreatingProductionPlan ||
+                    isRefreshingProductionPlan
+                  }
                   className="inline-flex h-11 items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isCreatingProductionPlan ? "Формируем план..." : "Сформировать план выпуска"}
                 </button>
               </div>
 
-              {!canCreateProductionPlan ? (
+              {canCreateProductionPlanFromDemand && demandResult && demandInternalItems.length === 0 ? (
                 <p className="mt-2 text-sm text-slate-400">
                   Нет потребности к выпуску для формирования плана.
                 </p>

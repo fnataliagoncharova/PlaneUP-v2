@@ -4,12 +4,13 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.safety_stock import (
     SafetyStockCreate,
@@ -25,6 +26,9 @@ from schemas.safety_stock import (
 
 
 router = APIRouter(prefix="/safety-stock", tags=["safety_stock"])
+
+SAFETY_STOCK_READ_ROLES = ("planner", "viewer")
+SAFETY_STOCK_WRITE_ROLES = ("planner",)
 
 IMPORT_MODE_UPSERT: SafetyStockImportMode = "upsert"
 
@@ -474,7 +478,7 @@ def upsert_safety_stock_row(
     return bool(row and row["inserted"])
 
 
-@router.get("", response_model=list[SafetyStockRead])
+@router.get("", response_model=list[SafetyStockRead], dependencies=[Depends(require_roles(*SAFETY_STOCK_READ_ROLES))])
 def list_safety_stock(
     nomenclature_id: int | None = Query(default=None),
 ):
@@ -529,7 +533,7 @@ def list_safety_stock(
             connection.close()
 
 
-@router.post("", response_model=SafetyStockRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=SafetyStockRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles(*SAFETY_STOCK_WRITE_ROLES))])
 def create_safety_stock_item(payload: SafetyStockCreate):
     connection = None
 
@@ -609,7 +613,7 @@ def create_safety_stock_item(payload: SafetyStockCreate):
             connection.close()
 
 
-@router.put("/{safety_stock_id}", response_model=SafetyStockRead)
+@router.put("/{safety_stock_id}", response_model=SafetyStockRead, dependencies=[Depends(require_roles(*SAFETY_STOCK_WRITE_ROLES))])
 def update_safety_stock_item(
     payload: SafetyStockUpdate,
     safety_stock_id: int = Path(..., gt=0),
@@ -676,7 +680,7 @@ def update_safety_stock_item(
             connection.close()
 
 
-@router.delete("/{safety_stock_id}", response_model=SafetyStockDeleteResponse)
+@router.delete("/{safety_stock_id}", response_model=SafetyStockDeleteResponse, dependencies=[Depends(require_roles(*SAFETY_STOCK_WRITE_ROLES))])
 def delete_safety_stock_item(safety_stock_id: int = Path(..., gt=0)):
     connection = None
 
@@ -720,7 +724,7 @@ def delete_safety_stock_item(safety_stock_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/import/template")
+@router.get("/import/template", dependencies=[Depends(require_roles(*SAFETY_STOCK_READ_ROLES))])
 def download_safety_stock_import_template():
     template_content = create_template_workbook()
     return StreamingResponse(
@@ -732,7 +736,7 @@ def download_safety_stock_import_template():
     )
 
 
-@router.post("/import/preview", response_model=SafetyStockImportPreviewResponse)
+@router.post("/import/preview", response_model=SafetyStockImportPreviewResponse, dependencies=[Depends(require_roles(*SAFETY_STOCK_READ_ROLES))])
 async def preview_safety_stock_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),
@@ -768,7 +772,7 @@ async def preview_safety_stock_import(
             connection.close()
 
 
-@router.post("/import/commit", response_model=SafetyStockImportCommitResponse)
+@router.post("/import/commit", response_model=SafetyStockImportCommitResponse, dependencies=[Depends(require_roles(*SAFETY_STOCK_WRITE_ROLES))])
 async def commit_safety_stock_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),

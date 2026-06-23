@@ -5,13 +5,14 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
 from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.sales_plan import (
     SalesPlanCreate,
@@ -27,6 +28,9 @@ from schemas.sales_plan import (
 
 
 router = APIRouter(prefix="/sales-plan", tags=["sales_plan"])
+
+SALES_PLAN_READ_ROLES = ("planner", "viewer")
+SALES_PLAN_WRITE_ROLES = ("planner",)
 
 IMPORT_MODE_UPSERT: SalesPlanImportMode = "upsert"
 
@@ -590,7 +594,7 @@ def upsert_sales_plan_row(
     return bool(row and row["inserted"])
 
 
-@router.get("", response_model=list[SalesPlanRead])
+@router.get("", response_model=list[SalesPlanRead], dependencies=[Depends(require_roles(*SALES_PLAN_READ_ROLES))])
 def list_sales_plan(
     plan_date: date | None = Query(default=None),
 ):
@@ -647,7 +651,7 @@ def list_sales_plan(
             connection.close()
 
 
-@router.post("", response_model=SalesPlanRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=SalesPlanRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles(*SALES_PLAN_WRITE_ROLES))])
 def create_sales_plan_item(payload: SalesPlanCreate):
     connection = None
 
@@ -731,7 +735,7 @@ def create_sales_plan_item(payload: SalesPlanCreate):
             connection.close()
 
 
-@router.put("/{sales_plan_id}", response_model=SalesPlanRead)
+@router.put("/{sales_plan_id}", response_model=SalesPlanRead, dependencies=[Depends(require_roles(*SALES_PLAN_WRITE_ROLES))])
 def update_sales_plan_item(
     payload: SalesPlanUpdate,
     sales_plan_id: int = Path(..., gt=0),
@@ -799,7 +803,7 @@ def update_sales_plan_item(
             connection.close()
 
 
-@router.delete("/{sales_plan_id}", response_model=SalesPlanDeleteResponse)
+@router.delete("/{sales_plan_id}", response_model=SalesPlanDeleteResponse, dependencies=[Depends(require_roles(*SALES_PLAN_WRITE_ROLES))])
 def delete_sales_plan_item(sales_plan_id: int = Path(..., gt=0)):
     connection = None
 
@@ -843,7 +847,7 @@ def delete_sales_plan_item(sales_plan_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/import/template")
+@router.get("/import/template", dependencies=[Depends(require_roles(*SALES_PLAN_READ_ROLES))])
 def download_sales_plan_import_template():
     template_content = create_template_workbook()
     return StreamingResponse(
@@ -855,7 +859,7 @@ def download_sales_plan_import_template():
     )
 
 
-@router.post("/import/preview", response_model=SalesPlanImportPreviewResponse)
+@router.post("/import/preview", response_model=SalesPlanImportPreviewResponse, dependencies=[Depends(require_roles(*SALES_PLAN_READ_ROLES))])
 async def preview_sales_plan_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),
@@ -892,7 +896,7 @@ async def preview_sales_plan_import(
             connection.close()
 
 
-@router.post("/import/commit", response_model=SalesPlanImportCommitResponse)
+@router.post("/import/commit", response_model=SalesPlanImportCommitResponse, dependencies=[Depends(require_roles(*SALES_PLAN_WRITE_ROLES))])
 async def commit_sales_plan_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),

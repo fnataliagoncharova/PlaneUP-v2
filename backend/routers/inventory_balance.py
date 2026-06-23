@@ -5,13 +5,14 @@ import re
 from typing import Any
 
 import psycopg2
-from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.datetime import from_excel
 from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from schemas.inventory_balance import (
     InventoryBalanceCreate,
@@ -27,6 +28,9 @@ from schemas.inventory_balance import (
 
 
 router = APIRouter(prefix="/inventory-balance", tags=["inventory_balance"])
+
+INVENTORY_BALANCE_READ_ROLES = ("planner", "viewer")
+INVENTORY_BALANCE_WRITE_ROLES = ("planner",)
 
 IMPORT_MODE_UPSERT: InventoryBalanceImportMode = "upsert"
 
@@ -556,7 +560,7 @@ def upsert_inventory_balance_row(
     return bool(row and row["inserted"])
 
 
-@router.get("", response_model=list[InventoryBalanceRead])
+@router.get("", response_model=list[InventoryBalanceRead], dependencies=[Depends(require_roles(*INVENTORY_BALANCE_READ_ROLES))])
 def list_inventory_balance(
     as_of_date: date | None = Query(default=None),
 ):
@@ -613,7 +617,7 @@ def list_inventory_balance(
             connection.close()
 
 
-@router.get("/dates", response_model=list[date])
+@router.get("/dates", response_model=list[date], dependencies=[Depends(require_roles(*INVENTORY_BALANCE_READ_ROLES))])
 def list_inventory_balance_dates():
     connection = None
 
@@ -640,7 +644,7 @@ def list_inventory_balance_dates():
             connection.close()
 
 
-@router.post("", response_model=InventoryBalanceRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InventoryBalanceRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_WRITE_ROLES))])
 def create_inventory_balance_item(payload: InventoryBalanceCreate):
     connection = None
 
@@ -723,7 +727,7 @@ def create_inventory_balance_item(payload: InventoryBalanceCreate):
             connection.close()
 
 
-@router.put("/{balance_id}", response_model=InventoryBalanceRead)
+@router.put("/{balance_id}", response_model=InventoryBalanceRead, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_WRITE_ROLES))])
 def update_inventory_balance_item(
     payload: InventoryBalanceUpdate,
     balance_id: int = Path(..., gt=0),
@@ -791,7 +795,7 @@ def update_inventory_balance_item(
             connection.close()
 
 
-@router.delete("/{balance_id}", response_model=InventoryBalanceDeleteResponse)
+@router.delete("/{balance_id}", response_model=InventoryBalanceDeleteResponse, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_WRITE_ROLES))])
 def delete_inventory_balance_item(balance_id: int = Path(..., gt=0)):
     connection = None
 
@@ -835,7 +839,7 @@ def delete_inventory_balance_item(balance_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/import/template")
+@router.get("/import/template", dependencies=[Depends(require_roles(*INVENTORY_BALANCE_READ_ROLES))])
 def download_inventory_balance_import_template():
     template_content = create_template_workbook()
     return StreamingResponse(
@@ -847,7 +851,7 @@ def download_inventory_balance_import_template():
     )
 
 
-@router.post("/import/preview", response_model=InventoryBalanceImportPreviewResponse)
+@router.post("/import/preview", response_model=InventoryBalanceImportPreviewResponse, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_READ_ROLES))])
 async def preview_inventory_balance_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),
@@ -884,7 +888,7 @@ async def preview_inventory_balance_import(
             connection.close()
 
 
-@router.post("/import/commit", response_model=InventoryBalanceImportCommitResponse)
+@router.post("/import/commit", response_model=InventoryBalanceImportCommitResponse, dependencies=[Depends(require_roles(*INVENTORY_BALANCE_WRITE_ROLES))])
 async def commit_inventory_balance_import(
     file: UploadFile = File(...),
     import_mode: str = Form(IMPORT_MODE_UPSERT),
