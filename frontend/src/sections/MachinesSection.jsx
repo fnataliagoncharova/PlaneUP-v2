@@ -1,6 +1,7 @@
 import { AlertCircle, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useRole } from "../auth/useRole";
 import MachineDetailsPanel from "../components/machines/MachineDetailsPanel";
 import MachineFormPanel from "../components/machines/MachineFormPanel";
 import MachinesList from "../components/machines/MachinesList";
@@ -27,6 +28,7 @@ function getDefaultSelection(items) {
 }
 
 function MachinesSection() {
+  const { user } = useRole();
   const [items, setItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [searchValue, setSearchValue] = useState("");
@@ -39,6 +41,7 @@ function MachinesSection() {
   const [usageEntries, setUsageEntries] = useState([]);
   const [isUsageLoading, setIsUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState("");
+  const canEditMachines = user?.role === "admin" || user?.role === "maintenance";
 
   useEffect(() => {
     let isCancelled = false;
@@ -154,12 +157,20 @@ function MachinesSection() {
   }, [selectedItem?.machine_id]);
 
   const handleOpenCreateForm = () => {
+    if (!canEditMachines) {
+      return;
+    }
+
     setFormMode("create");
     setSaveError("");
     setIsFormOpen(true);
   };
 
   const handleOpenEditForm = () => {
+    if (!canEditMachines) {
+      return;
+    }
+
     if (!selectedItem) {
       return;
     }
@@ -204,7 +215,11 @@ function MachinesSection() {
 
       setIsFormOpen(false);
     } catch (error) {
-      setSaveError(error.message || "Не удалось сохранить изменения.");
+      setSaveError(
+        error?.status === 403 || error?.message === "Forbidden"
+          ? "Недостаточно прав для изменения оборудования."
+          : error.message || "Не удалось сохранить изменения.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -224,14 +239,16 @@ function MachinesSection() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={handleOpenCreateForm}
-                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
-              >
-                <Plus className="h-4 w-4" />
-                Новая единица
-              </button>
+              {canEditMachines ? (
+                <button
+                  type="button"
+                  onClick={handleOpenCreateForm}
+                  className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
+                >
+                  <Plus className="h-4 w-4" />
+                  Новая единица
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -261,6 +278,7 @@ function MachinesSection() {
           errorMessage={saveError}
           onCancel={handleCancelForm}
           onSave={handleSubmitForm}
+          canEdit={canEditMachines}
         />
       ) : (
         <MachineDetailsPanel
@@ -269,6 +287,7 @@ function MachinesSection() {
           isUsageLoading={isUsageLoading}
           usageError={usageError}
           onEdit={handleOpenEditForm}
+          canEdit={canEditMachines}
         />
       )}
     </section>

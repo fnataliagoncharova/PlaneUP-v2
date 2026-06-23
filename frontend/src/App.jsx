@@ -124,7 +124,7 @@ const navigationGroups = [
         id: "machines",
         label: "Оборудование",
         icon: Cog,
-        roles: ["planner", "maintenance", "viewer"],
+        roles: ["planner", "master", "maintenance", "viewer"],
       },
       {
         id: "equipment_maintenance",
