@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS production_actuals (
 
     comment TEXT NULL,
 
+    created_by_user_id INTEGER NULL
+        REFERENCES users(id),
+
+    updated_by_user_id INTEGER NULL
+        REFERENCES users(id),
+
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
 

@@ -30,7 +30,7 @@ router = APIRouter(tags=["production_week_plans"])
 plans_router = APIRouter(prefix="/production-plans", tags=["production_week_plans"])
 weeks_router = APIRouter(prefix="/production-week-plans", tags=["production_week_plans"])
 
-PLAN_READ_ROLES = ("planner", "viewer")
+PLAN_READ_ROLES = ("planner", "master", "maintenance", "viewer")
 PLAN_WRITE_ROLES = ("planner",)
 
 

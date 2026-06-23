@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -6,6 +6,7 @@ import psycopg2
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from psycopg2.extras import RealDictCursor
 
+from auth.dependencies import get_current_user
 from auth.rbac import require_roles
 from db import get_connection
 from schemas.production_actual import (
@@ -18,8 +19,7 @@ from schemas.production_actual import (
 
 router = APIRouter(prefix="/production-actuals", tags=["production_actuals"])
 
-MASTER_WORKSPACE_READ_ROLES = ("master", "planner", "viewer")
-MASTER_WORKSPACE_WRITE_ROLES = ("master",)
+MASTER_WORKSPACE_READ_ROLES = ("master", "planner", "maintenance", "viewer")
 
 DECIMAL_ZERO = Decimal("0")
 SHIFT_TYPES = {"day", "night"}
@@ -41,9 +41,13 @@ SELECT_COLUMNS = """
     m.machine_code,
     m.machine_name,
     pa.comment,
+    pa.created_by_user_id,
+    pa.updated_by_user_id,
     pa.created_at,
     pa.updated_at
 """
+
+PRODUCTION_ACTUAL_PERMISSION_ERROR = "Недостаточно прав для изменения факта выпуска."
 
 
 def normalize_shift_type(value: str | None) -> str:
@@ -72,6 +76,61 @@ def validate_actual_qty(value: Decimal | None) -> Decimal:
             detail="Количество факта должно быть больше нуля.",
         )
     return value
+
+
+def get_current_production_shift_interval(now: datetime | None = None) -> tuple[datetime, datetime]:
+    current_datetime = now or datetime.utcnow()
+    current_day_start = current_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if 8 <= current_datetime.hour < 20:
+        shift_start = current_day_start + timedelta(hours=8)
+        shift_end = current_day_start + timedelta(hours=20)
+        return shift_start, shift_end
+
+    if current_datetime.hour >= 20:
+        shift_start = current_day_start + timedelta(hours=20)
+        shift_end = current_day_start + timedelta(days=1, hours=8)
+        return shift_start, shift_end
+
+    shift_start = current_day_start - timedelta(hours=4)
+    shift_end = current_day_start + timedelta(hours=8)
+    return shift_start, shift_end
+
+
+def ensure_can_modify_production_actual(record: dict[str, Any], current_user: dict[str, Any]) -> None:
+    if current_user["role"] == "admin":
+        return
+
+    created_at = record.get("created_at")
+    if not isinstance(created_at, datetime):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=PRODUCTION_ACTUAL_PERMISSION_ERROR,
+        )
+
+    current_shift_start, current_shift_end = get_current_production_shift_interval()
+
+    if (
+        current_user["role"] == "master"
+        and record.get("created_by_user_id") == current_user["id"]
+        and current_shift_start <= created_at < current_shift_end
+    ):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=PRODUCTION_ACTUAL_PERMISSION_ERROR,
+    )
+
+
+def ensure_can_create_production_actual(current_user: dict[str, Any]) -> None:
+    if current_user["role"] in {"admin", "master"}:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=PRODUCTION_ACTUAL_PERMISSION_ERROR,
+    )
 
 
 def ensure_machine_exists(cursor: RealDictCursor, machine_id: int) -> None:
@@ -130,7 +189,10 @@ def require_production_actual(cursor: RealDictCursor, production_actual_id: int,
             shift_team_no,
             actual_qty,
             machine_id,
-            comment
+            comment,
+            created_by_user_id,
+            updated_by_user_id,
+            created_at
         FROM production_actuals
         WHERE production_actual_id = %s
         {lock_clause};
@@ -285,12 +347,15 @@ def get_production_actual(production_actual_id: int = Path(..., gt=0)):
     "",
     response_model=ProductionActualRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_WRITE_ROLES))],
 )
-def create_production_actual(payload: ProductionActualCreate):
+def create_production_actual(
+    payload: ProductionActualCreate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
     connection = None
 
     try:
+        ensure_can_create_production_actual(current_user)
         normalized_shift_type = normalize_shift_type(payload.shift_type)
         validate_shift_team_no(payload.shift_team_no)
         validate_actual_qty(payload.actual_qty)
@@ -313,9 +378,11 @@ def create_production_actual(payload: ProductionActualCreate):
                     actual_qty,
                     unit_of_measure,
                     machine_id,
-                    comment
+                    comment,
+                    created_by_user_id,
+                    updated_by_user_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING production_actual_id;
                 """,
                 (
@@ -328,6 +395,8 @@ def create_production_actual(payload: ProductionActualCreate):
                     week_line_row["unit_of_measure"],
                     payload.machine_id,
                     payload.comment,
+                    current_user["id"],
+                    current_user["id"],
                 ),
             )
             created_row = cursor.fetchone()
@@ -353,11 +422,11 @@ def create_production_actual(payload: ProductionActualCreate):
 @router.put(
     "/{production_actual_id}",
     response_model=ProductionActualRead,
-    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_WRITE_ROLES))],
 )
 def update_production_actual(
     payload: ProductionActualUpdate,
     production_actual_id: int = Path(..., gt=0),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ):
     connection = None
 
@@ -366,6 +435,7 @@ def update_production_actual(
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             current_row = require_production_actual(cursor, production_actual_id, lock=True)
+            ensure_can_modify_production_actual(current_row, current_user)
 
             next_actual_date = payload_data.get("actual_date", current_row["actual_date"])
             next_shift_type = current_row["shift_type"]
@@ -396,6 +466,7 @@ def update_production_actual(
                     actual_qty = %s,
                     machine_id = %s,
                     comment = %s,
+                    updated_by_user_id = %s,
                     updated_at = NOW()
                 WHERE production_actual_id = %s;
                 """,
@@ -406,6 +477,7 @@ def update_production_actual(
                     next_actual_qty,
                     next_machine_id,
                     next_comment,
+                    current_user["id"],
                     production_actual_id,
                 ),
             )
@@ -431,15 +503,18 @@ def update_production_actual(
 @router.delete(
     "/{production_actual_id}",
     response_model=ProductionActualDeleteResponse,
-    dependencies=[Depends(require_roles(*MASTER_WORKSPACE_WRITE_ROLES))],
 )
-def delete_production_actual(production_actual_id: int = Path(..., gt=0)):
+def delete_production_actual(
+    production_actual_id: int = Path(..., gt=0),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
     connection = None
 
     try:
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-            require_production_actual(cursor, production_actual_id, lock=True)
+            current_row = require_production_actual(cursor, production_actual_id, lock=True)
+            ensure_can_modify_production_actual(current_row, current_user)
             cursor.execute(
                 """
                 DELETE FROM production_actuals

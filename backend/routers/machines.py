@@ -12,7 +12,7 @@ from schemas.machines import MachineCreate, MachineRead, MachineUpdate, MachineU
 
 router = APIRouter(prefix="/machines", tags=["machines"])
 
-EQUIPMENT_READ_ROLES = ("planner", "maintenance", "viewer")
+EQUIPMENT_READ_ROLES = ("planner", "master", "maintenance", "viewer")
 EQUIPMENT_WRITE_ROLES = ("maintenance",)
 
 SELECT_COLUMNS = """

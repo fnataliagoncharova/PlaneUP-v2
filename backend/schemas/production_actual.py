@@ -40,6 +40,8 @@ class ProductionActualRead(BaseModel):
     machine_code: str | None = None
     machine_name: str | None = None
     comment: str | None = None
+    created_by_user_id: int | None = None
+    updated_by_user_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

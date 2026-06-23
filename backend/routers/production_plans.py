@@ -25,7 +25,7 @@ from schemas.production_plan import (
 
 router = APIRouter(prefix="/production-plans", tags=["production_plans"])
 
-PLAN_READ_ROLES = ("planner", "viewer")
+PLAN_READ_ROLES = ("planner", "master", "maintenance", "viewer")
 PLAN_WRITE_ROLES = ("planner",)
 
 PLAN_COLUMNS = """
