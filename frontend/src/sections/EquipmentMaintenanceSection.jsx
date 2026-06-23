@@ -1,6 +1,7 @@
 import { AlertCircle, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useRole } from "../auth/useRole";
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
 import {
   createEquipmentMaintenance,
@@ -22,6 +23,14 @@ function toErrorMessage(error, fallbackText) {
     return error.message;
   }
   return fallbackText;
+}
+
+function toMaintenanceWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения планового ТО.";
+  }
+
+  return toErrorMessage(error, fallbackText);
 }
 
 function splitDateTime(value) {
@@ -157,6 +166,7 @@ function getMachineDisplay(machineCode, machineName) {
 }
 
 function EquipmentMaintenanceSection() {
+  const { user } = useRole();
   const [machines, setMachines] = useState([]);
   const [maintenanceItems, setMaintenanceItems] = useState([]);
   const [filters, setFilters] = useState({
@@ -188,6 +198,7 @@ function EquipmentMaintenanceSection() {
     ended_time: "00:30",
     comment: "",
   });
+  const canEditMaintenance = user?.role === "admin" || user?.role === "maintenance";
 
   const timeOptions = useMemo(
     () => buildTimeOptions(formState.started_time, formState.ended_time),
@@ -301,6 +312,10 @@ function EquipmentMaintenanceSection() {
   };
 
   const openCreateModal = () => {
+    if (!canEditMaintenance) {
+      return;
+    }
+
     const defaultMachineId =
       String(filters.machine_id || "").trim() || String(machines[0]?.machine_id || "");
 
@@ -319,6 +334,10 @@ function EquipmentMaintenanceSection() {
   };
 
   const openEditModal = (item) => {
+    if (!canEditMaintenance) {
+      return;
+    }
+
     const started = splitDateTime(item.started_at);
     const ended = splitDateTime(item.ended_at);
 
@@ -345,6 +364,11 @@ function EquipmentMaintenanceSection() {
   };
 
   const handleSaveMaintenance = async () => {
+    if (!canEditMaintenance) {
+      setFormError("Недостаточно прав для изменения планового ТО.");
+      return;
+    }
+
     const machineId = Number(formState.machine_id);
     if (!Number.isFinite(machineId) || machineId <= 0) {
       setFormError("Выберите оборудование.");
@@ -394,7 +418,7 @@ function EquipmentMaintenanceSection() {
       setIsFormOpen(false);
       await loadMaintenance(filters);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось сохранить запись планового ТО."));
+      setFormError(toMaintenanceWriteErrorMessage(error, "Не удалось сохранить запись планового ТО."));
     } finally {
       setIsSaving(false);
     }
@@ -420,6 +444,12 @@ function EquipmentMaintenanceSection() {
   };
 
   const handleDelete = async () => {
+    if (!canEditMaintenance) {
+      setDeleteCandidate(null);
+      setPageError("Недостаточно прав для изменения планового ТО.");
+      return;
+    }
+
     if (!deleteCandidate?.maintenance_id) {
       return;
     }
@@ -433,7 +463,7 @@ function EquipmentMaintenanceSection() {
       await loadMaintenance(filters);
     } catch (error) {
       setDeleteCandidate(null);
-      setPageError(toErrorMessage(error, "Не удалось удалить запись планового ТО."));
+      setPageError(toMaintenanceWriteErrorMessage(error, "Не удалось удалить запись планового ТО."));
     } finally {
       setIsDeleting(false);
     }
@@ -467,8 +497,8 @@ function EquipmentMaintenanceSection() {
           <button
             type="button"
             onClick={openCreateModal}
-            disabled={isLoading}
-            className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:opacity-60"
+            disabled={isLoading || !canEditMaintenance}
+            className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22] disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Plus className="h-4 w-4" />
             Добавить ТО
@@ -588,7 +618,8 @@ function EquipmentMaintenanceSection() {
                             onClick={() => openEditModal(item)}
                             title="Изменить"
                             aria-label="Изменить"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]"
+                            disabled={!canEditMaintenance}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -597,7 +628,8 @@ function EquipmentMaintenanceSection() {
                             onClick={() => setDeleteCandidate(item)}
                             title="Удалить"
                             aria-label="Удалить"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/30 bg-rose-500/[0.1] text-rose-100 transition hover:border-rose-300/45 hover:bg-rose-500/[0.18]"
+                            disabled={!canEditMaintenance}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/30 bg-rose-500/[0.1] text-rose-100 transition hover:border-rose-300/45 hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -630,6 +662,7 @@ function EquipmentMaintenanceSection() {
                       machine_id: event.target.value,
                     }))
                   }
+                  disabled={!canEditMaintenance}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 >
                   <option value="">Выберите оборудование</option>
@@ -652,6 +685,8 @@ function EquipmentMaintenanceSection() {
                       started_date: event.target.value,
                     }))
                   }
+                  readOnly={!canEditMaintenance}
+                  disabled={!canEditMaintenance}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
               </div>
@@ -665,6 +700,7 @@ function EquipmentMaintenanceSection() {
                       started_time: event.target.value,
                     }))
                   }
+                  disabled={!canEditMaintenance}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 >
                   {timeOptions.map((timeOption) => (
@@ -686,6 +722,8 @@ function EquipmentMaintenanceSection() {
                       ended_date: event.target.value,
                     }))
                   }
+                  readOnly={!canEditMaintenance}
+                  disabled={!canEditMaintenance}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
               </div>
@@ -699,6 +737,7 @@ function EquipmentMaintenanceSection() {
                       ended_time: event.target.value,
                     }))
                   }
+                  disabled={!canEditMaintenance}
                   className="h-10 w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 >
                   {timeOptions.map((timeOption) => (
@@ -719,6 +758,8 @@ function EquipmentMaintenanceSection() {
                       comment: event.target.value,
                     }))
                   }
+                  readOnly={!canEditMaintenance}
+                  disabled={!canEditMaintenance}
                   rows={3}
                   className="w-full rounded-none border border-white/[0.1] bg-[rgba(8,22,34,0.74)] px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
                 />
@@ -740,7 +781,7 @@ function EquipmentMaintenanceSection() {
               <button
                 type="button"
                 onClick={handleSaveMaintenance}
-                disabled={isSaving}
+                disabled={isSaving || !canEditMaintenance}
                 className="h-9 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.24] disabled:opacity-50"
               >
                 {isSaving ? "Сохраняем..." : "Сохранить"}
@@ -762,7 +803,7 @@ function EquipmentMaintenanceSection() {
         cancelText="Отмена"
         onConfirm={handleDelete}
         onCancel={() => setDeleteCandidate(null)}
-        isConfirmDisabled={isDeleting}
+        isConfirmDisabled={isDeleting || !canEditMaintenance}
         isCancelDisabled={isDeleting}
       />
     </section>

@@ -22,7 +22,7 @@ from schemas.equipment_maintenance import (
 router = APIRouter(prefix="/equipment-maintenance", tags=["equipment_maintenance"])
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-MAINTENANCE_READ_ROLES = ("planner", "maintenance", "viewer")
+MAINTENANCE_READ_ROLES = ("planner", "master", "maintenance", "viewer")
 MAINTENANCE_WRITE_ROLES = ("maintenance",)
 
 SELECT_COLUMNS = """

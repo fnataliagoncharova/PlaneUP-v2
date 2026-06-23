@@ -6,12 +6,13 @@ from typing import Any
 from urllib.parse import quote
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from psycopg2.extras import RealDictCursor
 
+from auth.rbac import require_roles
 from db import get_connection
 from routers.equipment_downtimes import get_local_now
 from routers.production_week_plans import build_equipment_availability
@@ -30,6 +31,8 @@ from schemas.production_analytics import (
 
 
 router = APIRouter(prefix="/production-analytics", tags=["production_analytics"])
+
+ANALYTICS_READ_ROLES = ("planner", "master", "maintenance", "viewer")
 
 DECIMAL_ZERO = Decimal("0")
 MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
@@ -678,7 +681,7 @@ def render_capacity_analytics_sheet(worksheet, month: str, data: EquipmentMonthl
     note_cell.alignment = Alignment(wrap_text=True)
 
 
-@router.get("/print")
+@router.get("/print", dependencies=[Depends(require_roles(*ANALYTICS_READ_ROLES))])
 def print_production_analytics(month: str = Query(...)):
     month_start = parse_month_value(month)
     month_label = month_start.strftime("%Y-%m")
@@ -709,7 +712,11 @@ def print_production_analytics(month: str = Query(...)):
         ) from exc
 
 
-@router.get("/monthly-output", response_model=MonthlyOutputAnalyticsResponse)
+@router.get(
+    "/monthly-output",
+    response_model=MonthlyOutputAnalyticsResponse,
+    dependencies=[Depends(require_roles(*ANALYTICS_READ_ROLES))],
+)
 def get_monthly_output_analytics(
     month: str = Query(...),
     only_with_deviations: bool = Query(default=False),
@@ -914,8 +921,16 @@ def get_monthly_output_analytics(
             connection.close()
 
 
-@router.get("/capacity-monthly", response_model=EquipmentMonthlyAnalyticsResponse)
-@router.get("/equipment-monthly", response_model=EquipmentMonthlyAnalyticsResponse)
+@router.get(
+    "/capacity-monthly",
+    response_model=EquipmentMonthlyAnalyticsResponse,
+    dependencies=[Depends(require_roles(*ANALYTICS_READ_ROLES))],
+)
+@router.get(
+    "/equipment-monthly",
+    response_model=EquipmentMonthlyAnalyticsResponse,
+    dependencies=[Depends(require_roles(*ANALYTICS_READ_ROLES))],
+)
 def get_equipment_monthly_analytics(month: str = Query(...)):
     month_start = parse_month_value(month)
     month_start, month_end, month_start_at, month_end_at = get_month_period_bounds(month_start)

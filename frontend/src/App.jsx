@@ -130,7 +130,7 @@ const navigationGroups = [
         id: "equipment_maintenance",
         label: "Плановое ТО",
         icon: Wrench,
-        roles: ["planner", "maintenance", "viewer"],
+        roles: ["planner", "master", "maintenance", "viewer"],
       },
     ],
   },
@@ -141,7 +141,7 @@ const navigationGroups = [
         id: "nomenclature",
         label: "Номенклатура",
         icon: Boxes,
-        roles: ["planner", "maintenance", "viewer"],
+        roles: ["planner", "master", "maintenance", "viewer"],
       },
       {
         id: "processes",

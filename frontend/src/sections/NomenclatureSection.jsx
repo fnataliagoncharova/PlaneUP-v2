@@ -5,6 +5,7 @@ import NomenclatureDetailsPanel from "../components/nomenclature/NomenclatureDet
 import NomenclatureFormPanel from "../components/nomenclature/NomenclatureFormPanel";
 import NomenclatureImportPanel from "../components/nomenclature/NomenclatureImportPanel";
 import NomenclatureList from "../components/nomenclature/NomenclatureList";
+import { useRole } from "../auth/useRole";
 import {
   commitNomenclatureImport,
   createNomenclatureItem,
@@ -66,6 +67,7 @@ function buildStepProcessLabel(step, processById) {
 }
 
 function NomenclatureSection({ onOpenRoute }) {
+  const { user } = useRole();
   const [items, setItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [routes, setRoutes] = useState([]);
@@ -95,6 +97,15 @@ function NomenclatureSection({ onOpenRoute }) {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isCommitLoading, setIsCommitLoading] = useState(false);
   const [isTemplateDownloading, setIsTemplateDownloading] = useState(false);
+  const canEditNomenclature = user?.role === "admin" || user?.role === "planner";
+
+  const getNomenclatureWriteErrorMessage = (error, fallbackText) => {
+    if (error?.status === 403 || error?.message === "Forbidden") {
+      return "Недостаточно прав для изменения номенклатуры.";
+    }
+
+    return error?.message || fallbackText;
+  };
 
   const reloadNomenclature = useCallback(async () => {
     const response = await getNomenclatureList();
@@ -355,6 +366,10 @@ function NomenclatureSection({ onOpenRoute }) {
   }, [onOpenRoute, selectedProductionRoute]);
 
   const handleOpenCreateForm = () => {
+    if (!canEditNomenclature) {
+      return;
+    }
+
     setFormMode("create");
     setSaveError("");
     setIsImportOpen(false);
@@ -362,7 +377,7 @@ function NomenclatureSection({ onOpenRoute }) {
   };
 
   const handleOpenEditForm = () => {
-    if (!selectedItem) {
+    if (!selectedItem || !canEditNomenclature) {
       return;
     }
 
@@ -382,6 +397,11 @@ function NomenclatureSection({ onOpenRoute }) {
   };
 
   const handleSubmitForm = async (payload) => {
+    if (!canEditNomenclature) {
+      setSaveError("Недостаточно прав для изменения номенклатуры.");
+      return;
+    }
+
     setIsSaving(true);
     setSaveError("");
 
@@ -407,7 +427,7 @@ function NomenclatureSection({ onOpenRoute }) {
 
       setIsFormOpen(false);
     } catch (error) {
-      setSaveError(error.message || "Не удалось сохранить изменения.");
+      setSaveError(getNomenclatureWriteErrorMessage(error, "Не удалось сохранить изменения."));
     } finally {
       setIsSaving(false);
     }
@@ -424,6 +444,10 @@ function NomenclatureSection({ onOpenRoute }) {
   };
 
   const handleOpenImportPanel = () => {
+    if (!canEditNomenclature) {
+      return;
+    }
+
     setIsFormOpen(false);
     resetImportState();
     setIsImportOpen(true);
@@ -453,6 +477,11 @@ function NomenclatureSection({ onOpenRoute }) {
   };
 
   const handlePreviewImport = async () => {
+    if (!canEditNomenclature) {
+      setImportError("Недостаточно прав для изменения номенклатуры.");
+      return;
+    }
+
     if (!importFile) {
       setImportError("Выберите Excel-файл для предпросмотра.");
       return;
@@ -467,13 +496,18 @@ function NomenclatureSection({ onOpenRoute }) {
       setPreviewData(response);
     } catch (error) {
       setPreviewData(null);
-      setImportError(error.message || "Не удалось подготовить предпросмотр импорта.");
+      setImportError(getNomenclatureWriteErrorMessage(error, "Не удалось подготовить предпросмотр импорта."));
     } finally {
       setIsPreviewLoading(false);
     }
   };
 
   const handleCommitImport = async () => {
+    if (!canEditNomenclature) {
+      setImportError("Недостаточно прав для изменения номенклатуры.");
+      return;
+    }
+
     if (!importFile) {
       setImportError("Выберите Excel-файл для импорта.");
       return;
@@ -492,7 +526,7 @@ function NomenclatureSection({ onOpenRoute }) {
       setCommitResult(response);
       await reloadNomenclature();
     } catch (error) {
-      setImportError(error.message || "Не удалось выполнить импорт номенклатуры.");
+      setImportError(getNomenclatureWriteErrorMessage(error, "Не удалось выполнить импорт номенклатуры."));
     } finally {
       setIsCommitLoading(false);
     }
@@ -536,7 +570,8 @@ function NomenclatureSection({ onOpenRoute }) {
               <button
                 type="button"
                 onClick={handleOpenCreateForm}
-                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
+                disabled={!canEditNomenclature}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Plus className="h-4 w-4" />
                 Новая позиция
@@ -544,7 +579,8 @@ function NomenclatureSection({ onOpenRoute }) {
               <button
                 type="button"
                 onClick={handleOpenImportPanel}
-                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18"
+                disabled={!canEditNomenclature}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Upload className="h-4 w-4" />
                 Импорт Excel
@@ -586,6 +622,7 @@ function NomenclatureSection({ onOpenRoute }) {
           onCancel={handleCloseImportPanel}
           onDownloadTemplate={handleDownloadTemplate}
           isTemplateDownloading={isTemplateDownloading}
+          canEdit={canEditNomenclature}
         />
       ) : isFormOpen ? (
         <NomenclatureFormPanel
@@ -595,6 +632,7 @@ function NomenclatureSection({ onOpenRoute }) {
           errorMessage={saveError}
           onCancel={handleCancelForm}
           onSave={handleSubmitForm}
+          canEdit={canEditNomenclature}
         />
       ) : (
         <NomenclatureDetailsPanel
@@ -608,6 +646,7 @@ function NomenclatureSection({ onOpenRoute }) {
           routeChain={routeChain}
           isRouteChainLoading={isRouteChainLoading}
           routeChainError={routeChainError}
+          canEdit={canEditNomenclature}
         />
       )}
     </section>

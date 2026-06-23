@@ -53,9 +53,10 @@ function NomenclatureImportPanel({
   onCancel,
   onDownloadTemplate,
   isTemplateDownloading,
+  canEdit = true,
 }) {
-  const canRunPreview = selectedFile && !isPreviewLoading && !isCommitLoading;
-  const canRunCommit = selectedFile && previewData && !isPreviewLoading && !isCommitLoading;
+  const canRunPreview = canEdit && selectedFile && !isPreviewLoading && !isCommitLoading;
+  const canRunCommit = canEdit && selectedFile && previewData && !isPreviewLoading && !isCommitLoading;
 
   return (
     <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
@@ -82,7 +83,7 @@ function NomenclatureImportPanel({
             <button
               type="button"
               onClick={() => onImportModeChange("add_only")}
-              disabled={isPreviewLoading || isCommitLoading}
+              disabled={!canEdit || isPreviewLoading || isCommitLoading}
               className={[
                 "rounded-none border px-3 py-2 text-xs font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-60",
                 importMode === "add_only"
@@ -95,7 +96,7 @@ function NomenclatureImportPanel({
             <button
               type="button"
               onClick={() => onImportModeChange("upsert")}
-              disabled={isPreviewLoading || isCommitLoading}
+              disabled={!canEdit || isPreviewLoading || isCommitLoading}
               className={[
                 "rounded-none border px-3 py-2 text-xs font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-60",
                 importMode === "upsert"
@@ -112,7 +113,12 @@ function NomenclatureImportPanel({
           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">
             Excel файл
           </div>
-          <label className="flex cursor-pointer items-center gap-3 border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 transition hover:border-cyan-200/30">
+          <label
+            className={[
+              "flex items-center gap-3 border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 transition hover:border-cyan-200/30",
+              canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+            ].join(" ")}
+          >
             <FileSpreadsheet className="h-4 w-4 text-cyan-100" />
             <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
               {selectedFile?.name || "Выберите файл .xlsx"}
@@ -122,7 +128,7 @@ function NomenclatureImportPanel({
               accept=".xlsx"
               className="hidden"
               onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
-              disabled={isPreviewLoading || isCommitLoading}
+              disabled={!canEdit || isPreviewLoading || isCommitLoading}
             />
           </label>
           <div className="mt-2 text-xs text-slate-500">

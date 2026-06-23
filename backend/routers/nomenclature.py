@@ -26,7 +26,7 @@ from schemas.nomenclature_route_chain import NomenclatureRouteChainResponse
 
 router = APIRouter(prefix="/nomenclature", tags=["nomenclature"])
 
-NOMENCLATURE_READ_ROLES = ("planner", "maintenance", "viewer")
+NOMENCLATURE_READ_ROLES = ("planner", "master", "maintenance", "viewer")
 NOMENCLATURE_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """

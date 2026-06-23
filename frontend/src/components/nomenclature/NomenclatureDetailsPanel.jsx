@@ -342,6 +342,7 @@ function NomenclatureDetailsPanel({
   routeChain,
   isRouteChainLoading,
   routeChainError,
+  canEdit = true,
 }) {
   if (!item) {
     return (
@@ -375,7 +376,8 @@ function NomenclatureDetailsPanel({
         <button
           type="button"
           onClick={onEdit}
-          className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
+          disabled={!canEdit}
+          className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-45"
         >
           <PencilLine className="h-3.5 w-3.5" />
           Редактировать

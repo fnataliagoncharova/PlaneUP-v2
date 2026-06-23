@@ -24,7 +24,7 @@ function createInitialState(item) {
   };
 }
 
-function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, onSave }) {
+function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, onSave, canEdit = true }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() => createInitialState(item));
   const [localError, setLocalError] = useState("");
@@ -35,6 +35,10 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
   }, [item, mode]);
 
   const handleFieldChange = (fieldName, fieldValue) => {
+    if (!canEdit) {
+      return;
+    }
+
     setFormValues((previousValues) => ({
       ...previousValues,
       [fieldName]: fieldValue,
@@ -43,6 +47,11 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!canEdit) {
+      setLocalError("Недостаточно прав для изменения номенклатуры.");
+      return;
+    }
 
     const normalizedCode = formValues.nomenclature_code.trim();
     const normalizedName = formValues.nomenclature_name.trim();
@@ -83,6 +92,8 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
             type="text"
             value={formValues.nomenclature_code}
             onChange={(event) => handleFieldChange("nomenclature_code", event.target.value)}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             placeholder="Например NM-012"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           />
@@ -94,6 +105,8 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
             type="text"
             value={formValues.nomenclature_name}
             onChange={(event) => handleFieldChange("nomenclature_name", event.target.value)}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             placeholder="Введите наименование"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-4 text-lg leading-7 text-slate-100 outline-none transition focus:border-cyan-200/40"
           />
@@ -104,6 +117,7 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
           <select
             value={formValues.item_type}
             onChange={(event) => handleFieldChange("item_type", event.target.value)}
+            disabled={!canEdit}
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           >
             {ITEM_TYPE_OPTIONS.map((option) => (
@@ -119,6 +133,7 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
           <select
             value={formValues.unit_of_measure}
             onChange={(event) => handleFieldChange("unit_of_measure", event.target.value)}
+            disabled={!canEdit}
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
           >
             {UNIT_OPTIONS.map((option) => (
@@ -139,6 +154,7 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
           <button
             type="button"
             onClick={() => handleFieldChange("is_active", !formValues.is_active)}
+            disabled={!canEdit}
             className={[
               "inline-flex min-w-24 items-center justify-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.16em] transition",
               formValues.is_active
@@ -172,7 +188,7 @@ function NomenclatureFormPanel({ mode, item, isSaving, errorMessage, onCancel, o
           </button>
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !canEdit}
             className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
