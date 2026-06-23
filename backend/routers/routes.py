@@ -1,15 +1,19 @@
 from typing import List
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import ForeignKeyViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
+from auth.rbac import require_roles
 from schemas.routes import RouteCreate, RouteRead, RouteUpdate
 
 
 router = APIRouter(prefix="/routes", tags=["routes"])
+
+ROUTE_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+ROUTE_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """
     route_id,
@@ -87,7 +91,11 @@ def ensure_route_can_be_activated(
         )
 
 
-@router.get("", response_model=List[RouteRead])
+@router.get(
+    "",
+    response_model=List[RouteRead],
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def list_routes():
     connection = None
 
@@ -114,7 +122,11 @@ def list_routes():
             connection.close()
 
 
-@router.get("/{route_id}", response_model=RouteRead)
+@router.get(
+    "/{route_id}",
+    response_model=RouteRead,
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def get_route(route_id: int = Path(..., gt=0)):
     connection = None
 
@@ -148,7 +160,12 @@ def get_route(route_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("", response_model=RouteRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=RouteRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def create_route(payload: RouteCreate):
     connection = None
 
@@ -206,7 +223,11 @@ def create_route(payload: RouteCreate):
             connection.close()
 
 
-@router.put("/{route_id}", response_model=RouteRead)
+@router.put(
+    "/{route_id}",
+    response_model=RouteRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def update_route(payload: RouteUpdate, route_id: int = Path(..., gt=0)):
     connection = None
 
@@ -297,7 +318,11 @@ def update_route(payload: RouteUpdate, route_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.delete("/{route_id}", response_model=RouteRead)
+@router.delete(
+    "/{route_id}",
+    response_model=RouteRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def deactivate_route(route_id: int = Path(..., gt=0)):
     connection = None
 

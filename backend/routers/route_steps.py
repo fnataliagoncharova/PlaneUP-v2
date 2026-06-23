@@ -2,15 +2,19 @@ from decimal import Decimal
 from typing import List
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import CheckViolation, ForeignKeyViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
+from auth.rbac import require_roles
 from schemas.route_steps import RouteStepCreate, RouteStepRead, RouteStepUpdate
 
 
 router = APIRouter(tags=["route_steps"])
+
+ROUTE_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+ROUTE_WRITE_ROLES = ("planner",)
 
 DEGASSING_ONLY_FIRST_STEP_MESSAGE = (
     "\u0414\u0435\u0433\u0430\u0437\u0430\u0446\u0438\u044f \u043c\u043e\u0436\u0435\u0442 "
@@ -116,7 +120,11 @@ def deactivate_route_if_active(cursor: RealDictCursor, route_id: int) -> bool:
     return cursor.fetchone() is not None
 
 
-@router.get("/routes/{route_id}/steps", response_model=List[RouteStepRead])
+@router.get(
+    "/routes/{route_id}/steps",
+    response_model=List[RouteStepRead],
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def list_route_steps(route_id: int = Path(..., gt=0)):
     connection = None
 
@@ -146,7 +154,11 @@ def list_route_steps(route_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/route-steps/{route_step_id}", response_model=RouteStepRead)
+@router.get(
+    "/route-steps/{route_step_id}",
+    response_model=RouteStepRead,
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def get_route_step(route_step_id: int = Path(..., gt=0)):
     connection = None
 
@@ -180,7 +192,12 @@ def get_route_step(route_step_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("/routes/{route_id}/steps", response_model=RouteStepRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/routes/{route_id}/steps",
+    response_model=RouteStepRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def create_route_step(payload: RouteStepCreate, route_id: int = Path(..., gt=0)):
     connection = None
 
@@ -271,7 +288,11 @@ def create_route_step(payload: RouteStepCreate, route_id: int = Path(..., gt=0))
             connection.close()
 
 
-@router.put("/route-steps/{route_step_id}", response_model=RouteStepRead)
+@router.put(
+    "/route-steps/{route_step_id}",
+    response_model=RouteStepRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def update_route_step(payload: RouteStepUpdate, route_step_id: int = Path(..., gt=0)):
     connection = None
 
@@ -372,7 +393,11 @@ def update_route_step(payload: RouteStepUpdate, route_step_id: int = Path(..., g
             connection.close()
 
 
-@router.delete("/route-steps/{route_step_id}", response_model=RouteStepRead)
+@router.delete(
+    "/route-steps/{route_step_id}",
+    response_model=RouteStepRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def delete_route_step(route_step_id: int = Path(..., gt=0)):
     connection = None
 

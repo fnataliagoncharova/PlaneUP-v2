@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import ProcessDetailsPanel from "../components/processes/ProcessDetailsPanel";
 import ProcessFormPanel from "../components/processes/ProcessFormPanel";
 import ProcessesList from "../components/processes/ProcessesList";
+import { useRole } from "../auth/useRole";
 import {
   createProcessItem,
   getProcessesList,
@@ -25,7 +26,18 @@ function getDefaultSelection(items) {
   return preferredItem?.process_id ?? items[0].process_id;
 }
 
+function toProcessWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения технологических операций.";
+  }
+  return error?.message || fallbackText;
+}
+
 function ProcessesSection() {
+  const { user } = useRole();
+  const role = user?.role;
+  const canEditProcesses = role === "admin" || role === "planner";
+
   const [items, setItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [searchValue, setSearchValue] = useState("");
@@ -105,6 +117,11 @@ function ProcessesSection() {
   const selectedItem = items.find((item) => item.process_id === selectedItemId) ?? null;
 
   const handleOpenCreateForm = () => {
+    if (!canEditProcesses) {
+      setSaveError("Недостаточно прав для изменения технологических операций.");
+      return;
+    }
+
     setFormMode("create");
     setSaveError("");
     setIsFormOpen(true);
@@ -112,6 +129,11 @@ function ProcessesSection() {
 
   const handleOpenEditForm = () => {
     if (!selectedItem) {
+      return;
+    }
+
+    if (!canEditProcesses) {
+      setSaveError("Недостаточно прав для изменения технологических операций.");
       return;
     }
 
@@ -130,6 +152,11 @@ function ProcessesSection() {
   };
 
   const handleSubmitForm = async (payload) => {
+    if (!canEditProcesses) {
+      setSaveError("Недостаточно прав для изменения технологических операций.");
+      return;
+    }
+
     setIsSaving(true);
     setSaveError("");
 
@@ -155,7 +182,7 @@ function ProcessesSection() {
 
       setIsFormOpen(false);
     } catch (error) {
-      setSaveError(error.message || "Не удалось сохранить изменения.");
+      setSaveError(toProcessWriteErrorMessage(error, "Не удалось сохранить изменения."));
     } finally {
       setIsSaving(false);
     }
@@ -174,7 +201,8 @@ function ProcessesSection() {
               </h1>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            {canEditProcesses ? (
+              <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={handleOpenCreateForm}
@@ -183,7 +211,8 @@ function ProcessesSection() {
                 <Plus className="h-4 w-4" />
                 Новая операция
               </button>
-            </div>
+              </div>
+            ) : null}
           </div>
 
           {loadError ? (
@@ -212,11 +241,13 @@ function ProcessesSection() {
           errorMessage={saveError}
           onCancel={handleCancelForm}
           onSave={handleSubmitForm}
+          canEdit={canEditProcesses}
         />
       ) : (
         <ProcessDetailsPanel
           item={filteredItems.length > 0 ? selectedItem : null}
           onEdit={handleOpenEditForm}
+          canEdit={canEditProcesses}
         />
       )}
     </section>

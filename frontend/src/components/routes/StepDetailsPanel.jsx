@@ -70,6 +70,7 @@ function IconActionButton({ label, onClick, disabled = false, tone = "edit", chi
 
 function StepDetailsPanel({
   selectedRoute,
+  canEditRoutes = true,
   selectedResultNomenclatureLabel,
   step,
   processLabel,
@@ -139,7 +140,8 @@ function StepDetailsPanel({
             Выходная номенклатура: {selectedResultNomenclatureLabel}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-3">
+        {canEditRoutes ? (
+          <div className="flex flex-col items-end gap-3">
           <button
             type="button"
             onClick={onEditRoute}
@@ -162,7 +164,8 @@ function StepDetailsPanel({
             <Power className="h-3.5 w-3.5" />
             {selectedRoute.is_active ? "Деактивировать" : "Активировать"}
           </button>
-        </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="panel-divider mt-5" />
@@ -186,7 +189,7 @@ function StepDetailsPanel({
       <section className="mt-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="panel-title">Операция получения</div>
-          {step ? (
+          {step && canEditRoutes ? (
             <div className="flex items-center gap-2">
               <IconActionButton label="Изменить" onClick={onEditStep}>
                 <PencilLine className="h-3.5 w-3.5" />
@@ -200,7 +203,7 @@ function StepDetailsPanel({
                 <Trash2 className="h-3.5 w-3.5" />
               </IconActionButton>
             </div>
-          ) : (
+          ) : !step && canEditRoutes ? (
             <button
               type="button"
               onClick={onOpenCreateStep}
@@ -209,7 +212,7 @@ function StepDetailsPanel({
               <Plus className="h-3.5 w-3.5" />
               Задать операцию
             </button>
-          )}
+          ) : null}
         </div>
 
         {isStepLoading ? (
@@ -273,7 +276,7 @@ function StepDetailsPanel({
           <button
             type="button"
             onClick={onOpenCreateInput}
-            disabled={!step}
+            disabled={!step || !canEditRoutes}
             className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-cyan-50 transition hover:bg-cyan-400/[0.18] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -324,7 +327,8 @@ function StepDetailsPanel({
                     >
                       {typeLabel}
                     </span>
-                    <div className="flex items-center gap-2">
+                    {canEditRoutes ? (
+                      <div className="flex items-center gap-2">
                       <IconActionButton label="Изменить" onClick={() => onEditInput(input)}>
                         <PencilLine className="h-3.5 w-3.5" />
                       </IconActionButton>
@@ -336,7 +340,8 @@ function StepDetailsPanel({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </IconActionButton>
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex items-start justify-between gap-3">
@@ -368,7 +373,7 @@ function StepDetailsPanel({
           <button
             type="button"
             onClick={onOpenCreateEquipment}
-            disabled={!step}
+            disabled={!step || !canEditRoutes}
             className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-cyan-50 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -416,7 +421,8 @@ function StepDetailsPanel({
                     >
                       {getEquipmentRoleLabel(equipmentItem.equipment_role)}
                     </div>
-                    <div className="flex items-center gap-2">
+                    {canEditRoutes ? (
+                      <div className="flex items-center gap-2">
                       <IconActionButton label="Изменить" onClick={() => onEditEquipment(equipmentItem)}>
                         <PencilLine className="h-3.5 w-3.5" />
                       </IconActionButton>
@@ -428,7 +434,8 @@ function StepDetailsPanel({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </IconActionButton>
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex items-start justify-between gap-3">

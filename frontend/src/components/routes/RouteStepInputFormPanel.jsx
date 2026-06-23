@@ -9,7 +9,16 @@ function createInitialState(item) {
   };
 }
 
-function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, errorMessage, onCancel, onSave }) {
+function RouteStepInputFormPanel({
+  mode,
+  item,
+  nomenclatureItems,
+  isSaving,
+  errorMessage,
+  onCancel,
+  onSave,
+  canEdit = true,
+}) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() => createInitialState(item));
   const [localError, setLocalError] = useState("");
@@ -25,11 +34,19 @@ function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, erro
   }, [item, mode]);
 
   const handleFieldChange = (fieldName, fieldValue) => {
+    if (!canEdit) {
+      return;
+    }
+
     setFormValues((previousValues) => ({ ...previousValues, [fieldName]: fieldValue }));
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!canEdit) {
+      return;
+    }
 
     const normalizedQty = Number(formValues.input_qty);
     if (!Number.isFinite(normalizedQty) || normalizedQty <= 0) {
@@ -71,7 +88,7 @@ function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, erro
           value={formValues.input_nomenclature_id}
           onChange={(nomenclatureId) => handleFieldChange("input_nomenclature_id", nomenclatureId)}
           placeholder="Начните вводить код или название"
-          disabled={sortedNomenclatureItems.length === 0}
+          disabled={sortedNomenclatureItems.length === 0 || !canEdit}
         />
 
         <label className="block">
@@ -81,6 +98,8 @@ function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, erro
             min="0.001"
             step="0.001"
             value={formValues.input_qty}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             onChange={(event) => handleFieldChange("input_qty", event.target.value)}
             placeholder="Например 1.000"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
@@ -94,7 +113,7 @@ function RouteStepInputFormPanel({ mode, item, nomenclatureItems, isSaving, erro
           <button type="button" onClick={onCancel} disabled={isSaving} className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07] disabled:cursor-not-allowed disabled:opacity-60">
             <X className="h-4 w-4" />Отмена
           </button>
-          <button type="submit" disabled={isSaving} className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="submit" disabled={isSaving || !canEdit} className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60">
             <Save className="h-4 w-4" />{isSaving ? "Сохраняем..." : "Сохранить"}
           </button>
         </div>

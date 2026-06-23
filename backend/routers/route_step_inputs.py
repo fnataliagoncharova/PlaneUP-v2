@@ -1,11 +1,12 @@
 ﻿from typing import List
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import ForeignKeyViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
+from auth.rbac import require_roles
 from schemas.route_step_inputs import (
     RouteStepInputCreate,
     RouteStepInputRead,
@@ -14,6 +15,9 @@ from schemas.route_step_inputs import (
 
 
 router = APIRouter(tags=["route_step_inputs"])
+
+ROUTE_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+ROUTE_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """
     rsi.step_input_id,
@@ -85,7 +89,11 @@ def ensure_nomenclature_exists(cursor: RealDictCursor, nomenclature_id: int) -> 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Номенклатура не найдена.")
 
 
-@router.get("/route-steps/{route_step_id}/inputs", response_model=List[RouteStepInputRead])
+@router.get(
+    "/route-steps/{route_step_id}/inputs",
+    response_model=List[RouteStepInputRead],
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def list_route_step_inputs(route_step_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -110,7 +118,11 @@ def list_route_step_inputs(route_step_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/route-step-inputs/{step_input_id}", response_model=RouteStepInputRead)
+@router.get(
+    "/route-step-inputs/{step_input_id}",
+    response_model=RouteStepInputRead,
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def get_route_step_input(step_input_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -136,7 +148,12 @@ def get_route_step_input(step_input_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("/route-steps/{route_step_id}/inputs", response_model=RouteStepInputRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/route-steps/{route_step_id}/inputs",
+    response_model=RouteStepInputRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def create_route_step_input(payload: RouteStepInputCreate, route_step_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -196,7 +213,11 @@ def create_route_step_input(payload: RouteStepInputCreate, route_step_id: int = 
             connection.close()
 
 
-@router.put("/route-step-inputs/{step_input_id}", response_model=RouteStepInputRead)
+@router.put(
+    "/route-step-inputs/{step_input_id}",
+    response_model=RouteStepInputRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def update_route_step_input(payload: RouteStepInputUpdate, step_input_id: int = Path(..., gt=0)):
     connection = None
     try:
@@ -259,7 +280,11 @@ def update_route_step_input(payload: RouteStepInputUpdate, step_input_id: int = 
             connection.close()
 
 
-@router.delete("/route-step-inputs/{step_input_id}", response_model=RouteStepInputRead)
+@router.delete(
+    "/route-step-inputs/{step_input_id}",
+    response_model=RouteStepInputRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def delete_route_step_input(step_input_id: int = Path(..., gt=0)):
     connection = None
     try:

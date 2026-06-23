@@ -16,6 +16,7 @@ function ProcessFormPanel({
   errorMessage,
   onCancel,
   onSave,
+  canEdit = true,
 }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() => createInitialState(item));
@@ -27,6 +28,10 @@ function ProcessFormPanel({
   }, [item, mode]);
 
   const handleFieldChange = (fieldName, fieldValue) => {
+    if (!canEdit) {
+      return;
+    }
+
     setFormValues((previousValues) => ({
       ...previousValues,
       [fieldName]: fieldValue,
@@ -35,6 +40,10 @@ function ProcessFormPanel({
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!canEdit) {
+      return;
+    }
 
     const normalizedCode = formValues.process_code.trim();
     const normalizedName = formValues.process_name.trim();
@@ -79,6 +88,8 @@ function ProcessFormPanel({
           <input
             type="text"
             value={formValues.process_code}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             onChange={(event) => handleFieldChange("process_code", event.target.value)}
             placeholder="Например PR-007"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
@@ -92,6 +103,8 @@ function ProcessFormPanel({
           <input
             type="text"
             value={formValues.process_name}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             onChange={(event) => handleFieldChange("process_name", event.target.value)}
             placeholder="Введите наименование операции"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-4 text-lg leading-7 text-slate-100 outline-none transition focus:border-cyan-200/40"
@@ -109,6 +122,7 @@ function ProcessFormPanel({
           <button
             type="button"
             onClick={() => handleFieldChange("is_active", !formValues.is_active)}
+            disabled={!canEdit}
             className={[
               "inline-flex min-w-24 items-center justify-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.16em] transition",
               formValues.is_active
@@ -151,7 +165,7 @@ function ProcessFormPanel({
           </button>
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !canEdit}
             className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
@@ -164,4 +178,3 @@ function ProcessFormPanel({
 }
 
 export default ProcessFormPanel;
-

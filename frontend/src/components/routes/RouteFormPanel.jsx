@@ -18,6 +18,7 @@ function RouteFormPanel({
   errorMessage,
   onCancel,
   onSave,
+  canEdit = true,
 }) {
   const isEditMode = mode === "edit";
   const [formValues, setFormValues] = useState(() =>
@@ -39,6 +40,10 @@ function RouteFormPanel({
   }, [item, mode]);
 
   const handleFieldChange = (fieldName, fieldValue) => {
+    if (!canEdit) {
+      return;
+    }
+
     setFormValues((previousValues) => ({
       ...previousValues,
       [fieldName]: fieldValue,
@@ -47,6 +52,10 @@ function RouteFormPanel({
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!canEdit) {
+      return;
+    }
 
     const normalizedCode = formValues.route_code.trim();
     const normalizedName = formValues.route_name.trim();
@@ -97,6 +106,8 @@ function RouteFormPanel({
           <input
             type="text"
             value={formValues.route_code}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             onChange={(event) => handleFieldChange("route_code", event.target.value)}
             placeholder="Например RT-004"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-3.5 text-lg leading-6 text-slate-100 outline-none transition focus:border-cyan-200/40"
@@ -110,13 +121,15 @@ function RouteFormPanel({
           <input
             type="text"
             value={formValues.route_name}
+            readOnly={!canEdit}
+            disabled={!canEdit}
             onChange={(event) => handleFieldChange("route_name", event.target.value)}
             placeholder="Введите наименование маршрута"
             className="w-full rounded-none border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,30,43,0.76),rgba(9,17,27,0.9))] px-4 py-4 text-lg leading-7 text-slate-100 outline-none transition focus:border-cyan-200/40"
           />
         </label>
 
-        <NomenclatureSearchSelect
+          <NomenclatureSearchSelect
           label="Выходная номенклатура"
           items={sortedNomenclatureItems}
           value={formValues.result_nomenclature_id}
@@ -124,7 +137,7 @@ function RouteFormPanel({
             handleFieldChange("result_nomenclature_id", nomenclatureId)
           }
           placeholder="Начните вводить код или название"
-          disabled={sortedNomenclatureItems.length === 0}
+          disabled={sortedNomenclatureItems.length === 0 || !canEdit}
         />
 
         {localError ? (
@@ -151,7 +164,7 @@ function RouteFormPanel({
           </button>
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !canEdit}
             className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/14 px-4 py-2.5 text-sm font-medium text-cyan-50 shadow-cyanGlow transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />

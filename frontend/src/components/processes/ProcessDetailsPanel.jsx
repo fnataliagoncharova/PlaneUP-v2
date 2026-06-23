@@ -14,7 +14,7 @@ function StatusTile({ label, value, tone = "cyan" }) {
   );
 }
 
-function ProcessDetailsPanel({ item, onEdit }) {
+function ProcessDetailsPanel({ item, onEdit, canEdit = true }) {
   if (!item) {
     return (
       <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
@@ -48,7 +48,8 @@ function ProcessDetailsPanel({ item, onEdit }) {
             backend API.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-3">
+        {canEdit ? (
+          <div className="flex flex-col items-end gap-3">
           <button
             type="button"
             onClick={onEdit}
@@ -57,7 +58,8 @@ function ProcessDetailsPanel({ item, onEdit }) {
             <PencilLine className="h-3.5 w-3.5" />
             Редактировать
           </button>
-        </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="panel-divider mt-5" />

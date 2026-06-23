@@ -1,15 +1,19 @@
 from typing import List
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
+from auth.rbac import require_roles
 from schemas.processes import ProcessCreate, ProcessRead, ProcessUpdate
 
 
 router = APIRouter(prefix="/processes", tags=["processes"])
+
+PROCESS_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+PROCESS_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """
     process_id,
@@ -19,7 +23,11 @@ SELECT_COLUMNS = """
 """
 
 
-@router.get("", response_model=List[ProcessRead])
+@router.get(
+    "",
+    response_model=List[ProcessRead],
+    dependencies=[Depends(require_roles(*PROCESS_READ_ROLES))],
+)
 def list_processes():
     connection = None
 
@@ -46,7 +54,11 @@ def list_processes():
             connection.close()
 
 
-@router.get("/{process_id}", response_model=ProcessRead)
+@router.get(
+    "/{process_id}",
+    response_model=ProcessRead,
+    dependencies=[Depends(require_roles(*PROCESS_READ_ROLES))],
+)
 def get_process(process_id: int = Path(..., gt=0)):
     connection = None
 
@@ -80,7 +92,12 @@ def get_process(process_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.post("", response_model=ProcessRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ProcessRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*PROCESS_WRITE_ROLES))],
+)
 def create_process(payload: ProcessCreate):
     connection = None
 
@@ -128,7 +145,11 @@ def create_process(payload: ProcessCreate):
             connection.close()
 
 
-@router.put("/{process_id}", response_model=ProcessRead)
+@router.put(
+    "/{process_id}",
+    response_model=ProcessRead,
+    dependencies=[Depends(require_roles(*PROCESS_WRITE_ROLES))],
+)
 def update_process(payload: ProcessUpdate, process_id: int = Path(..., gt=0)):
     connection = None
 
@@ -183,7 +204,11 @@ def update_process(payload: ProcessUpdate, process_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.delete("/{process_id}", response_model=ProcessRead)
+@router.delete(
+    "/{process_id}",
+    response_model=ProcessRead,
+    dependencies=[Depends(require_roles(*PROCESS_WRITE_ROLES))],
+)
 def deactivate_process(process_id: int = Path(..., gt=0)):
     connection = None
 
@@ -221,4 +246,3 @@ def deactivate_process(process_id: int = Path(..., gt=0)):
     finally:
         if connection is not None:
             connection.close()
-

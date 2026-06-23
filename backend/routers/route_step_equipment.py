@@ -1,11 +1,12 @@
 from typing import List
 
 import psycopg2
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from psycopg2.errors import CheckViolation, ForeignKeyViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from db import get_connection
+from auth.rbac import require_roles
 from schemas.route_step_equipment import (
     RouteStepEquipmentCreate,
     RouteStepEquipmentRead,
@@ -14,6 +15,9 @@ from schemas.route_step_equipment import (
 
 
 router = APIRouter(tags=["route_step_equipment"])
+
+ROUTE_READ_ROLES = ("planner", "master", "maintenance", "viewer")
+ROUTE_WRITE_ROLES = ("planner",)
 
 SELECT_COLUMNS = """
     step_equipment_id,
@@ -125,7 +129,11 @@ def deactivate_route_if_active(cursor: RealDictCursor, route_id: int) -> bool:
     return cursor.fetchone() is not None
 
 
-@router.get("/route-steps/{route_step_id}/equipment", response_model=List[RouteStepEquipmentRead])
+@router.get(
+    "/route-steps/{route_step_id}/equipment",
+    response_model=List[RouteStepEquipmentRead],
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def list_route_step_equipment(route_step_id: int = Path(..., gt=0)):
     connection = None
 
@@ -155,7 +163,11 @@ def list_route_step_equipment(route_step_id: int = Path(..., gt=0)):
             connection.close()
 
 
-@router.get("/route-step-equipment/{step_equipment_id}", response_model=RouteStepEquipmentRead)
+@router.get(
+    "/route-step-equipment/{step_equipment_id}",
+    response_model=RouteStepEquipmentRead,
+    dependencies=[Depends(require_roles(*ROUTE_READ_ROLES))],
+)
 def get_route_step_equipment(step_equipment_id: int = Path(..., gt=0)):
     connection = None
 
@@ -193,6 +205,7 @@ def get_route_step_equipment(step_equipment_id: int = Path(..., gt=0)):
     "/route-steps/{route_step_id}/equipment",
     response_model=RouteStepEquipmentRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
 )
 def create_route_step_equipment(payload: RouteStepEquipmentCreate, route_step_id: int = Path(..., gt=0)):
     connection = None
@@ -286,7 +299,11 @@ def create_route_step_equipment(payload: RouteStepEquipmentCreate, route_step_id
             connection.close()
 
 
-@router.put("/route-step-equipment/{step_equipment_id}", response_model=RouteStepEquipmentRead)
+@router.put(
+    "/route-step-equipment/{step_equipment_id}",
+    response_model=RouteStepEquipmentRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def update_route_step_equipment(payload: RouteStepEquipmentUpdate, step_equipment_id: int = Path(..., gt=0)):
     connection = None
 
@@ -386,7 +403,11 @@ def update_route_step_equipment(payload: RouteStepEquipmentUpdate, step_equipmen
             connection.close()
 
 
-@router.delete("/route-step-equipment/{step_equipment_id}", response_model=RouteStepEquipmentRead)
+@router.delete(
+    "/route-step-equipment/{step_equipment_id}",
+    response_model=RouteStepEquipmentRead,
+    dependencies=[Depends(require_roles(*ROUTE_WRITE_ROLES))],
+)
 def delete_route_step_equipment(step_equipment_id: int = Path(..., gt=0)):
     connection = None
 

@@ -8,6 +8,7 @@ import RouteStepEquipmentFormPanel from "../components/routes/RouteStepEquipment
 import RouteStepFormPanel from "../components/routes/RouteStepFormPanel";
 import RouteStepInputFormPanel from "../components/routes/RouteStepInputFormPanel";
 import StepDetailsPanel from "../components/routes/StepDetailsPanel";
+import { useRole } from "../auth/useRole";
 import { getMachinesList } from "../services/machinesApi";
 import { getNomenclatureList } from "../services/nomenclatureApi";
 import { getProcessesList } from "../services/processesApi";
@@ -119,7 +120,18 @@ const ROUTE_AUTODEACTIVATION_MESSAGE =
 const MULTIPLE_STEPS_WARNING =
   "В маршруте найдено несколько шагов. В новой модели используется первая операция.";
 
+function toRouteWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения маршрутов.";
+  }
+  return error?.message || fallbackText;
+}
+
 function RoutesSection({ routeOpenRequest }) {
+  const { user } = useRole();
+  const role = user?.role;
+  const canEditRoutes = role === "admin" || role === "planner";
+
   const [routes, setRoutes] = useState([]);
   const [routeSteps, setRouteSteps] = useState([]);
   const [routeStepInputs, setRouteStepInputs] = useState([]);
@@ -596,6 +608,11 @@ function RoutesSection({ routeOpenRequest }) {
   );
 
   const handleOpenCreateRouteForm = () => {
+    if (!canEditRoutes) {
+      setRouteStatusError("Недостаточно прав для изменения маршрутов.");
+      return;
+    }
+
     setRouteFormMode("create");
     setRouteSaveError("");
     setRouteStatusError("");
@@ -605,6 +622,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenEditRouteForm = () => {
     if (!selectedRoute) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setRouteStatusError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -625,6 +647,11 @@ function RoutesSection({ routeOpenRequest }) {
   };
 
   const handleSubmitRouteForm = async (payload) => {
+    if (!canEditRoutes) {
+      setRouteSaveError("Недостаточно прав для изменения маршрутов.");
+      return;
+    }
+
     setIsSavingRoute(true);
     setRouteSaveError("");
     setRouteStatusError("");
@@ -650,7 +677,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       setActivePanel("view");
     } catch (error) {
-      setRouteSaveError(error.message || "Не удалось сохранить маршрут.");
+      setRouteSaveError(toRouteWriteErrorMessage(error, "Не удалось сохранить маршрут."));
     } finally {
       setIsSavingRoute(false);
     }
@@ -658,6 +685,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleActivateRoute = async () => {
     if (!selectedRoute || selectedRoute.is_active) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setRouteStatusError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -675,7 +707,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       replaceRouteInState(updatedRoute);
     } catch (error) {
-      setRouteStatusError(error.message || "Не удалось активировать маршрут.");
+      setRouteStatusError(toRouteWriteErrorMessage(error, "Не удалось активировать маршрут."));
     } finally {
       setIsChangingRouteStatus(false);
     }
@@ -683,6 +715,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleDeactivateRoute = async () => {
     if (!selectedRoute || !selectedRoute.is_active) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setRouteStatusError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -694,7 +731,7 @@ function RoutesSection({ routeOpenRequest }) {
       const deactivatedRoute = await deleteRouteItem(selectedRoute.route_id);
       replaceRouteInState(deactivatedRoute);
     } catch (error) {
-      setRouteStatusError(error.message || "Не удалось деактивировать маршрут.");
+      setRouteStatusError(toRouteWriteErrorMessage(error, "Не удалось деактивировать маршрут."));
     } finally {
       setIsChangingRouteStatus(false);
     }
@@ -705,6 +742,11 @@ function RoutesSection({ routeOpenRequest }) {
       return;
     }
 
+    if (!canEditRoutes) {
+      setRouteStatusError("Недостаточно прав для изменения маршрутов.");
+      return;
+    }
+
     setStepFormMode("create");
     setStepSaveError("");
     setActivePanel("step-form");
@@ -712,6 +754,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenEditStepForm = () => {
     if (!selectedStep) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setStepSaveError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -731,6 +778,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleSubmitStepForm = async (payload) => {
     if (!selectedRoute) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setStepSaveError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -773,7 +825,7 @@ function RoutesSection({ routeOpenRequest }) {
       await syncRouteAfterStructuralChange(routeId, wasRouteActive);
       setActivePanel("view");
     } catch (error) {
-      setStepSaveError(error.message || "Не удалось сохранить операцию получения.");
+      setStepSaveError(toRouteWriteErrorMessage(error, "Не удалось сохранить операцию получения."));
     } finally {
       setIsSavingStep(false);
     }
@@ -781,6 +833,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenDeleteStepConfirm = () => {
     if (!selectedStep || isDeletingStep) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setStepsError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -838,7 +895,7 @@ function RoutesSection({ routeOpenRequest }) {
         setActivePanel("view");
       }
     } catch (error) {
-      setStepsError(error.message || "Не удалось удалить операцию получения.");
+      setStepsError(toRouteWriteErrorMessage(error, "Не удалось удалить операцию получения."));
     } finally {
       setIsDeletingStep(false);
     }
@@ -846,6 +903,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenCreateInputForm = () => {
     if (!selectedStep) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setInputsError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -857,6 +919,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenEditInputForm = (input) => {
     if (!selectedStep || !input) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setInputsError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -877,6 +944,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleSubmitInputForm = async (payload) => {
     if (!selectedStep) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setInputSaveError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -912,7 +984,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       setActivePanel("view");
     } catch (error) {
-      setInputSaveError(error.message || "Не удалось сохранить вход операции.");
+      setInputSaveError(toRouteWriteErrorMessage(error, "Не удалось сохранить вход операции."));
     } finally {
       setIsSavingInput(false);
     }
@@ -920,6 +992,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenDeleteInputConfirm = (input) => {
     if (!input || isDeletingInput) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setInputsError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -971,7 +1048,7 @@ function RoutesSection({ routeOpenRequest }) {
         setActivePanel("view");
       }
     } catch (error) {
-      setInputsError(error.message || "Не удалось удалить вход операции.");
+      setInputsError(toRouteWriteErrorMessage(error, "Не удалось удалить вход операции."));
     } finally {
       setIsDeletingInput(false);
       setInputPendingDeleteId(null);
@@ -983,6 +1060,11 @@ function RoutesSection({ routeOpenRequest }) {
       return;
     }
 
+    if (!canEditRoutes) {
+      setEquipmentError("Недостаточно прав для изменения маршрутов.");
+      return;
+    }
+
     setEquipmentFormMode("create");
     setSelectedEquipmentId(null);
     setEquipmentSaveError("");
@@ -991,6 +1073,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenEditEquipmentForm = (equipmentItem) => {
     if (!selectedStep || !equipmentItem) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setEquipmentError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -1011,6 +1098,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleSubmitEquipmentForm = async (payload) => {
     if (!selectedStep) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setEquipmentSaveError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -1051,7 +1143,7 @@ function RoutesSection({ routeOpenRequest }) {
 
       setActivePanel("view");
     } catch (error) {
-      setEquipmentSaveError(error.message || "Не удалось сохранить оборудование операции.");
+      setEquipmentSaveError(toRouteWriteErrorMessage(error, "Не удалось сохранить оборудование операции."));
     } finally {
       setIsSavingEquipment(false);
     }
@@ -1059,6 +1151,11 @@ function RoutesSection({ routeOpenRequest }) {
 
   const handleOpenDeleteEquipmentConfirm = (equipmentItem) => {
     if (!equipmentItem || isDeletingEquipment) {
+      return;
+    }
+
+    if (!canEditRoutes) {
+      setEquipmentError("Недостаточно прав для изменения маршрутов.");
       return;
     }
 
@@ -1115,7 +1212,7 @@ function RoutesSection({ routeOpenRequest }) {
         setActivePanel("view");
       }
     } catch (error) {
-      setEquipmentError(error.message || "Не удалось удалить оборудование операции.");
+      setEquipmentError(toRouteWriteErrorMessage(error, "Не удалось удалить оборудование операции."));
     } finally {
       setIsDeletingEquipment(false);
       setEquipmentPendingDeleteId(null);
@@ -1139,7 +1236,8 @@ function RoutesSection({ routeOpenRequest }) {
                 </h1>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              {canEditRoutes ? (
+                <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={handleOpenCreateRouteForm}
@@ -1148,7 +1246,8 @@ function RoutesSection({ routeOpenRequest }) {
                   <GitBranchPlus className="h-4 w-4" />
                   Новый маршрут
                 </button>
-              </div>
+                </div>
+              ) : null}
             </div>
 
             {loadError ? (
@@ -1177,6 +1276,7 @@ function RoutesSection({ routeOpenRequest }) {
             errorMessage={routeSaveError}
             onCancel={handleCancelRouteForm}
             onSave={handleSubmitRouteForm}
+            canEdit={canEditRoutes}
           />
         ) : activePanel === "step-form" ? (
           <RouteStepFormPanel
@@ -1190,6 +1290,7 @@ function RoutesSection({ routeOpenRequest }) {
             errorMessage={stepSaveError}
             onCancel={handleCancelStepForm}
             onSave={handleSubmitStepForm}
+            canEdit={canEditRoutes}
           />
         ) : activePanel === "input-form" ? (
           <RouteStepInputFormPanel
@@ -1200,6 +1301,7 @@ function RoutesSection({ routeOpenRequest }) {
             errorMessage={inputSaveError}
             onCancel={handleCancelInputForm}
             onSave={handleSubmitInputForm}
+            canEdit={canEditRoutes}
           />
         ) : activePanel === "equipment-form" ? (
           <RouteStepEquipmentFormPanel
@@ -1210,10 +1312,12 @@ function RoutesSection({ routeOpenRequest }) {
             errorMessage={equipmentSaveError}
             onCancel={handleCancelEquipmentForm}
             onSave={handleSubmitEquipmentForm}
+            canEdit={canEditRoutes}
           />
         ) : (
           <StepDetailsPanel
             selectedRoute={selectedRoute}
+            canEditRoutes={canEditRoutes}
             selectedResultNomenclatureLabel={selectedResultNomenclatureLabel}
             step={selectedStep}
             processLabel={selectedStepProcessLabel}
