@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS equipment_downtimes (
     ended_at TIMESTAMP NULL,
     duration_minutes INTEGER NULL,
     comment TEXT NULL,
+    created_by_user_id INTEGER NULL REFERENCES users(id),
+    updated_by_user_id INTEGER NULL REFERENCES users(id),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     CONSTRAINT equipment_downtimes_ended_after_started_check CHECK (

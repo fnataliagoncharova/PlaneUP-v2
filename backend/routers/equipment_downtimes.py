@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 import psycopg2
@@ -18,7 +18,9 @@ from schemas.equipment_downtime import (
 router = APIRouter(prefix="/equipment-downtimes", tags=["equipment_downtimes"])
 
 DOWNTIME_READ_ROLES = ("planner", "master", "maintenance", "viewer")
-DOWNTIME_WRITE_ROLES = ("master",)
+DOWNTIME_CREATE_ROLES = ("planner", "master", "maintenance")
+DOWNTIME_WRITE_ROLES = ("planner", "master", "maintenance")
+DOWNTIME_PERMISSION_ERROR = "Недостаточно прав для изменения внепланового простоя."
 
 STATUS_OPEN = "open"
 STATUS_CLOSED = "closed"
@@ -38,6 +40,10 @@ SELECT_COLUMNS = """
     ed.ended_at,
     ed.duration_minutes,
     ed.comment,
+    ed.created_by_user_id,
+    created_user.username AS created_by_username,
+    ed.updated_by_user_id,
+    updated_user.username AS updated_by_username,
     ed.created_at,
     ed.updated_at
 """
@@ -72,6 +78,63 @@ def calculate_duration_minutes(started_at: datetime, ended_at: datetime) -> int:
 
 def get_local_now() -> datetime:
     return datetime.now()
+
+
+def get_current_production_shift_interval(now: datetime | None = None) -> tuple[datetime, datetime]:
+    current_datetime = now or datetime.utcnow()
+    current_day_start = current_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if 8 <= current_datetime.hour < 20:
+        shift_start = current_day_start + timedelta(hours=8)
+        shift_end = current_day_start + timedelta(hours=20)
+        return shift_start, shift_end
+
+    if current_datetime.hour >= 20:
+        shift_start = current_day_start + timedelta(hours=20)
+        shift_end = current_day_start + timedelta(days=1, hours=8)
+        return shift_start, shift_end
+
+    shift_start = current_day_start - timedelta(hours=4)
+    shift_end = current_day_start + timedelta(hours=8)
+    return shift_start, shift_end
+
+
+def to_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def ensure_can_modify_equipment_downtime(record: dict[str, Any], current_user: dict[str, Any]) -> None:
+    if current_user["role"] == "admin":
+        return
+
+    if current_user["role"] not in set(DOWNTIME_WRITE_ROLES):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=DOWNTIME_PERMISSION_ERROR,
+        )
+
+    created_at = record.get("created_at")
+    if not isinstance(created_at, datetime):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=DOWNTIME_PERMISSION_ERROR,
+        )
+
+    current_shift_start, current_shift_end = get_current_production_shift_interval()
+    normalized_created_at = to_naive_utc(created_at)
+
+    if (
+        record.get("created_by_user_id") == current_user["id"]
+        and current_shift_start <= normalized_created_at < current_shift_end
+    ):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=DOWNTIME_PERMISSION_ERROR,
+    )
 
 
 def validate_open_downtime_started_at(started_at: datetime, ended_at: datetime | None) -> None:
@@ -177,6 +240,8 @@ def require_equipment_downtime_exists(connection, downtime_id: int) -> dict[str,
             FROM equipment_downtimes AS ed
             INNER JOIN machines AS m ON m.machine_id = ed.machine_id
             INNER JOIN downtime_reasons AS dr ON dr.downtime_reason_id = ed.downtime_reason_id
+            LEFT JOIN users AS created_user ON created_user.id = ed.created_by_user_id
+            LEFT JOIN users AS updated_user ON updated_user.id = ed.updated_by_user_id
             WHERE ed.downtime_id = %s;
             """,
             (downtime_id,),
@@ -264,6 +329,8 @@ def list_equipment_downtimes(
                 FROM equipment_downtimes AS ed
                 INNER JOIN machines AS m ON m.machine_id = ed.machine_id
                 INNER JOIN downtime_reasons AS dr ON dr.downtime_reason_id = ed.downtime_reason_id
+                LEFT JOIN users AS created_user ON created_user.id = ed.created_by_user_id
+                LEFT JOIN users AS updated_user ON updated_user.id = ed.updated_by_user_id
                 {where_sql}
                 ORDER BY
                     CASE WHEN ed.ended_at IS NULL THEN 0 ELSE 1 END ASC,
@@ -292,9 +359,11 @@ def list_equipment_downtimes(
     "",
     response_model=EquipmentDowntimeRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
 )
-def create_equipment_downtime(payload: EquipmentDowntimeCreate):
+def create_equipment_downtime(
+    payload: EquipmentDowntimeCreate,
+    current_user: dict[str, Any] = Depends(require_roles(*DOWNTIME_CREATE_ROLES)),
+):
     connection = None
 
     try:
@@ -316,9 +385,11 @@ def create_equipment_downtime(payload: EquipmentDowntimeCreate):
                     started_at,
                     ended_at,
                     duration_minutes,
-                    comment
+                    comment,
+                    created_by_user_id,
+                    updated_by_user_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING downtime_id;
                 """,
                 (
@@ -328,6 +399,8 @@ def create_equipment_downtime(payload: EquipmentDowntimeCreate):
                     payload.ended_at,
                     duration_minutes,
                     payload.comment,
+                    current_user["id"],
+                    current_user["id"],
                 ),
             )
             created_row = cursor.fetchone()
@@ -353,11 +426,11 @@ def create_equipment_downtime(payload: EquipmentDowntimeCreate):
 @router.put(
     "/{downtime_id}",
     response_model=EquipmentDowntimeRead,
-    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
 )
 def update_equipment_downtime(
     payload: EquipmentDowntimeUpdate,
     downtime_id: int = Path(..., gt=0),
+    current_user: dict[str, Any] = Depends(require_roles(*DOWNTIME_WRITE_ROLES)),
 ):
     connection = None
 
@@ -374,7 +447,9 @@ def update_equipment_downtime(
                     downtime_reason_id,
                     started_at,
                     ended_at,
-                    comment
+                    comment,
+                    created_by_user_id,
+                    created_at
                 FROM equipment_downtimes
                 WHERE downtime_id = %s
                 FOR UPDATE;
@@ -387,6 +462,8 @@ def update_equipment_downtime(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Запись простоя не найдена.",
                 )
+
+            ensure_can_modify_equipment_downtime(current_row, current_user)
 
             next_machine_id = payload_data.get("machine_id", current_row["machine_id"])
             next_reason_id = payload_data.get("downtime_reason_id", current_row["downtime_reason_id"])
@@ -412,6 +489,7 @@ def update_equipment_downtime(
                     ended_at = %s,
                     duration_minutes = %s,
                     comment = %s,
+                    updated_by_user_id = %s,
                     updated_at = NOW()
                 WHERE downtime_id = %s;
                 """,
@@ -422,6 +500,7 @@ def update_equipment_downtime(
                     next_ended_at,
                     next_duration_minutes,
                     next_comment,
+                    current_user["id"],
                     downtime_id,
                 ),
             )
@@ -447,11 +526,11 @@ def update_equipment_downtime(
 @router.patch(
     "/{downtime_id}/close",
     response_model=EquipmentDowntimeRead,
-    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
 )
 def close_equipment_downtime(
     payload: EquipmentDowntimeClose,
     downtime_id: int = Path(..., gt=0),
+    current_user: dict[str, Any] = Depends(require_roles(*DOWNTIME_WRITE_ROLES)),
 ):
     connection = None
 
@@ -464,7 +543,9 @@ def close_equipment_downtime(
                     downtime_id,
                     started_at,
                     ended_at,
-                    comment
+                    comment,
+                    created_by_user_id,
+                    created_at
                 FROM equipment_downtimes
                 WHERE downtime_id = %s
                 FOR UPDATE;
@@ -477,6 +558,8 @@ def close_equipment_downtime(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Запись простоя не найдена.",
                 )
+
+            ensure_can_modify_equipment_downtime(current_row, current_user)
 
             if current_row["ended_at"] is not None:
                 raise HTTPException(
@@ -494,6 +577,7 @@ def close_equipment_downtime(
                     ended_at = %s,
                     duration_minutes = %s,
                     comment = %s,
+                    updated_by_user_id = %s,
                     updated_at = NOW()
                 WHERE downtime_id = %s;
                 """,
@@ -501,6 +585,7 @@ def close_equipment_downtime(
                     payload.ended_at,
                     duration_minutes,
                     next_comment,
+                    current_user["id"],
                     downtime_id,
                 ),
             )
@@ -525,13 +610,35 @@ def close_equipment_downtime(
 
 @router.delete(
     "/{downtime_id}",
-    dependencies=[Depends(require_roles(*DOWNTIME_WRITE_ROLES))],
 )
-def delete_equipment_downtime(downtime_id: int = Path(..., gt=0)):
+def delete_equipment_downtime(
+    downtime_id: int = Path(..., gt=0),
+    current_user: dict[str, Any] = Depends(require_roles(*DOWNTIME_WRITE_ROLES)),
+):
     connection = None
 
     try:
         connection = get_connection()
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT downtime_id, created_by_user_id, created_at
+                FROM equipment_downtimes
+                WHERE downtime_id = %s
+                FOR UPDATE;
+                """,
+                (downtime_id,),
+            )
+            current_row = cursor.fetchone()
+
+        if current_row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Запись простоя не найдена.",
+            )
+
+        ensure_can_modify_equipment_downtime(current_row, current_user)
+
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(
                 """
@@ -542,12 +649,6 @@ def delete_equipment_downtime(downtime_id: int = Path(..., gt=0)):
                 (downtime_id,),
             )
             deleted_row = cursor.fetchone()
-
-        if deleted_row is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Запись простоя не найдена.",
-            )
 
         connection.commit()
         return {

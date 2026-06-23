@@ -11,6 +11,7 @@ import {
 } from "../services/equipmentDowntimesApi";
 import { getDowntimeReasons } from "../services/downtimeReasonsApi";
 import { getMachinesList } from "../services/machinesApi";
+import { useRole } from "../auth/useRole";
 
 const BASE_TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
   const hours = Math.floor(index / 4);
@@ -30,6 +31,13 @@ function toErrorMessage(error, fallbackText) {
     return error.message;
   }
   return fallbackText;
+}
+
+function toDowntimeWriteErrorMessage(error, fallbackText) {
+  if (error?.status === 403 || error?.message === "Forbidden") {
+    return "Недостаточно прав для изменения внепланового простоя.";
+  }
+  return toErrorMessage(error, fallbackText);
 }
 
 function splitDateTime(value) {
@@ -222,6 +230,13 @@ function getCloseDurationPreview(startedAtValue, endedDate, endedTime) {
 }
 
 function EquipmentDowntimesSection() {
+  const { user } = useRole();
+  const role = user?.role;
+  const canCreateDowntime =
+    role === "admin" || role === "planner" || role === "master" || role === "maintenance";
+  const canEditDowntimeBase = canCreateDowntime;
+  const canDeleteDowntimeBase = canCreateDowntime;
+
   const [machines, setMachines] = useState([]);
   const [downtimeReasons, setDowntimeReasons] = useState([]);
   const [downtimeItems, setDowntimeItems] = useState([]);
@@ -250,6 +265,7 @@ function EquipmentDowntimesSection() {
   const [editingItem, setEditingItem] = useState(null);
   const [closingItem, setClosingItem] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const canSubmitDowntimeForm = formMode === "create" ? canCreateDowntime : canEditDowntimeBase;
 
   const [formState, setFormState] = useState(createDefaultFormState);
   const [closeState, setCloseState] = useState(createDefaultCloseState(null));
@@ -407,6 +423,11 @@ function EquipmentDowntimesSection() {
   };
 
   const openCreateModal = () => {
+    if (!canCreateDowntime) {
+      setPageError("Недостаточно прав для изменения внепланового простоя.");
+      return;
+    }
+
     const defaultState = createDefaultFormState();
 
     setFormMode("create");
@@ -423,6 +444,11 @@ function EquipmentDowntimesSection() {
   };
 
   const openEditModal = (item) => {
+    if (!canEditDowntimeBase) {
+      setPageError("Недостаточно прав для изменения внепланового простоя.");
+      return;
+    }
+
     const started = splitDateTime(item.started_at);
     const ended = splitDateTime(item.ended_at);
 
@@ -451,6 +477,11 @@ function EquipmentDowntimesSection() {
   };
 
   const openCloseModal = (item) => {
+    if (!canEditDowntimeBase) {
+      setPageError("Недостаточно прав для изменения внепланового простоя.");
+      return;
+    }
+
     setClosingItem(item);
     setCloseState(createDefaultCloseState(item));
     setCloseError("");
@@ -466,6 +497,11 @@ function EquipmentDowntimesSection() {
   };
 
   const handleSaveDowntime = async () => {
+    if (!canSubmitDowntimeForm) {
+      setFormError("Недостаточно прав для изменения внепланового простоя.");
+      return;
+    }
+
     if (!formState.machine_id) {
       setFormError("Оборудование обязательно.");
       return;
@@ -524,13 +560,18 @@ function EquipmentDowntimesSection() {
       setIsFormOpen(false);
       await loadEquipmentDowntimes(filters);
     } catch (error) {
-      setFormError(toErrorMessage(error, "Не удалось сохранить запись простоя."));
+      setFormError(toDowntimeWriteErrorMessage(error, "Не удалось сохранить запись простоя."));
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleCloseDowntime = async () => {
+    if (!canEditDowntimeBase) {
+      setCloseError("Недостаточно прав для изменения внепланового простоя.");
+      return;
+    }
+
     if (!closingItem?.downtime_id) {
       return;
     }
@@ -562,13 +603,19 @@ function EquipmentDowntimesSection() {
       setClosingItem(null);
       await loadEquipmentDowntimes(filters);
     } catch (error) {
-      setCloseError(toErrorMessage(error, "Не удалось закрыть простой."));
+      setCloseError(toDowntimeWriteErrorMessage(error, "Не удалось закрыть простой."));
     } finally {
       setIsClosing(false);
     }
   };
 
   const handleDelete = async () => {
+    if (!canDeleteDowntimeBase) {
+      setDeleteCandidate(null);
+      setPageError("Недостаточно прав для изменения внепланового простоя.");
+      return;
+    }
+
     if (!deleteCandidate?.downtime_id) {
       return;
     }
@@ -582,7 +629,7 @@ function EquipmentDowntimesSection() {
       await loadEquipmentDowntimes(filters);
     } catch (error) {
       setDeleteCandidate(null);
-      setPageError(toErrorMessage(error, "Не удалось удалить запись простоя."));
+      setPageError(toDowntimeWriteErrorMessage(error, "Не удалось удалить запись простоя."));
     } finally {
       setIsDeleting(false);
     }
@@ -631,14 +678,16 @@ function EquipmentDowntimesSection() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22]"
-          >
-            <Plus className="h-4 w-4" />
-            Добавить простой
-          </button>
+          {canCreateDowntime ? (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex h-10 items-center gap-2 rounded-none border border-cyan-300/35 bg-cyan-400/[0.14] px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/[0.22]"
+            >
+              <Plus className="h-4 w-4" />
+              Добавить простой
+            </button>
+          ) : null}
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -771,6 +820,7 @@ function EquipmentDowntimesSection() {
                   <th className="px-3 py-2 text-left font-medium">Длительность</th>
                   <th className="px-3 py-2 text-left font-medium">Причина</th>
                   <th className="px-3 py-2 text-left font-medium">Категория</th>
+                  <th className="px-3 py-2 text-left font-medium">Автор</th>
                   <th className="px-3 py-2 text-left font-medium">Комментарий</th>
                   <th className="px-3 py-2 text-right font-medium">Действия</th>
                 </tr>
@@ -778,13 +828,13 @@ function EquipmentDowntimesSection() {
               <tbody>
                 {isListLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                    <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
                       Загрузка журнала простоев...
                     </td>
                   </tr>
                 ) : downtimeItems.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                    <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
                       Нет записей по выбранным условиям.
                     </td>
                   </tr>
@@ -839,39 +889,44 @@ function EquipmentDowntimesSection() {
                           </div>
                         </td>
                         <td className="px-3 py-2.5 text-slate-300">{item.reason_category || "—"}</td>
+                        <td className="px-3 py-2.5 text-slate-300">{item.created_by_username || "—"}</td>
                         <td className="px-3 py-2.5 text-slate-400">{item.comment || "—"}</td>
                         <td className="px-3 py-2.5">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(item)}
-                              title="Изменить"
-                              aria-label="Изменить"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            {isOpen ? (
+                          {canEditDowntimeBase || canDeleteDowntimeBase ? (
+                            <div className="flex justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => openCloseModal(item)}
-                                title="Закрыть простой"
-                                aria-label="Закрыть простой"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-amber-500/40 bg-amber-500/10 text-amber-100 transition hover:border-amber-400/60 hover:bg-amber-500/15"
+                                onClick={() => openEditModal(item)}
+                                title="Изменить"
+                                aria-label="Изменить"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-cyan-300/28 bg-cyan-400/[0.08] text-cyan-100 transition hover:border-cyan-300/42 hover:bg-cyan-400/[0.16]"
                               >
-                                <CheckCheck className="h-4 w-4" />
+                                <Pencil className="h-4 w-4" />
                               </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => setDeleteCandidate(item)}
-                              title="Удалить"
-                              aria-label="Удалить"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/28 bg-rose-500/[0.08] text-rose-100 transition hover:border-rose-300/42 hover:bg-rose-500/[0.16]"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
+                              {isOpen ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openCloseModal(item)}
+                                  title="Закрыть простой"
+                                  aria-label="Закрыть простой"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-amber-500/40 bg-amber-500/10 text-amber-100 transition hover:border-amber-400/60 hover:bg-amber-500/15"
+                                >
+                                  <CheckCheck className="h-4 w-4" />
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => setDeleteCandidate(item)}
+                                title="Удалить"
+                                aria-label="Удалить"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-none border border-rose-300/28 bg-rose-500/[0.08] text-rose-100 transition hover:border-rose-300/42 hover:bg-rose-500/[0.16]"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-right text-slate-600">—</div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -904,6 +959,7 @@ function EquipmentDowntimesSection() {
                   <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Оборудование</span>
                   <select
                     value={formState.machine_id}
+                    disabled={!canSubmitDowntimeForm}
                     onChange={(event) =>
                       setFormState((currentValue) => ({
                         ...currentValue,
@@ -927,6 +983,7 @@ function EquipmentDowntimesSection() {
                   </span>
                   <select
                     value={formState.downtime_reason_id}
+                    disabled={!canSubmitDowntimeForm}
                     onChange={(event) =>
                       setFormState((currentValue) => ({
                         ...currentValue,
@@ -958,6 +1015,8 @@ function EquipmentDowntimesSection() {
                       <input
                         type="date"
                         value={formState.started_date}
+                        readOnly={!canSubmitDowntimeForm}
+                        disabled={!canSubmitDowntimeForm}
                         onChange={(event) =>
                           setFormState((currentValue) => ({
                             ...currentValue,
@@ -971,6 +1030,7 @@ function EquipmentDowntimesSection() {
                       <span>Время начала</span>
                       <select
                         value={formState.started_time}
+                        disabled={!canSubmitDowntimeForm}
                         onChange={(event) =>
                           setFormState((currentValue) => ({
                             ...currentValue,
@@ -997,6 +1057,8 @@ function EquipmentDowntimesSection() {
                       <input
                         type="date"
                         value={formState.ended_date}
+                        readOnly={!canSubmitDowntimeForm}
+                        disabled={!canSubmitDowntimeForm}
                         onChange={(event) =>
                           setFormState((currentValue) => ({
                             ...currentValue,
@@ -1010,6 +1072,7 @@ function EquipmentDowntimesSection() {
                       <span>Время окончания</span>
                       <select
                         value={formState.ended_time}
+                        disabled={!canSubmitDowntimeForm}
                         onChange={(event) =>
                           setFormState((currentValue) => ({
                             ...currentValue,
@@ -1038,6 +1101,8 @@ function EquipmentDowntimesSection() {
                 <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Комментарий</span>
                 <textarea
                   value={formState.comment}
+                  readOnly={!canSubmitDowntimeForm}
+                  disabled={!canSubmitDowntimeForm}
                   onChange={(event) =>
                     setFormState((currentValue) => ({
                       ...currentValue,
@@ -1061,7 +1126,7 @@ function EquipmentDowntimesSection() {
               <button
                 type="button"
                 onClick={handleSaveDowntime}
-                disabled={isSaving}
+                disabled={isSaving || !canSubmitDowntimeForm}
                 className="inline-flex items-center gap-2 rounded-none border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Сохранение..." : "Сохранить"}
@@ -1110,6 +1175,8 @@ function EquipmentDowntimesSection() {
                   <input
                     type="date"
                     value={closeState.ended_date}
+                    readOnly={!canEditDowntimeBase}
+                    disabled={!canEditDowntimeBase}
                     onChange={(event) =>
                       setCloseState((currentValue) => ({
                         ...currentValue,
@@ -1124,6 +1191,7 @@ function EquipmentDowntimesSection() {
                   <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Время окончания</span>
                   <select
                     value={closeState.ended_time}
+                    disabled={!canEditDowntimeBase}
                     onChange={(event) =>
                       setCloseState((currentValue) => ({
                         ...currentValue,
@@ -1150,6 +1218,8 @@ function EquipmentDowntimesSection() {
                 <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Комментарий</span>
                 <textarea
                   value={closeState.comment}
+                  readOnly={!canEditDowntimeBase}
+                  disabled={!canEditDowntimeBase}
                   onChange={(event) =>
                     setCloseState((currentValue) => ({
                       ...currentValue,
@@ -1173,7 +1243,7 @@ function EquipmentDowntimesSection() {
               <button
                 type="button"
                 onClick={handleCloseDowntime}
-                disabled={isClosing}
+                disabled={isClosing || !canEditDowntimeBase}
                 className="inline-flex items-center gap-2 rounded-none border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-400/60 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isClosing ? "Закрытие..." : "Закрыть простой"}

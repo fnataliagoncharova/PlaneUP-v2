@@ -71,5 +71,9 @@ class EquipmentDowntimeRead(BaseModel):
     current_duration_minutes: int
     current_duration_hours: float
     comment: str | None = None
+    created_by_user_id: int | None = None
+    created_by_username: str | None = None
+    updated_by_user_id: int | None = None
+    updated_by_username: str | None = None
     created_at: datetime
     updated_at: datetime
