@@ -23,6 +23,7 @@ from routers.route_steps import router as route_steps_router
 from routers.routes import router as routes_router
 from routers.safety_stock import router as safety_stock_router
 from routers.sales_plan import router as sales_plan_router
+from routers.users import router as users_router
 
 
 app = FastAPI()
@@ -56,6 +57,7 @@ app.include_router(production_week_plans_router)
 app.include_router(production_actuals_router)
 app.include_router(production_analytics_router)
 app.include_router(auth_router)
+app.include_router(users_router)
 
 
 @app.get("/")
