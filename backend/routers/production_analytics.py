@@ -122,6 +122,35 @@ def to_percent_float(value: Decimal | None) -> float | None:
     return round(float(value), 1)
 
 
+def calculate_merged_downtime_minutes(intervals: list[tuple[datetime, datetime]]) -> int:
+    normalized_intervals: list[tuple[datetime, datetime]] = []
+    for start_at, end_at in intervals:
+        if not isinstance(start_at, datetime) or not isinstance(end_at, datetime):
+            continue
+        if end_at <= start_at:
+            continue
+        normalized_intervals.append((start_at, end_at))
+
+    if not normalized_intervals:
+        return 0
+
+    normalized_intervals.sort(key=lambda item: item[0])
+    merged_minutes = 0
+    current_start, current_end = normalized_intervals[0]
+
+    for next_start, next_end in normalized_intervals[1:]:
+        if next_start <= current_end:
+            if next_end > current_end:
+                current_end = next_end
+            continue
+
+        merged_minutes += max(0, int((current_end - current_start).total_seconds() // 60))
+        current_start, current_end = next_start, next_end
+
+    merged_minutes += max(0, int((current_end - current_start).total_seconds() // 60))
+    return merged_minutes
+
+
 def normalize_unit_of_measure(value: Any) -> str:
     unit = str(value or "").strip()
     return unit or "Без ед."
@@ -274,6 +303,27 @@ def fetch_planned_maintenance_minutes_for_period(
     )
     row = cursor.fetchone()
     return to_decimal(row["maintenance_minutes"])
+
+
+def fetch_planned_maintenance_intervals_for_period(
+    cursor: RealDictCursor,
+    date_from: datetime,
+    date_to: datetime,
+) -> list[dict[str, Any]]:
+    cursor.execute(
+        """
+        SELECT
+            em.machine_id AS equipment_id,
+            em.started_at,
+            em.ended_at
+        FROM equipment_maintenance AS em
+        WHERE em.started_at < %s
+          AND em.ended_at > %s
+        ORDER BY em.machine_id ASC, em.started_at ASC;
+        """,
+        (date_to, date_from),
+    )
+    return cursor.fetchall()
 
 
 def get_field(item: Any, field_name: str, default: Any = None) -> Any:
@@ -1075,6 +1125,11 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
                 (month_end_at, month_start_at),
             )
             downtime_rows = cursor.fetchall()
+            maintenance_rows = fetch_planned_maintenance_intervals_for_period(
+                cursor=cursor,
+                date_from=month_start_at,
+                date_to=month_end_at,
+            )
             planned_maintenance_minutes_total = fetch_planned_maintenance_minutes_for_period(
                 cursor=cursor,
                 date_from=month_start_at,
@@ -1083,7 +1138,23 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
 
         downtime_aggregates: dict[tuple[int, int], dict[str, Any]] = {}
         downtime_category_aggregates: dict[str, dict[str, Any]] = {}
-        unplanned_downtime_minutes_total = 0
+        downtime_intervals_by_equipment: dict[int, list[tuple[datetime, datetime]]] = {}
+        unavailability_intervals_by_equipment: dict[int, list[tuple[datetime, datetime]]] = {}
+
+        for row in maintenance_rows:
+            equipment_id_raw = row.get("equipment_id")
+            started_at = row.get("started_at")
+            ended_at = row.get("ended_at")
+            if equipment_id_raw is None or not isinstance(started_at, datetime) or not isinstance(ended_at, datetime):
+                continue
+
+            effective_start = started_at if started_at >= month_start_at else month_start_at
+            effective_end = ended_at if ended_at <= month_end_at else month_end_at
+            if effective_end <= effective_start:
+                continue
+
+            equipment_id = int(equipment_id_raw)
+            unavailability_intervals_by_equipment.setdefault(equipment_id, []).append((effective_start, effective_end))
 
         for row in downtime_rows:
             started_at = row.get("started_at")
@@ -1098,11 +1169,15 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
             if duration_minutes <= 0:
                 continue
 
-            key = (int(row["equipment_id"]), int(row["reason_id"]))
+            equipment_id = int(row["equipment_id"])
+            downtime_intervals_by_equipment.setdefault(equipment_id, []).append((effective_start, effective_end))
+            unavailability_intervals_by_equipment.setdefault(equipment_id, []).append((effective_start, effective_end))
+
+            key = (equipment_id, int(row["reason_id"]))
             aggregate = downtime_aggregates.setdefault(
                 key,
                 {
-                    "equipment_id": int(row["equipment_id"]),
+                    "equipment_id": equipment_id,
                     "equipment_code": str(row.get("equipment_code") or "").strip(),
                     "equipment_name": str(row.get("equipment_name") or "").strip(),
                     "reason_id": int(row["reason_id"]),
@@ -1127,7 +1202,15 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
             )
             category_aggregate["downtime_count"] += 1
             category_aggregate["downtime_minutes"] += duration_minutes
-            unplanned_downtime_minutes_total += duration_minutes
+
+        unplanned_downtime_minutes_total = sum(
+            calculate_merged_downtime_minutes(intervals)
+            for intervals in downtime_intervals_by_equipment.values()
+        )
+        total_unavailability_minutes = sum(
+            calculate_merged_downtime_minutes(intervals)
+            for intervals in unavailability_intervals_by_equipment.values()
+        )
 
         downtimes = sorted(
             [
@@ -1175,7 +1258,7 @@ def get_equipment_monthly_analytics(month: str = Query(...)):
         summary = build_empty_equipment_summary()
         maintenance_hours_total = to_hours_float(planned_maintenance_minutes_total)
         unplanned_hours_total = unplanned_downtime_hours_total
-        total_downtime_hours = round(maintenance_hours_total + unplanned_hours_total, 1)
+        total_downtime_hours = to_hours_float(total_unavailability_minutes)
         unplanned_share_percent = (
             round((unplanned_hours_total / total_downtime_hours) * 100, 1)
             if total_downtime_hours > 0
