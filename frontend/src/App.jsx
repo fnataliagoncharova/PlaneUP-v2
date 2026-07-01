@@ -7,6 +7,7 @@ import {
   LogOut,
   OctagonPause,
   ScrollText,
+  Shield,
   Wrench,
   Workflow,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import ProcessesSection from "./sections/ProcessesSection";
 import ProductionAnalyticsSection from "./sections/ProductionAnalyticsSection";
 import ProductionPlanningSection from "./sections/ProductionPlanningSection";
 import RoutesSection from "./sections/RoutesSection";
+import UsersSection from "./sections/UsersSection";
 
 function ProductionPlanningIcon({ className }) {
   return (
@@ -163,6 +165,17 @@ const navigationGroups = [
       },
     ],
   },
+  {
+    label: "АДМИНИСТРИРОВАНИЕ",
+    items: [
+      {
+        id: "users",
+        label: "Пользователи",
+        icon: Shield,
+        roles: ["admin"],
+      },
+    ],
+  },
 ];
 
 const sectionDescriptions = {
@@ -177,6 +190,7 @@ const sectionDescriptions = {
   production_planning: "План выпуска",
   production_analytics: "Анализ выпуска",
   master_workspace: "Рабочий стол мастера",
+  users: "Управление пользователями",
 };
 
 function App() {
@@ -276,6 +290,8 @@ function App() {
               <ProductionAnalyticsSection />
             ) : renderedSection === "master_workspace" ? (
               <MasterWorkspaceSection />
+            ) : renderedSection === "users" ? (
+              <UsersSection />
             ) : (
               <SectionPlaceholder
                 title={activeItem?.label ?? "Нет доступных разделов"}
