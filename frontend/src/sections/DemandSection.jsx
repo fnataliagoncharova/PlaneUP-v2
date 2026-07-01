@@ -69,7 +69,6 @@ import { useRole } from "../auth/useRole";
 
 const MODULE_TAB_SOURCE_DATA = "source_data";
 const MODULE_TAB_CALCULATE = "demand_calculate";
-const MODULE_TAB_RESULTS = "demand_results";
 
 const IMPORT_CONTEXT_SALES_PLAN = "sales_plan";
 const IMPORT_CONTEXT_INVENTORY_BALANCE = "inventory_balance";
@@ -78,7 +77,6 @@ const IMPORT_CONTEXT_SAFETY_STOCK = "safety_stock";
 const MODULE_TABS = [
   { id: MODULE_TAB_SOURCE_DATA, label: "Исходные данные" },
   { id: MODULE_TAB_CALCULATE, label: "Расчёт потребности" },
-  { id: MODULE_TAB_RESULTS, label: "Результаты" },
 ];
 
 const TAB_BUTTON_BASE_CLASS =
@@ -291,6 +289,19 @@ function IconActionButton({ label, onClick, disabled = false, tone = "edit", chi
   );
 }
 
+function DemandResultTableColGroup({ numericColumns = 1 }) {
+  return (
+    <colgroup>
+      <col className="w-[120px]" />
+      <col className="w-[360px]" />
+      <col className="w-[72px]" />
+      {Array.from({ length: numericColumns }).map((_, index) => (
+        <col key={index} className="w-[148px]" />
+      ))}
+    </colgroup>
+  );
+}
+
 function DemandSection() {
   const { user } = useRole();
   const canViewDemand = user?.role === "admin" || user?.role === "planner" || user?.role === "viewer";
@@ -408,6 +419,12 @@ function DemandSection() {
   const [productionPlanRefreshCandidate, setProductionPlanRefreshCandidate] = useState(null);
   const [isRefreshingProductionPlan, setIsRefreshingProductionPlan] = useState(false);
   const [isRefreshProductionPlanConfirmOpen, setIsRefreshProductionPlanConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    if (!MODULE_TABS.some((tab) => tab.id === activeModuleTab)) {
+      setActiveModuleTab(MODULE_TAB_CALCULATE);
+    }
+  }, [activeModuleTab]);
 
   const reloadSalesPlan = useCallback(async () => {
     if (!canViewDemand) {
@@ -3833,14 +3850,15 @@ function DemandSection() {
                     <div className="text-sm text-slate-400">Позиций: <span className="font-medium tabular-nums text-slate-100">{demandTopLevelItems.length}</span></div>
                   </div>
                   <div className="mt-4 max-h-[420px] overflow-auto border border-cyan-300/10">
-                    <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
+                    <table className="min-w-full table-fixed text-left text-sm text-slate-200">
+                      <DemandResultTableColGroup numericColumns={5} />
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-center">Ед.</th><th className="px-3 py-2 text-right">План продаж</th><th className="px-3 py-2 text-right">Страховой запас</th><th className="px-3 py-2 text-right">Остаток</th><th className="px-3 py-2 text-right">Валовая потребность</th><th className="px-3 py-2 text-right">Потребность к выпуску</th></tr></thead>
                       <tbody>
                         {demandTopLevelItems.length > 0 ? demandTopLevelItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || ""}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || ""}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.unit_of_measure || ""}</td>
+                            <td className="px-3 py-2.5 font-medium text-slate-100"><div className="truncate" title={item.nomenclature_code || ""}>{item.nomenclature_code || ""}</div></td>
+                            <td className="px-3 py-2.5 text-slate-300"><div className="truncate" title={item.nomenclature_name || ""}>{item.nomenclature_name || ""}</div></td>
+                            <td className="px-3 py-2.5 text-center text-slate-300"><div className="truncate" title={item.unit_of_measure || ""}>{item.unit_of_measure || ""}</div></td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.sales_plan_qty)}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.safety_stock_qty)}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">{formatQty(item.available_qty)}</td>
@@ -3856,14 +3874,15 @@ function DemandSection() {
                 <section className="glass-panel p-5">
                   <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Потребность к выпуску</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandInternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
-                    <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
+                    <table className="min-w-full table-fixed text-left text-sm text-slate-200">
+                      <DemandResultTableColGroup numericColumns={1} />
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-center">Ед.</th><th className="px-3 py-2 text-right">Количество к выпуску</th></tr></thead>
                       <tbody>
                         {demandInternalItems.length > 0 ? demandInternalItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || ""}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || ""}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.unit_of_measure || ""}</td>
+                            <td className="px-3 py-2.5 font-medium text-slate-100"><div className="truncate" title={item.nomenclature_code || ""}>{item.nomenclature_code || ""}</div></td>
+                            <td className="px-3 py-2.5 text-slate-300"><div className="truncate" title={item.nomenclature_name || ""}>{item.nomenclature_name || ""}</div></td>
+                            <td className="px-3 py-2.5 text-center text-slate-300"><div className="truncate" title={item.unit_of_measure || ""}>{item.unit_of_measure || ""}</div></td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.required_qty)}</td>
                           </tr>
                         )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={4}>Потребность к выпуску не сформирована.</td></tr>}
@@ -3875,14 +3894,15 @@ function DemandSection() {
                 <section className="glass-panel p-5">
                   <div className="flex flex-wrap items-end justify-between gap-3"><h3 className="text-lg font-semibold text-slate-50">Внешнее обеспечение</h3><div className="text-sm text-slate-400">Позиций: <span className="tabular-nums text-slate-100">{demandExternalItems.length}</span></div></div>
                   <div className="mt-4 max-h-[360px] overflow-auto border border-cyan-300/10">
-                    <table className="min-w-full text-left text-sm text-slate-200">
-                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2">Ед.</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
+                    <table className="min-w-full table-fixed text-left text-sm text-slate-200">
+                      <DemandResultTableColGroup numericColumns={1} />
+                      <thead className="sticky top-0 bg-[rgba(8,22,34,0.95)] text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-3 py-2">Код</th><th className="px-3 py-2">Наименование</th><th className="px-3 py-2 text-center">Ед.</th><th className="px-3 py-2 text-right">Количество</th></tr></thead>
                       <tbody>
                         {demandExternalItems.length > 0 ? demandExternalItems.map((item, index) => (
                           <tr key={`${item.nomenclature_code || index}-${index}`} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.03]">
-                            <td className="px-3 py-2.5 font-medium text-slate-100">{item.nomenclature_code || ""}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.nomenclature_name || ""}</td>
-                            <td className="px-3 py-2.5 text-slate-300">{item.unit_of_measure || ""}</td>
+                            <td className="px-3 py-2.5 font-medium text-slate-100"><div className="truncate" title={item.nomenclature_code || ""}>{item.nomenclature_code || ""}</div></td>
+                            <td className="px-3 py-2.5 text-slate-300"><div className="truncate" title={item.nomenclature_name || ""}>{item.nomenclature_name || ""}</div></td>
+                            <td className="px-3 py-2.5 text-center text-slate-300"><div className="truncate" title={item.unit_of_measure || ""}>{item.unit_of_measure || ""}</div></td>
                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-100">{formatQty(item.required_qty)}</td>
                           </tr>
                         )) : <tr><td className="px-3 py-4 text-slate-400" colSpan={4}>Внешнее обеспечение не сформировано.</td></tr>}
@@ -3981,15 +4001,6 @@ function DemandSection() {
         </section>
       ) : null}
 
-      {activeModuleTab === MODULE_TAB_RESULTS ? (
-        <section className="glass-panel p-6 sm:p-7">
-          <div className="panel-title">Результаты</div>
-          <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">Результаты расчёта</h2>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
-            {demandResult ? "Последний расчёт доступен во вкладке Расчёт потребности." : "Результаты пока не сформированы. Выполните расчёт потребности во вкладке Расчёт потребности."}
-          </p>
-        </section>
-      ) : null}
     </section>
   );
 }
