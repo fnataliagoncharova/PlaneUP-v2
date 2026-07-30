@@ -41,12 +41,12 @@ function Sidebar({
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-40 w-[292px] max-w-[85vw] border-r border-cyan-300/10 bg-[linear-gradient(180deg,rgba(8,18,29,0.98),rgba(9,20,31,0.95)_55%,rgba(7,15,24,0.98))] transition-transform duration-300 lg:static lg:z-auto lg:max-w-none lg:translate-x-0 lg:border-b-0 lg:border-r lg:transition-[width]",
+          "fixed inset-y-0 left-0 z-40 h-dvh w-[292px] max-w-[85vw] border-r border-cyan-300/10 bg-[linear-gradient(180deg,rgba(8,18,29,0.98),rgba(9,20,31,0.95)_55%,rgba(7,15,24,0.98))] transition-transform duration-300 lg:static lg:z-auto lg:h-auto lg:max-w-none lg:translate-x-0 lg:border-b-0 lg:border-r lg:transition-[width]",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed ? "lg:w-[104px]" : "lg:w-[292px]",
         ].join(" ")}
       >
-        <div className="flex h-full flex-col p-4 sm:p-5">
+        <div className="flex h-full min-h-0 flex-col p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
             <PlaneUpLogo className="w-[172px] max-w-full" />
             <button
@@ -84,7 +84,12 @@ function Sidebar({
             </button>
           </div>
 
-          <nav className={isCollapsed ? "space-y-2" : "space-y-5"}>
+          <nav
+            className={[
+              "min-h-0 flex-1 overflow-y-auto pr-1",
+              isCollapsed ? "space-y-2" : "space-y-5",
+            ].join(" ")}
+          >
             {groups.map((group) => {
               const isGroupCollapsible = Boolean(group.collapsible) && !isCollapsed;
               const isGroupOpen = !isGroupCollapsible || openGroups[group.label] !== false;

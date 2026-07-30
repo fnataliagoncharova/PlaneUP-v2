@@ -2,7 +2,7 @@ from typing import Any
 
 import psycopg2
 from fastapi import APIRouter, Depends, HTTPException, Path, status
-from psycopg2.errors import UniqueViolation
+from psycopg2.errors import CheckViolation, UniqueViolation
 from psycopg2.extras import RealDictCursor
 
 from auth.passwords import hash_password
@@ -26,6 +26,7 @@ USER_ADMIN_ONLY = ("admin",)
 USER_NOT_FOUND_ERROR = "Пользователь не найден."
 USERNAME_EXISTS_ERROR = "Пользователь с таким логином уже существует."
 LAST_ACTIVE_ADMIN_ERROR = "Нельзя оставить систему без активного администратора."
+INVALID_USER_ROLE_ERROR = "Недопустимая роль пользователя."
 
 USER_SELECT_COLUMNS = """
     id,
@@ -131,6 +132,21 @@ def ensure_not_last_active_admin(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=LAST_ACTIVE_ADMIN_ERROR)
 
 
+def raise_user_write_error(exc: psycopg2.Error, fallback_message: str) -> None:
+    constraint_name = getattr(getattr(exc, "diag", None), "constraint_name", None)
+
+    if isinstance(exc, UniqueViolation):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=USERNAME_EXISTS_ERROR) from exc
+
+    if isinstance(exc, CheckViolation) and constraint_name == "users_role_check":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=INVALID_USER_ROLE_ERROR) from exc
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=fallback_message,
+    ) from exc
+
+
 @router.get("", response_model=list[UserAdminRead], dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))])
 def list_users():
     connection = None
@@ -168,6 +184,7 @@ def create_user(payload: UserCreate):
     try:
         connection = get_connection()
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            ensure_username_available(cursor, payload.username)
             cursor.execute(
                 f"""
                 INSERT INTO users (
@@ -192,17 +209,14 @@ def create_user(payload: UserCreate):
 
         connection.commit()
         return created_user
-    except UniqueViolation as exc:
+    except HTTPException:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=USERNAME_EXISTS_ERROR) from exc
+        raise
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось создать пользователя.",
-        ) from exc
+        raise_user_write_error(exc, "Не удалось создать пользователя.")
     finally:
         if connection is not None:
             connection.close()
@@ -242,17 +256,10 @@ def update_user(payload: UserUpdate, user_id: int = Path(..., gt=0)):
         if connection is not None:
             connection.rollback()
         raise
-    except UniqueViolation as exc:
-        if connection is not None:
-            connection.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=USERNAME_EXISTS_ERROR) from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось сохранить пользователя.",
-        ) from exc
+        raise_user_write_error(exc, "Не удалось сохранить пользователя.")
     finally:
         if connection is not None:
             connection.close()
@@ -290,17 +297,10 @@ def update_user_profile(payload: UserProfileUpdate, user_id: int = Path(..., gt=
         if connection is not None:
             connection.rollback()
         raise
-    except UniqueViolation as exc:
-        if connection is not None:
-            connection.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=USERNAME_EXISTS_ERROR) from exc
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось изменить профиль пользователя.",
-        ) from exc
+        raise_user_write_error(exc, "Не удалось изменить профиль пользователя.")
     finally:
         if connection is not None:
             connection.close()
@@ -340,10 +340,7 @@ def update_user_role(payload: UserRoleUpdate, user_id: int = Path(..., gt=0)):
     except psycopg2.Error as exc:
         if connection is not None:
             connection.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось изменить роль пользователя.",
-        ) from exc
+        raise_user_write_error(exc, "Не удалось изменить роль пользователя.")
     finally:
         if connection is not None:
             connection.close()
