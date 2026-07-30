@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from psycopg2.extras import RealDictCursor
 
 from auth.dependencies import get_current_user
-from auth.rbac import require_roles
+from auth.rbac import is_admin_like_role, require_roles
 from db import get_connection
 from schemas.production_actual import (
     ProductionActualCreate,
@@ -98,7 +98,7 @@ def get_current_production_shift_interval(now: datetime | None = None) -> tuple[
 
 
 def ensure_can_modify_production_actual(record: dict[str, Any], current_user: dict[str, Any]) -> None:
-    if current_user["role"] == "admin":
+    if is_admin_like_role(current_user["role"]):
         return
 
     created_at = record.get("created_at")
@@ -124,7 +124,7 @@ def ensure_can_modify_production_actual(record: dict[str, Any], current_user: di
 
 
 def ensure_can_create_production_actual(current_user: dict[str, Any]) -> None:
-    if current_user["role"] in {"admin", "master"}:
+    if is_admin_like_role(current_user["role"]) or current_user["role"] == "master":
         return
 
     raise HTTPException(

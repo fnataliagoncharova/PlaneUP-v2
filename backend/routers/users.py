@@ -131,7 +131,7 @@ def ensure_not_last_active_admin(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=LAST_ACTIVE_ADMIN_ERROR)
 
 
-@router.get("", response_model=list[UserAdminRead], dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))])
+@router.get("", response_model=list[UserAdminRead], dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))])
 def list_users():
     connection = None
 
@@ -160,7 +160,7 @@ def list_users():
     "",
     response_model=UserAdminRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))],
 )
 def create_user(payload: UserCreate):
     connection = None
@@ -211,7 +211,7 @@ def create_user(payload: UserCreate):
 @router.patch(
     "/{user_id}",
     response_model=UserAdminRead,
-    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))],
 )
 def update_user(payload: UserUpdate, user_id: int = Path(..., gt=0)):
     connection = None
@@ -261,7 +261,7 @@ def update_user(payload: UserUpdate, user_id: int = Path(..., gt=0)):
 @router.patch(
     "/{user_id}/profile",
     response_model=UserAdminRead,
-    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))],
 )
 def update_user_profile(payload: UserProfileUpdate, user_id: int = Path(..., gt=0)):
     connection = None
@@ -309,7 +309,7 @@ def update_user_profile(payload: UserProfileUpdate, user_id: int = Path(..., gt=
 @router.patch(
     "/{user_id}/role",
     response_model=UserAdminRead,
-    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))],
 )
 def update_user_role(payload: UserRoleUpdate, user_id: int = Path(..., gt=0)):
     connection = None
@@ -352,7 +352,7 @@ def update_user_role(payload: UserRoleUpdate, user_id: int = Path(..., gt=0)):
 @router.patch(
     "/{user_id}/password",
     response_model=UserAdminRead,
-    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))],
 )
 def update_user_password(payload: UserPasswordUpdate, user_id: int = Path(..., gt=0)):
     connection = None
@@ -394,7 +394,7 @@ def update_user_password(payload: UserPasswordUpdate, user_id: int = Path(..., g
 @router.patch(
     "/{user_id}/active",
     response_model=UserAdminRead,
-    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY))],
+    dependencies=[Depends(require_roles(*USER_ADMIN_ONLY, allow_demo_admin=False))],
 )
 def update_user_active(payload: UserActiveUpdate, user_id: int = Path(..., gt=0)):
     connection = None

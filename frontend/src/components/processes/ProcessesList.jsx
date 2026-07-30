@@ -1,4 +1,4 @@
-import { ChevronRight, Network, Search, Workflow } from "lucide-react";
+import { ChevronRight, Search, Workflow } from "lucide-react";
 
 function ProcessesList({
   items,
@@ -16,10 +16,6 @@ function ProcessesList({
           <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
             Список операций
           </h2>
-        </div>
-        <div className="tech-chip">
-          <Network className="h-4 w-4" />
-          Backend API
         </div>
       </div>
 
@@ -146,4 +142,3 @@ function ProcessesList({
 }
 
 export default ProcessesList;
-

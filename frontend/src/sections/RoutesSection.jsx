@@ -130,7 +130,7 @@ function toRouteWriteErrorMessage(error, fallbackText) {
 function RoutesSection({ routeOpenRequest }) {
   const { user } = useRole();
   const role = user?.role;
-  const canEditRoutes = role === "admin" || role === "planner";
+  const canEditRoutes = role === "admin" || role === "demo_admin" || role === "planner";
 
   const [routes, setRoutes] = useState([]);
   const [routeSteps, setRouteSteps] = useState([]);

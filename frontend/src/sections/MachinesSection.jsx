@@ -41,7 +41,7 @@ function MachinesSection() {
   const [usageEntries, setUsageEntries] = useState([]);
   const [isUsageLoading, setIsUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState("");
-  const canEditMachines = user?.role === "admin" || user?.role === "maintenance";
+  const canEditMachines = user?.role === "admin" || user?.role === "demo_admin" || user?.role === "maintenance";
 
   useEffect(() => {
     let isCancelled = false;

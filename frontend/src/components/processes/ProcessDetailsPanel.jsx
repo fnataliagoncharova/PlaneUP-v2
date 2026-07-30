@@ -43,21 +43,17 @@ function ProcessDetailsPanel({ item, onEdit, canEdit = true }) {
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
             {item.process_name}
           </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            Карточка технологической операции из V2-справочника. Данные синхронизированы с
-            backend API.
-          </p>
         </div>
         {canEdit ? (
           <div className="flex flex-col items-end gap-3">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
-          >
-            <PencilLine className="h-3.5 w-3.5" />
-            Редактировать
-          </button>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-2 rounded-none border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-200 transition hover:border-cyan-400/20 hover:bg-cyan-400/[0.07]"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              Редактировать
+            </button>
           </div>
         ) : null}
       </div>
@@ -98,7 +94,6 @@ function ProcessDetailsPanel({ item, onEdit, canEdit = true }) {
           />
         </div>
       </section>
-
     </aside>
   );
 }

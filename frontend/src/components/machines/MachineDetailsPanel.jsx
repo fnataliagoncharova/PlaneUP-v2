@@ -73,9 +73,6 @@ function MachineDetailsPanel({
           <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-semibold text-slate-50">
             {item.machine_name}
           </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            Карточка оборудования из V2-справочника. Данные синхронизированы с backend API.
-          </p>
         </div>
         {canEdit ? (
           <div className="flex flex-col items-end gap-3">

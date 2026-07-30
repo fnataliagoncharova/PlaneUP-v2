@@ -14,6 +14,7 @@ import {
 
 
 const ROLE_OPTIONS = [
+  { value: "demo_admin", label: "Демо-администратор" },
   { value: "admin", label: "Администратор" },
   { value: "planner", label: "Планировщик" },
   { value: "master", label: "Мастер" },

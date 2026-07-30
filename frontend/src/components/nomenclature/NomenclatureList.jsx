@@ -1,4 +1,4 @@
-﻿import { Boxes, ChevronRight, Network, Search } from "lucide-react";
+import { Boxes, ChevronRight, Search } from "lucide-react";
 
 function getItemTypeLabel(itemType) {
   return itemType === "purchased" ? "Закупаемая" : "Производимая";
@@ -12,7 +12,6 @@ function NomenclatureList({ items, isLoading, selectedItemId, onSelectItem, sear
           <div className="panel-title">Номенклатура</div>
           <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">Список позиций</h2>
         </div>
-        <div className="tech-chip"><Network className="h-4 w-4" />Backend API</div>
       </div>
 
       <div className="panel-divider mt-5" />

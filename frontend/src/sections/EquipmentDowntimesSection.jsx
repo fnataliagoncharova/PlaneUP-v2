@@ -233,7 +233,7 @@ function EquipmentDowntimesSection() {
   const { user } = useRole();
   const role = user?.role;
   const canCreateDowntime =
-    role === "admin" || role === "planner" || role === "master" || role === "maintenance";
+    role === "admin" || role === "demo_admin" || role === "planner" || role === "master" || role === "maintenance";
   const canEditDowntimeBase = canCreateDowntime;
   const canDeleteDowntimeBase = canCreateDowntime;
 

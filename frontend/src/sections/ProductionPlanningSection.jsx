@@ -172,11 +172,12 @@ function ProductionPlanningSection() {
   const isApproved = selectedPlan?.status === "approved";
   const canViewProductionPlans =
     user?.role === "admin" ||
+    user?.role === "demo_admin" ||
     user?.role === "planner" ||
     user?.role === "master" ||
     user?.role === "maintenance" ||
     user?.role === "viewer";
-  const canEditProductionPlans = user?.role === "admin" || user?.role === "planner";
+  const canEditProductionPlans = user?.role === "admin" || user?.role === "demo_admin" || user?.role === "planner";
 
   const loadPlanDetails = useCallback(async (planId) => {
     if (!planId) {

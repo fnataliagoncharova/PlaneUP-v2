@@ -109,14 +109,19 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
     return user
 
 
-def require_roles(*roles: str) -> Callable[[dict], dict]:
+def require_roles(*roles: str, allow_demo_admin: bool = True) -> Callable[[dict], dict]:
     allowed_roles = set(roles)
 
     def dependency(current_user: dict = Depends(get_current_user)) -> dict:
-        if current_user["role"] == "admin":
+        current_role = current_user["role"]
+
+        if current_role == "admin":
             return current_user
 
-        if current_user["role"] not in allowed_roles:
+        if allow_demo_admin and current_role == "demo_admin":
+            return current_user
+
+        if current_role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Forbidden",

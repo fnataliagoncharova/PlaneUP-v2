@@ -49,7 +49,7 @@ function DowntimeReasonsSection() {
   const [editingItem, setEditingItem] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
   const canEditDowntimeReasons =
-    user?.role === "admin" || user?.role === "planner" || user?.role === "maintenance";
+    user?.role === "admin" || user?.role === "demo_admin" || user?.role === "planner" || user?.role === "maintenance";
 
   const [formState, setFormState] = useState({
     reason_code: "",

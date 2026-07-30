@@ -1,4 +1,4 @@
-import { ChevronRight, Layers3, Network, Search } from "lucide-react";
+import { ChevronRight, Layers3, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 function RouteList({
@@ -45,10 +45,6 @@ function RouteList({
           <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
             Список маршрутов
           </h2>
-        </div>
-        <div className="tech-chip">
-          <Network className="h-4 w-4" />
-          Backend API
         </div>
       </div>
 
@@ -152,4 +148,3 @@ function RouteList({
 }
 
 export default RouteList;
-

@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT users_role_check CHECK (role IN ('admin', 'planner', 'master', 'maintenance', 'viewer'))
+    CONSTRAINT users_role_check CHECK (role IN ('admin', 'demo_admin', 'planner', 'master', 'maintenance', 'viewer'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);

@@ -1,4 +1,4 @@
-import { ChevronRight, Cog, Network, Search } from "lucide-react";
+import { ChevronRight, Cog, Search } from "lucide-react";
 
 function MachinesList({
   items,
@@ -16,10 +16,6 @@ function MachinesList({
           <h2 className="mt-3 font-['Space_Grotesk'] text-2xl font-semibold text-slate-50">
             Список оборудования
           </h2>
-        </div>
-        <div className="tech-chip">
-          <Network className="h-4 w-4" />
-          Backend API
         </div>
       </div>
 
@@ -146,4 +142,3 @@ function MachinesList({
 }
 
 export default MachinesList;
-

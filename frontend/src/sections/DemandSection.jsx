@@ -304,10 +304,11 @@ function DemandResultTableColGroup({ numericColumns = 1 }) {
 
 function DemandSection() {
   const { user } = useRole();
-  const canViewDemand = user?.role === "admin" || user?.role === "planner" || user?.role === "viewer";
-  const canCalculateDemand = user?.role === "admin" || user?.role === "planner";
-  const canCreateProductionPlanFromDemand = user?.role === "admin" || user?.role === "planner";
-  const canEditDemandInputs = user?.role === "admin" || user?.role === "planner";
+  const isAdminLike = user?.role === "admin" || user?.role === "demo_admin";
+  const canViewDemand = isAdminLike || user?.role === "planner" || user?.role === "viewer";
+  const canCalculateDemand = isAdminLike || user?.role === "planner";
+  const canCreateProductionPlanFromDemand = isAdminLike || user?.role === "planner";
+  const canEditDemandInputs = isAdminLike || user?.role === "planner";
 
   const [activeModuleTab, setActiveModuleTab] = useState(MODULE_TAB_SOURCE_DATA);
   const [activeSourceTab, setActiveSourceTab] = useState(IMPORT_CONTEXT_SALES_PLAN);

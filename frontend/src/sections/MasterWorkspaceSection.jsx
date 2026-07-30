@@ -5,10 +5,10 @@ function MasterWorkspaceSection() {
   const { user } = useRole();
   const role = user?.role;
   const canViewMasterWorkspace =
-    role === "admin" || role === "planner" || role === "master" || role === "viewer";
-  const canCreateProductionActual = role === "admin" || role === "master";
-  const canEditProductionActual = role === "admin" || role === "master";
-  const canDeleteProductionActual = role === "admin" || role === "master";
+    role === "admin" || role === "demo_admin" || role === "planner" || role === "master" || role === "viewer";
+  const canCreateProductionActual = role === "admin" || role === "demo_admin" || role === "master";
+  const canEditProductionActual = role === "admin" || role === "demo_admin" || role === "master";
+  const canDeleteProductionActual = role === "admin" || role === "demo_admin" || role === "master";
 
   if (!canViewMasterWorkspace) {
     return (

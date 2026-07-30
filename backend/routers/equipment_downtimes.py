@@ -5,7 +5,7 @@ import psycopg2
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from psycopg2.extras import RealDictCursor
 
-from auth.rbac import require_roles
+from auth.rbac import is_admin_like_role, require_roles
 from db import get_connection
 from schemas.equipment_downtime import (
     EquipmentDowntimeClose,
@@ -106,7 +106,7 @@ def to_naive_utc(value: datetime) -> datetime:
 
 
 def ensure_can_modify_equipment_downtime(record: dict[str, Any], current_user: dict[str, Any]) -> None:
-    if current_user["role"] == "admin":
+    if is_admin_like_role(current_user["role"]):
         return
 
     if current_user["role"] not in set(DOWNTIME_WRITE_ROLES):

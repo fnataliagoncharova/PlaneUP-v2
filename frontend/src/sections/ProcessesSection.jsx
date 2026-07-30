@@ -36,7 +36,7 @@ function toProcessWriteErrorMessage(error, fallbackText) {
 function ProcessesSection() {
   const { user } = useRole();
   const role = user?.role;
-  const canEditProcesses = role === "admin" || role === "planner";
+  const canEditProcesses = role === "admin" || role === "demo_admin" || role === "planner";
 
   const [items, setItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState(null);

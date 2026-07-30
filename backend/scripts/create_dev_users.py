@@ -14,6 +14,12 @@ from db import get_connection  # noqa: E402
 
 DEV_USERS = [
     {
+        "username": "demo_admin",
+        "password": "demo123",
+        "full_name": "Демо-администратор",
+        "role": "demo_admin",
+    },
+    {
         "username": "planner",
         "password": "planner123",
         "full_name": "Планировщик",

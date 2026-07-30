@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "./auth/AuthContext";
+import { isAdminLikeRole } from "./auth/permissions";
 
 import SectionPlaceholder from "./components/layout/SectionPlaceholder";
 import Sidebar from "./components/layout/Sidebar";
@@ -203,7 +204,13 @@ function App() {
 
   const filteredNavigationGroups = useMemo(() => {
     const isAdmin = user?.role === "admin";
-    const canSeeItem = (item) => isAdmin || item.roles?.includes(user?.role);
+    const canSeeItem = (item) => {
+      if (item.id === "users") {
+        return isAdmin;
+      }
+
+      return isAdminLikeRole(user?.role) || item.roles?.includes(user?.role);
+    };
 
     if (isAdmin) {
       return navigationGroups;

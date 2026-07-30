@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-UserRole = Literal["admin", "planner", "master", "maintenance", "viewer"]
+UserRole = Literal["admin", "demo_admin", "planner", "master", "maintenance", "viewer"]
 
 
 class UserRead(BaseModel):

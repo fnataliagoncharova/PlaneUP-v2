@@ -97,7 +97,7 @@ function NomenclatureSection({ onOpenRoute }) {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isCommitLoading, setIsCommitLoading] = useState(false);
   const [isTemplateDownloading, setIsTemplateDownloading] = useState(false);
-  const canEditNomenclature = user?.role === "admin" || user?.role === "planner";
+  const canEditNomenclature = user?.role === "admin" || user?.role === "demo_admin" || user?.role === "planner";
 
   const getNomenclatureWriteErrorMessage = (error, fallbackText) => {
     if (error?.status === 403 || error?.message === "Forbidden") {

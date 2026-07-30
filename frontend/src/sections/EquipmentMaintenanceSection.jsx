@@ -198,7 +198,7 @@ function EquipmentMaintenanceSection() {
     ended_time: "00:30",
     comment: "",
   });
-  const canEditMaintenance = user?.role === "admin" || user?.role === "maintenance";
+  const canEditMaintenance = user?.role === "admin" || user?.role === "demo_admin" || user?.role === "maintenance";
 
   const timeOptions = useMemo(
     () => buildTimeOptions(formState.started_time, formState.ended_time),
