@@ -5,6 +5,7 @@ import {
   Cog,
   LineChart,
   LogOut,
+  Menu,
   OctagonPause,
   ScrollText,
   Shield,
@@ -70,7 +71,7 @@ function MasterWorkspaceIcon({ className }) {
 
 const navigationGroups = [
   {
-    label: "ОБЗОР",
+    label: "Обзор",
     items: [
       {
         id: "production_analytics",
@@ -81,7 +82,7 @@ const navigationGroups = [
     ],
   },
   {
-    label: "ВХОДНЫЕ ДАННЫЕ",
+    label: "Входные данные",
     items: [
       {
         id: "demand",
@@ -92,7 +93,7 @@ const navigationGroups = [
     ],
   },
   {
-    label: "ПЛАНИРОВАНИЕ",
+    label: "Планирование",
     items: [
       {
         id: "production_planning",
@@ -103,7 +104,7 @@ const navigationGroups = [
     ],
   },
   {
-    label: "ИСПОЛНЕНИЕ",
+    label: "Исполнение",
     items: [
       {
         id: "master_workspace",
@@ -120,7 +121,7 @@ const navigationGroups = [
     ],
   },
   {
-    label: "ОГРАНИЧЕНИЯ",
+    label: "Ограничения",
     items: [
       {
         id: "machines",
@@ -137,7 +138,7 @@ const navigationGroups = [
     ],
   },
   {
-    label: "СПРАВОЧНИКИ",
+    label: "Справочники",
     items: [
       {
         id: "nomenclature",
@@ -166,7 +167,7 @@ const navigationGroups = [
     ],
   },
   {
-    label: "АДМИНИСТРИРОВАНИЕ",
+    label: "Администрирование",
     items: [
       {
         id: "users",
@@ -198,6 +199,7 @@ function App() {
 
   const [activeSection, setActiveSection] = useState("demand");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const filteredNavigationGroups = useMemo(() => {
     const isAdmin = user?.role === "admin";
@@ -230,9 +232,28 @@ function App() {
     }
   }, [activeSection, visibleNavigationItems]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const handleChange = (event) => {
+      if (event.matches) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    handleChange(mediaQuery);
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
   const activeItem =
     visibleNavigationItems.find((item) => item.id === activeSection) ?? visibleNavigationItems[0];
   const renderedSection = activeItem?.id;
+
+  const handleSelectSection = (sectionId) => {
+    setActiveSection(sectionId);
+    setIsMobileSidebarOpen(false);
+  };
 
   if (loading) {
     return <div className="p-6 text-white">Загрузка...</div>;
@@ -244,61 +265,80 @@ function App() {
 
   return (
     <div className="min-h-screen text-slate-100">
-      <div className="glass-shell flex min-h-screen w-full overflow-hidden">
+      <div className="glass-shell flex min-h-screen w-full flex-col overflow-hidden lg:flex-row">
         {visibleNavigationItems.length > 0 ? (
           <Sidebar
             items={filteredNavigationGroups}
             activeSection={activeSection}
-            onSelect={setActiveSection}
+            onSelect={handleSelectSection}
             isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
+            onToggleCollapse={() => setIsSidebarCollapsed((value) => !value)}
+            isMobileOpen={isMobileSidebarOpen}
+            onCloseMobile={() => setIsMobileSidebarOpen(false)}
           />
         ) : null}
 
-        <main className="flex-1 overflow-hidden">
-          <div className="relative h-full overflow-y-auto p-6">
-            <div className="mb-4 flex justify-end">
-              <div className="flex items-center gap-3 text-sm">
-                <span>{user.full_name || user.username}</span>
-                <button onClick={logout} className="text-red-400">
+        <main className="min-w-0 flex-1 overflow-hidden">
+          <div className="relative flex h-full min-w-0 flex-col overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-none border border-cyan-300/20 bg-cyan-400/[0.08] px-3 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-400/[0.14] lg:hidden"
+              >
+                <Menu className="h-4 w-4" />
+                Меню
+              </button>
+
+              <div className="ml-auto flex items-center gap-3 text-sm text-slate-200">
+                <span className="truncate">{user.full_name || user.username}</span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-none border border-rose-300/20 bg-rose-400/[0.08] text-rose-200 transition hover:border-rose-300/35 hover:bg-rose-400/[0.14]"
+                  title="Выйти"
+                  aria-label="Выйти"
+                >
                   <LogOut size={16} />
                 </button>
               </div>
             </div>
 
-            {visibleNavigationItems.length === 0 ? (
-              <div className="glass-panel p-5 text-sm text-slate-300">Нет доступных разделов.</div>
-            ) : renderedSection === "nomenclature" ? (
-              <NomenclatureSection />
-            ) : renderedSection === "processes" ? (
-              <ProcessesSection />
-            ) : renderedSection === "routes" ? (
-              <RoutesSection />
-            ) : renderedSection === "machines" ? (
-              <MachinesSection />
-            ) : renderedSection === "equipment_maintenance" ? (
-              <EquipmentMaintenanceSection />
-            ) : renderedSection === "downtime_reasons" ? (
-              <DowntimeReasonsSection />
-            ) : renderedSection === "equipment_downtimes" ? (
-              <EquipmentDowntimesSection />
-            ) : renderedSection === "demand" ? (
-              <DemandSection />
-            ) : renderedSection === "production_planning" ? (
-              <ProductionPlanningSection />
-            ) : renderedSection === "production_analytics" ? (
-              <ProductionAnalyticsSection />
-            ) : renderedSection === "master_workspace" ? (
-              <MasterWorkspaceSection />
-            ) : renderedSection === "users" ? (
-              <UsersSection />
-            ) : (
-              <SectionPlaceholder
-                title={activeItem?.label ?? "Нет доступных разделов"}
-                description={sectionDescriptions[renderedSection]}
-                icon={activeItem?.icon}
-              />
-            )}
+            <div className="min-w-0 flex-1">
+              {visibleNavigationItems.length === 0 ? (
+                <div className="glass-panel p-5 text-sm text-slate-300">Нет доступных разделов.</div>
+              ) : renderedSection === "nomenclature" ? (
+                <NomenclatureSection />
+              ) : renderedSection === "processes" ? (
+                <ProcessesSection />
+              ) : renderedSection === "routes" ? (
+                <RoutesSection />
+              ) : renderedSection === "machines" ? (
+                <MachinesSection />
+              ) : renderedSection === "equipment_maintenance" ? (
+                <EquipmentMaintenanceSection />
+              ) : renderedSection === "downtime_reasons" ? (
+                <DowntimeReasonsSection />
+              ) : renderedSection === "equipment_downtimes" ? (
+                <EquipmentDowntimesSection />
+              ) : renderedSection === "demand" ? (
+                <DemandSection />
+              ) : renderedSection === "production_planning" ? (
+                <ProductionPlanningSection />
+              ) : renderedSection === "production_analytics" ? (
+                <ProductionAnalyticsSection />
+              ) : renderedSection === "master_workspace" ? (
+                <MasterWorkspaceSection />
+              ) : renderedSection === "users" ? (
+                <UsersSection />
+              ) : (
+                <SectionPlaceholder
+                  title={activeItem?.label ?? "Нет доступных разделов"}
+                  description={sectionDescriptions[renderedSection]}
+                  icon={activeItem?.icon}
+                />
+              )}
+            </div>
           </div>
         </main>
       </div>

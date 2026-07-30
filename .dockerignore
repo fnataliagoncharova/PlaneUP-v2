@@ -1,0 +1,13 @@
+.git
+.gitignore
+.agents
+.codex
+docs
+frontend/node_modules
+frontend/dist
+backend/__pycache__
+backend/.env
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.log

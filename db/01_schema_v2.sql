@@ -80,7 +80,7 @@ CREATE TABLE route_step_equipment (
     CHECK (nominal_rate > 0),
     CHECK (min_batch_qty IS NULL OR min_batch_qty > 0),
     CHECK (equipment_role IN ('primary', 'alternative')),
-    CHECK (rate_uom IN ('РјВІ/РјРёРЅ', 'Рј.Рї./РјРёРЅ')),
+    CHECK (rate_uom IN ('м²/мин', 'м.п./мин')),
     UNIQUE (route_step_id, machine_id)
 );
 

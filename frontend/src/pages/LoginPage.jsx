@@ -3,7 +3,6 @@ import { useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 
-
 function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState("");
@@ -41,9 +40,9 @@ function LoginPage() {
             </div>
             <div>
               <h1 className="font-['Space_Grotesk'] text-2xl font-semibold tracking-tight text-slate-950">
-                PlaneUP V2
+                Plane<span style={{ color: "#0C92A3" }}>UP</span>
               </h1>
-              <p className="mt-1 text-sm text-slate-500">Вход в систему планирования</p>
+              <p className="mt-1 text-sm font-normal text-slate-500">Production Planning</p>
             </div>
           </div>
         </div>
@@ -98,6 +97,5 @@ function LoginPage() {
     </div>
   );
 }
-
 
 export default LoginPage;

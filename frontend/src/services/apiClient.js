@@ -1,6 +1,5 @@
 import { getStoredAuthToken } from "./authToken";
 
-
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001").replace(
   /\/$/,
   "",
@@ -63,7 +62,6 @@ function hasHeader(headers, headerName) {
   return Object.keys(headers).some((key) => key.toLowerCase() === normalizedHeaderName);
 }
 
-
 function buildRequestHeaders(options = {}) {
   const headers = { ...(options.headers ?? {}) };
   const token = getStoredAuthToken();
@@ -80,7 +78,6 @@ function buildRequestHeaders(options = {}) {
 
   return headers;
 }
-
 
 export async function apiRequest(path, options = {}) {
   const headers = buildRequestHeaders(options);

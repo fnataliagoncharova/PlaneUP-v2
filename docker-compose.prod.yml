@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16
+    container_name: planeup-v2-db
+    environment:
+      POSTGRES_USER: planner
+      POSTGRES_PASSWORD: planner
+      POSTGRES_DB: production_plan
+    volumes:
+      - planeup_v2_pg_data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U planner -d production_plan"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: planeup-v2-backend
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: production_plan
+      DB_USER: planner
+      DB_PASSWORD: planner
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: planeup-v2-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  planeup_v2_pg_data:

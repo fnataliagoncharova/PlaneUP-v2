@@ -5,7 +5,6 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -15,7 +14,7 @@ from db import get_connection  # noqa: E402
 
 
 DEFAULT_USERNAME = "admin"
-DEFAULT_PASSWORD = "admin12345"
+DEFAULT_PASSWORD = "admin123"
 DEFAULT_FULL_NAME = "Администратор"
 
 

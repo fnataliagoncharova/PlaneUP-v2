@@ -4,7 +4,6 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -16,26 +15,26 @@ from db import get_connection  # noqa: E402
 DEV_USERS = [
     {
         "username": "planner",
-        "password": "planner12345",
+        "password": "planner123",
         "full_name": "Планировщик",
         "role": "planner",
     },
     {
         "username": "master",
-        "password": "master12345",
+        "password": "master123",
         "full_name": "Мастер",
         "role": "master",
     },
     {
         "username": "maintenance",
-        "password": "maintenance12345",
-        "full_name": "Ответственный за ТО",
+        "password": "maintenance123",
+        "full_name": "Служба ТО",
         "role": "maintenance",
     },
     {
         "username": "viewer",
-        "password": "viewer12345",
-        "full_name": "Просмотр",
+        "password": "viewer123",
+        "full_name": "Наблюдатель",
         "role": "viewer",
     },
 ]
