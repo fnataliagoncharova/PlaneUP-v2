@@ -12,7 +12,7 @@ import {
   Wrench,
   Workflow,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "./auth/AuthContext";
 import { isAdminLikeRole } from "./auth/permissions";
@@ -202,6 +202,7 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [routeOpenRequest, setRouteOpenRequest] = useState(null);
+  const contentScrollRef = useRef(null);
 
   const filteredNavigationGroups = useMemo(() => {
     const isAdmin = user?.role === "admin";
@@ -274,6 +275,10 @@ function App() {
     }));
     setActiveSection("routes");
     setIsMobileSidebarOpen(false);
+    contentScrollRef.current?.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   if (loading) {
@@ -300,7 +305,11 @@ function App() {
         ) : null}
 
         <main className="min-w-0 flex-1 overflow-hidden">
-          <div className="relative flex h-full min-w-0 flex-col overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6">
+          <div
+            ref={contentScrollRef}
+            data-app-scroll-container="true"
+            className="relative flex h-full min-w-0 flex-col overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:px-6 lg:py-6"
+          >
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"

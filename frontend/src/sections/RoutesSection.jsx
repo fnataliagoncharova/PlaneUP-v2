@@ -325,9 +325,28 @@ function RoutesSection({ routeOpenRequest }) {
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      detailsPanelRef.current?.scrollIntoView({
+      const detailsPanelElement = detailsPanelRef.current;
+      if (!detailsPanelElement) {
+        return;
+      }
+
+      const scrollContainer = document.querySelector("[data-app-scroll-container='true']");
+      if (!(scrollContainer instanceof HTMLElement)) {
+        detailsPanelElement.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        return;
+      }
+
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const detailsRect = detailsPanelElement.getBoundingClientRect();
+      const nextTop =
+        scrollContainer.scrollTop + (detailsRect.top - containerRect.top) - 12;
+
+      scrollContainer.scrollTo({
+        top: Math.max(nextTop, 0),
         behavior: "smooth",
-        block: "start",
       });
     });
 
