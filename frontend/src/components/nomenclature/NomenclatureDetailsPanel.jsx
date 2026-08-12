@@ -7,7 +7,7 @@ import {
   PencilLine,
   ScrollText,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 function getItemTypeLabel(itemType) {
   return itemType === "purchased" ? "Закупаемая" : "Производимая";
@@ -344,6 +344,27 @@ function NomenclatureDetailsPanel({
   routeChainError,
   canEdit = true,
 }) {
+  const routeOpenTriggerAtRef = useRef(0);
+
+  const handleOpenRouteAction = useCallback(
+    (event) => {
+      if (!onOpenRoute) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - routeOpenTriggerAtRef.current < 400) {
+        return;
+      }
+
+      routeOpenTriggerAtRef.current = now;
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      onOpenRoute();
+    },
+    [onOpenRoute],
+  );
+
   if (!item) {
     return (
       <aside className="glass-panel h-fit p-5 sm:p-6 xl:sticky xl:top-6">
@@ -460,8 +481,9 @@ function NomenclatureDetailsPanel({
 
             <button
               type="button"
-              onClick={onOpenRoute}
-              className="mt-4 inline-flex items-center gap-2 rounded-none border border-cyan-400/28 bg-cyan-400/10 px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-cyan-50 transition hover:bg-cyan-400/16"
+              onClick={handleOpenRouteAction}
+              onTouchEnd={handleOpenRouteAction}
+              className="mt-4 inline-flex touch-manipulation items-center gap-2 rounded-none border border-cyan-400/28 bg-cyan-400/10 px-3.5 py-2 text-xs font-medium uppercase tracking-[0.14em] text-cyan-50 transition hover:bg-cyan-400/16"
             >
               <ArrowRight className="h-3.5 w-3.5" />
               Открыть маршрут
