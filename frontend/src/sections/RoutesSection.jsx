@@ -1,4 +1,4 @@
-import { AlertCircle, GitBranchPlus } from "lucide-react";
+import { AlertCircle, ChevronLeft, GitBranchPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
@@ -178,6 +178,7 @@ function RoutesSection({ routeOpenRequest }) {
   const [stepFormMode, setStepFormMode] = useState("create");
   const [inputFormMode, setInputFormMode] = useState("create");
   const [equipmentFormMode, setEquipmentFormMode] = useState("create");
+  const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState(false);
   const detailsPanelRef = useRef(null);
 
   useEffect(() => {
@@ -312,6 +313,7 @@ function RoutesSection({ routeOpenRequest }) {
 
     setSelectedRouteId(requestedRouteId);
     setActivePanel("view");
+    setIsMobileDetailsOpen(true);
   }, [routeOpenRequest?.routeId, routeOpenRequest?.version, routes]);
 
   useEffect(() => {
@@ -352,6 +354,18 @@ function RoutesSection({ routeOpenRequest }) {
 
     return () => window.cancelAnimationFrame(frameId);
   }, [routeOpenRequest?.routeId, routeOpenRequest?.version, selectedRouteId]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        setIsMobileDetailsOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     setRouteStatusError("");
@@ -617,6 +631,7 @@ function RoutesSection({ routeOpenRequest }) {
   const selectedStepProcessLabel = buildProcessLabel(selectedStep);
   const selectedStepNomenclatureLabel = buildNomenclatureLabel(selectedStep);
   const stepsModelWarning = hydratedSteps.length > 1 ? MULTIPLE_STEPS_WARNING : "";
+  const isDetailFormActive = activePanel !== "view";
 
   const replaceRouteInState = useCallback((updatedRoute) => {
     setRoutes((previousRoutes) =>
@@ -658,6 +673,7 @@ function RoutesSection({ routeOpenRequest }) {
     setRouteStatusError("");
     setRouteStatusNotice("");
     setActivePanel("route-form");
+    setIsMobileDetailsOpen(true);
   };
 
   const handleOpenEditRouteForm = () => {
@@ -675,6 +691,7 @@ function RoutesSection({ routeOpenRequest }) {
     setRouteStatusError("");
     setRouteStatusNotice("");
     setActivePanel("route-form");
+    setIsMobileDetailsOpen(true);
   };
 
   const handleCancelRouteForm = () => {
@@ -1264,10 +1281,29 @@ function RoutesSection({ routeOpenRequest }) {
   const inputFormItem = inputFormMode === "edit" ? selectedInput : null;
   const equipmentFormItem = equipmentFormMode === "edit" ? selectedEquipment : null;
 
+  const handleSelectRoute = useCallback((routeId) => {
+    setSelectedRouteId(routeId);
+  }, []);
+
+  const handleOpenMobileRouteDetails = useCallback((routeId) => {
+    if (!routeId) {
+      return;
+    }
+
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setIsMobileDetailsOpen(true);
+    }
+  }, []);
+
+  const handleBackToRouteList = useCallback(() => {
+    setIsMobileDetailsOpen(false);
+    setActivePanel("view");
+  }, []);
+
   return (
     <>
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.22fr)_minmax(0,0.88fr)] 2xl:grid-cols-[minmax(0,1.24fr)_minmax(0,0.92fr)]">
-        <div className="space-y-6">
+        <div className={isMobileDetailsOpen ? "hidden md:block space-y-6 xl:block" : "space-y-6"}>
           <header className="glass-panel p-4 sm:p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
@@ -1302,12 +1338,29 @@ function RoutesSection({ routeOpenRequest }) {
             routes={routes}
             isLoading={isLoading}
             selectedRouteId={selectedRouteId}
-            onSelectRoute={setSelectedRouteId}
+            onSelectRoute={handleSelectRoute}
+            onActivateRoute={handleOpenMobileRouteDetails}
             getResultNomenclatureLabel={getResultNomenclatureLabel}
           />
         </div>
 
-        <div ref={detailsPanelRef}>
+        <div
+          ref={detailsPanelRef}
+          className={isMobileDetailsOpen ? "block" : "hidden md:block xl:block"}
+        >
+          {!isDetailFormActive ? (
+            <div className="mb-3 md:hidden">
+              <button
+                type="button"
+                onClick={handleBackToRouteList}
+                className="inline-flex items-center gap-2 rounded-none border border-cyan-300/20 bg-cyan-400/[0.08] px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-400/[0.14]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                К списку маршрутов
+              </button>
+            </div>
+          ) : null}
+
           {activePanel === "route-form" ? (
             <RouteFormPanel
               mode={routeFormMode}

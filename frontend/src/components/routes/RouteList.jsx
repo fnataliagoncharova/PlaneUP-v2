@@ -6,6 +6,7 @@ function RouteList({
   isLoading,
   selectedRouteId,
   onSelectRoute,
+  onActivateRoute,
   getResultNomenclatureLabel,
 }) {
   const [searchValue, setSearchValue] = useState("");
@@ -76,7 +77,10 @@ function RouteList({
               <button
                 key={route.route_id}
                 type="button"
-                onClick={() => onSelectRoute(route.route_id)}
+                onClick={() => {
+                  onSelectRoute(route.route_id);
+                  onActivateRoute?.(route.route_id);
+                }}
                 className={[
                   "group relative flex w-full items-start gap-4 overflow-hidden rounded-none border px-4 py-4 text-left transition-all duration-200",
                   isSelected
