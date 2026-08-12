@@ -1,5 +1,5 @@
 import { AlertCircle, GitBranchPlus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import V2ConfirmDialog from "../components/common/V2ConfirmDialog";
 import RouteFormPanel from "../components/routes/RouteFormPanel";
@@ -178,6 +178,7 @@ function RoutesSection({ routeOpenRequest }) {
   const [stepFormMode, setStepFormMode] = useState("create");
   const [inputFormMode, setInputFormMode] = useState("create");
   const [equipmentFormMode, setEquipmentFormMode] = useState("create");
+  const detailsPanelRef = useRef(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -312,6 +313,26 @@ function RoutesSection({ routeOpenRequest }) {
     setSelectedRouteId(requestedRouteId);
     setActivePanel("view");
   }, [routeOpenRequest?.routeId, routeOpenRequest?.version, routes]);
+
+  useEffect(() => {
+    const requestedRouteId = routeOpenRequest?.routeId;
+    if (!requestedRouteId || requestedRouteId !== selectedRouteId) {
+      return;
+    }
+
+    if (!window.matchMedia("(max-width: 767px)").matches) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      detailsPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [routeOpenRequest?.routeId, routeOpenRequest?.version, selectedRouteId]);
 
   useEffect(() => {
     setRouteStatusError("");
@@ -1267,91 +1288,93 @@ function RoutesSection({ routeOpenRequest }) {
           />
         </div>
 
-        {activePanel === "route-form" ? (
-          <RouteFormPanel
-            mode={routeFormMode}
-            item={routeFormItem}
-            nomenclatureItems={nomenclatureItems}
-            isSaving={isSavingRoute}
-            errorMessage={routeSaveError}
-            onCancel={handleCancelRouteForm}
-            onSave={handleSubmitRouteForm}
-            canEdit={canEditRoutes}
-          />
-        ) : activePanel === "step-form" ? (
-          <RouteStepFormPanel
-            mode={stepFormMode}
-            item={stepFormItem}
-            processItems={processItems}
-            nomenclatureItems={nomenclatureItems}
-            routeSteps={routeSteps}
-            routeResultNomenclatureId={selectedRoute?.result_nomenclature_id}
-            isSaving={isSavingStep}
-            errorMessage={stepSaveError}
-            onCancel={handleCancelStepForm}
-            onSave={handleSubmitStepForm}
-            canEdit={canEditRoutes}
-          />
-        ) : activePanel === "input-form" ? (
-          <RouteStepInputFormPanel
-            mode={inputFormMode}
-            item={inputFormItem}
-            nomenclatureItems={nomenclatureItems}
-            isSaving={isSavingInput}
-            errorMessage={inputSaveError}
-            onCancel={handleCancelInputForm}
-            onSave={handleSubmitInputForm}
-            canEdit={canEditRoutes}
-          />
-        ) : activePanel === "equipment-form" ? (
-          <RouteStepEquipmentFormPanel
-            mode={equipmentFormMode}
-            item={equipmentFormItem}
-            machineItems={machineItems}
-            isSaving={isSavingEquipment}
-            errorMessage={equipmentSaveError}
-            onCancel={handleCancelEquipmentForm}
-            onSave={handleSubmitEquipmentForm}
-            canEdit={canEditRoutes}
-          />
-        ) : (
-          <StepDetailsPanel
-            selectedRoute={selectedRoute}
-            canEditRoutes={canEditRoutes}
-            selectedResultNomenclatureLabel={selectedResultNomenclatureLabel}
-            step={selectedStep}
-            processLabel={selectedStepProcessLabel}
-            outputNomenclatureLabel={selectedStepNomenclatureLabel}
-            outputNomenclatureUom={selectedStep?.output_nomenclature_uom}
-            onEditRoute={handleOpenEditRouteForm}
-            onActivateRoute={handleActivateRoute}
-            onDeactivateRoute={handleDeactivateRoute}
-            isChangingRouteStatus={isChangingRouteStatus}
-            routeStatusError={routeStatusError}
-            routeStatusNotice={routeStatusNotice}
-            stepsModelWarning={stepsModelWarning}
-            isStepLoading={isStepsLoading}
-            stepError={stepsError}
-            onOpenCreateStep={handleOpenCreateStepForm}
-            onEditStep={handleOpenEditStepForm}
-            onDeleteStep={handleOpenDeleteStepConfirm}
-            isDeletingStep={isDeletingStep}
-            inputs={hydratedInputs}
-            isInputsLoading={isInputsLoading}
-            inputsError={inputsError}
-            onOpenCreateInput={handleOpenCreateInputForm}
-            onEditInput={handleOpenEditInputForm}
-            onDeleteInput={handleOpenDeleteInputConfirm}
-            isDeletingInput={isDeletingInput}
-            equipment={hydratedEquipment}
-            isEquipmentLoading={isEquipmentLoading}
-            equipmentError={equipmentError}
-            onOpenCreateEquipment={handleOpenCreateEquipmentForm}
-            onEditEquipment={handleOpenEditEquipmentForm}
-            onDeleteEquipment={handleOpenDeleteEquipmentConfirm}
-            isDeletingEquipment={isDeletingEquipment}
-          />
-        )}
+        <div ref={detailsPanelRef}>
+          {activePanel === "route-form" ? (
+            <RouteFormPanel
+              mode={routeFormMode}
+              item={routeFormItem}
+              nomenclatureItems={nomenclatureItems}
+              isSaving={isSavingRoute}
+              errorMessage={routeSaveError}
+              onCancel={handleCancelRouteForm}
+              onSave={handleSubmitRouteForm}
+              canEdit={canEditRoutes}
+            />
+          ) : activePanel === "step-form" ? (
+            <RouteStepFormPanel
+              mode={stepFormMode}
+              item={stepFormItem}
+              processItems={processItems}
+              nomenclatureItems={nomenclatureItems}
+              routeSteps={routeSteps}
+              routeResultNomenclatureId={selectedRoute?.result_nomenclature_id}
+              isSaving={isSavingStep}
+              errorMessage={stepSaveError}
+              onCancel={handleCancelStepForm}
+              onSave={handleSubmitStepForm}
+              canEdit={canEditRoutes}
+            />
+          ) : activePanel === "input-form" ? (
+            <RouteStepInputFormPanel
+              mode={inputFormMode}
+              item={inputFormItem}
+              nomenclatureItems={nomenclatureItems}
+              isSaving={isSavingInput}
+              errorMessage={inputSaveError}
+              onCancel={handleCancelInputForm}
+              onSave={handleSubmitInputForm}
+              canEdit={canEditRoutes}
+            />
+          ) : activePanel === "equipment-form" ? (
+            <RouteStepEquipmentFormPanel
+              mode={equipmentFormMode}
+              item={equipmentFormItem}
+              machineItems={machineItems}
+              isSaving={isSavingEquipment}
+              errorMessage={equipmentSaveError}
+              onCancel={handleCancelEquipmentForm}
+              onSave={handleSubmitEquipmentForm}
+              canEdit={canEditRoutes}
+            />
+          ) : (
+            <StepDetailsPanel
+              selectedRoute={selectedRoute}
+              canEditRoutes={canEditRoutes}
+              selectedResultNomenclatureLabel={selectedResultNomenclatureLabel}
+              step={selectedStep}
+              processLabel={selectedStepProcessLabel}
+              outputNomenclatureLabel={selectedStepNomenclatureLabel}
+              outputNomenclatureUom={selectedStep?.output_nomenclature_uom}
+              onEditRoute={handleOpenEditRouteForm}
+              onActivateRoute={handleActivateRoute}
+              onDeactivateRoute={handleDeactivateRoute}
+              isChangingRouteStatus={isChangingRouteStatus}
+              routeStatusError={routeStatusError}
+              routeStatusNotice={routeStatusNotice}
+              stepsModelWarning={stepsModelWarning}
+              isStepLoading={isStepsLoading}
+              stepError={stepsError}
+              onOpenCreateStep={handleOpenCreateStepForm}
+              onEditStep={handleOpenEditStepForm}
+              onDeleteStep={handleOpenDeleteStepConfirm}
+              isDeletingStep={isDeletingStep}
+              inputs={hydratedInputs}
+              isInputsLoading={isInputsLoading}
+              inputsError={inputsError}
+              onOpenCreateInput={handleOpenCreateInputForm}
+              onEditInput={handleOpenEditInputForm}
+              onDeleteInput={handleOpenDeleteInputConfirm}
+              isDeletingInput={isDeletingInput}
+              equipment={hydratedEquipment}
+              isEquipmentLoading={isEquipmentLoading}
+              equipmentError={equipmentError}
+              onOpenCreateEquipment={handleOpenCreateEquipmentForm}
+              onEditEquipment={handleOpenEditEquipmentForm}
+              onDeleteEquipment={handleOpenDeleteEquipmentConfirm}
+              isDeletingEquipment={isDeletingEquipment}
+            />
+          )}
+        </div>
       </section>
 
       <V2ConfirmDialog
