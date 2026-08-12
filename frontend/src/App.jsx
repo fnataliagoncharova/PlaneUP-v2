@@ -201,6 +201,7 @@ function App() {
   const [activeSection, setActiveSection] = useState("demand");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [routeOpenRequest, setRouteOpenRequest] = useState(null);
 
   const filteredNavigationGroups = useMemo(() => {
     const isAdmin = user?.role === "admin";
@@ -262,6 +263,19 @@ function App() {
     setIsMobileSidebarOpen(false);
   };
 
+  const handleOpenRouteFromNomenclature = (routeId) => {
+    if (!routeId) {
+      return;
+    }
+
+    setRouteOpenRequest((previousRequest) => ({
+      routeId,
+      version: (previousRequest?.version ?? 0) + 1,
+    }));
+    setActiveSection("routes");
+    setIsMobileSidebarOpen(false);
+  };
+
   if (loading) {
     return <div className="p-6 text-white">Загрузка...</div>;
   }
@@ -315,11 +329,11 @@ function App() {
               {visibleNavigationItems.length === 0 ? (
                 <div className="glass-panel p-5 text-sm text-slate-300">Нет доступных разделов.</div>
               ) : renderedSection === "nomenclature" ? (
-                <NomenclatureSection />
+                <NomenclatureSection onOpenRoute={handleOpenRouteFromNomenclature} />
               ) : renderedSection === "processes" ? (
                 <ProcessesSection />
               ) : renderedSection === "routes" ? (
-                <RoutesSection />
+                <RoutesSection routeOpenRequest={routeOpenRequest} />
               ) : renderedSection === "machines" ? (
                 <MachinesSection />
               ) : renderedSection === "equipment_maintenance" ? (
